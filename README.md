@@ -26,8 +26,8 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
 | Dir | What it is | Tested |
 |-----|-----------|--------|
 | `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **one multiplexed TLS link (CA pinned)** with up to 24 concurrent streams and per-stream flow control, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
-| `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test` (17 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side) |
-| `admin-api/` | Go: **admin dashboard** (users; **devices** by MAC with name, `shared`/`dedicated` kind, lat/lon, operator-entered WiFi password shown masked, notes; OTA push; **capacity measurement** and the admission rule) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, SQLite store (no cgo). | `go test` (7 tests) + headless-browser smoke test |
+| `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test -race` (32 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side, idle eviction/reaping; slots: pinned routing, offline refusal, `SLOT_SECRET` fail-closed, dedicated boards kept out of the pool; gost slot-config generator, which needs `sh`) |
+| `admin-api/` | Go: **admin dashboard** (users; **devices** by MAC with name, `shared`/`dedicated` kind, lat/lon, operator-entered WiFi password shown masked, notes; OTA push; **capacity measurement** and the admission rule) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, SQLite store (no cgo). | `go test -race` (37 tests: users, auth/limiter/observer plugins, payment webhook, SQLite store and import, devices, slots and pool flag, admission rule, capacity measurement, dashboard markup) + headless-browser smoke test |
 | `flasher/` | ESP Web Tools static page to flash the board from Chrome/Edge + configure it. | manifest validated |
 | `deploy/` | Full-stack `docker-compose.yml` for Coolify (gost + broker + admin-api + flasher). | YAML validated |
 
@@ -69,6 +69,33 @@ shows the active-stream count next to the result.
 | `SLOT_SECRET` | none (alphanumeric, required) | Secret each slot's gost uses to authenticate to the broker (same value for both). Must be set: without it gost refuses to start (`gen-config.sh` exits before writing the slot services, so port `3128` stays down too) and the broker refuses every `slot-N` login |
 | `SPEEDTEST_URL` | `https://flash.jbacteam.com/speedtest.bin` | File the Measure button downloads |
 
+### Cutover for existing users
+
+Saving a slot on a board immediately scopes every user bound to that board to
+the slot's port: from that moment they are refused on `3128`. Switch over like
+this:
+
+1. Set `SLOT_SECRET` and `SLOT_COUNT` in Coolify (see the table above), open
+   the slot ports on the VPS firewall, and deploy.
+2. Check that an **unbound** user still works on the pool port:
+   `curl -x http://u:p@proxy.<domain>:3128 https://ifconfig.me` (prints the
+   exit IP).
+3. For each user already bound to a board, either tell them the new port
+   first and then set the board's slot, or, at the moment they switch:
+   **unassign** the user → set the board's **slot** → **Measure** →
+   **assign** the user again, then send them the new port (`Copy conn`).
+   Unassigning first keeps them on `3128` while the slot is set and measured.
+4. Rollback: stop admin-api, run `mv /data/users.json.imported /data/users.json`
+   in its `/data` volume, and redeploy the previous image. Usage recorded
+   since the cutover is lost (and a later roll-forward ignores the restored
+   file while `platform.db` still has users).
+
+`/data` now holds `platform.db` plus its `platform.db-wal` and
+`platform.db-shm` files. Back it up with SQLite-aware tooling (for example
+`sqlite3 /data/platform.db ".backup /data/platform.db.bak"`), or stop admin-api
+and copy all three files together: copying `platform.db` alone from a running
+instance can miss committed data still in the `-wal` file.
+
 ## Deploy on Coolify (one stack)
 
 1. In the **ESP32 Proxy Server** project → **+ New Resource → Public/Private Git
@@ -78,7 +105,9 @@ shows the active-stream count next to the result.
    `POOL_TOKEN`, `ADMIN_TOKEN`, `PAYMENT_WEBHOOK_SECRET`, `GOST_PLUGIN_SECRET`
    (alphanumeric), and the broker TLS pair `TLS_CERT_B64` / `TLS_KEY_B64`
    (`base64 -w0 broker.crt`, signed by the CA baked into the firmware — see
-   `docs/SECURITY.md`). Optionally `PROXY_PORT` (default 8080) and `POOL_PORT`.
+   `docs/SECURITY.md`), and `SLOT_SECRET` (alphanumeric, required; see
+   "Customer ports and capacity"). Optionally `SLOT_COUNT` (default 30),
+   `SPEEDTEST_URL`, `PROXY_PORT` (default 8080) and `POOL_PORT`.
 3. Deploy. Then in **Domains**, map `gost` **18080** → `gost-api.<domain>`,
    `flasher` **80** → `flash.<domain>`, and `admin-api` **8088** →
    `admin.<domain>` (the dashboard; sign in with `ADMIN_TOKEN`).
@@ -86,7 +115,9 @@ shows the active-stream count next to the result.
    `API_USER`/`API_PASS`. (The standalone `gost-proxy` you had can be removed —
    this stack replaces it and adds auth/limit/quota + the ESP32 chain.)
 
-Ports to open on the VPS firewall: **8080** (customers) and **7000** (your ESP32).
+Ports to open on the VPS firewall: **8080** (customers' pool port, or your
+`PROXY_PORT`), **3131–3160** (slot ports, `3130+SLOT_COUNT` at most) and
+**7000** (your ESP32).
 
 ## Flash & configure the ESP32-S3 (N16R8)
 

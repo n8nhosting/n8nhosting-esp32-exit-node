@@ -10,6 +10,8 @@
 #
 # Published to the host (must be reachable):
 #   8080  -> customer HTTP proxy      (customers abroad connect here: user:pass)
+#   3131-3160 -> per-device slot proxies (slot N = port 3130+N, SLOT_COUNT of them;
+#                customers bound to a board connect to its slot's port)
 #   7000  -> broker pool              (your ESP32 at home connects out to here)
 # Internal only (reach via Coolify domains/Traefik, not host ports):
 #   gost  18080  -> map to e.g. gost-api.<domain>  (GOST UI connects here)
