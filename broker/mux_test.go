@@ -231,6 +231,33 @@ func waitFor(t *testing.T, cond func() bool) {
 	t.Fatal("condition not reached")
 }
 
+func TestMuxOTADeliveredToConnectedLink(t *testing.T) {
+	withMuxTimers(t, time.Hour, time.Hour, time.Hour, 50*time.Millisecond)
+	ota := make(chan string, 1)
+	b := newBroker(config{token: "tok", dialWait: time.Second}, 8)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	stop := make(chan struct{})
+	defer func() {
+		close(stop)
+		poolLn.Close()
+		waitFor(t, func() bool { return b.muxCount() == 0 }) // link fully down before timers are restored
+	}()
+	go runMuxNode(t, poolLn.Addr().String(), "tok", "aa:bb:cc:dd:ee:60", true, 24, ota, stop)
+	waitFor(t, func() bool { return b.muxCount() == 1 })
+	if !b.reg.setOTA("aa:bb:cc:dd:ee:60", "https://x/fw.bin") {
+		t.Fatal("setOTA")
+	}
+	select {
+	case u := <-ota:
+		if u != "https://x/fw.bin" {
+			t.Fatalf("got %q", u)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("OTA not delivered while link stayed up")
+	}
+}
+
 func TestMuxChainReachabilityAndBigBody(t *testing.T) {
 	oh, op, oclose := originServer(t)
 	defer oclose()

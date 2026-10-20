@@ -88,6 +88,8 @@ type muxSession struct {
 	lastRx atomic.Int64 // unix nanos of the last frame received
 
 	evicted, idleClosed *int64 // broker-wide counters (nil = don't count)
+
+	pollOTA func() string // returns a queued OTA URL to push on the live link (nil = none)
 }
 
 type muxStream struct {
@@ -247,6 +249,12 @@ func (s *muxSession) keepalive() {
 			return
 		case <-reap.C:
 			s.reapIdle()
+			if s.pollOTA != nil {
+				if url := s.pollOTA(); url != "" {
+					log.Printf("ota: pushing %s to %s (mux, live)", url, s.node.MAC)
+					s.writeFrame(frameOTA, 0, []byte(url))
+				}
+			}
 		case <-t.C:
 			if s.node.isBlocked() {
 				log.Printf("mux %s: node blocked, closing link", s.node.MAC)

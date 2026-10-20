@@ -272,6 +272,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int)
 	c.SetReadDeadline(time.Time{})
 	s := newMuxSession(c, br, n, maxStreams)
 	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
+	s.pollOTA = func() string { return b.reg.takeOTA(n) }
 	if url := b.reg.takeOTA(n); url != "" {
 		log.Printf("ota: pushing %s to %s (mux)", url, n.MAC)
 		s.writeFrame(frameOTA, 0, []byte(url))
