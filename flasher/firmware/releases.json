@@ -1,0 +1,69 @@
+{
+  "latest": "2.4.21-mux1.2",
+  "releases": [
+    {
+      "version": "2.4.21-mux1.3",
+      "reports": "2.4.21-mux1.3",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 01:20:16",
+      "added": "2026-10-21",
+      "size": 1393872,
+      "sha256": "82c239f9e02ad285962267bceb2e2bf33aae1e345fa297d8cf1568151cb8dacb",
+      "url": "firmware/releases/2.4.21-mux1.3/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.3/manifest.json",
+      "notes": "self-test rollback: new image confirmed only after the mux link is up, reverts after 5 min otherwise"
+    },
+    {
+      "version": "2.4.21-mux1.2",
+      "reports": "2.4.21-mux1.2",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 00:55:26",
+      "added": "2026-10-20",
+      "size": 1393024,
+      "sha256": "b01751ace58d9451fdd196085af5b4c86bc204104707965b0d7a3d2377542111",
+      "url": "firmware/releases/2.4.21-mux1.2/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.2/manifest.json",
+      "notes": "64 KB lwIP TCP buffers (faster per stream)",
+      "commit": "2bac35e"
+    },
+    {
+      "version": "2.4.21-mux1.1",
+      "reports": "2.4.21-mux1.1",
+      "protocol": "mux1",
+      "built": "Oct 20 2026 22:48:49",
+      "added": "2026-10-20",
+      "size": 1393008,
+      "sha256": "17f689e8c85275c962d2aa689afb5e0023ceffc95de235f474819b5e3623b04c",
+      "url": "firmware/releases/2.4.21-mux1.1/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.1/manifest.json",
+      "notes": "mux1: one TLS link, 40 streams, one stats line a minute",
+      "commit": "9f308f5"
+    },
+    {
+      "version": "2.4.21-mux1",
+      "reports": "2.4.21-mux1",
+      "protocol": "mux1",
+      "built": "Oct 20 2026 21:38:50",
+      "added": "2026-10-20",
+      "size": 1392608,
+      "sha256": "09b138eb2f16d4def5ca0fc952b0a51b84de5565c4b190b1fd9c0f40a46309d8",
+      "url": "firmware/releases/2.4.21-mux1/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1/manifest.json",
+      "notes": "first mux1 build (24 streams)",
+      "commit": "6b6f689"
+    },
+    {
+      "version": "2.4.21-pool",
+      "reports": "2.4.21",
+      "protocol": "pool",
+      "built": "Oct 20 2026 18:49:52",
+      "added": "2026-10-20",
+      "size": 1413520,
+      "sha256": "4cc1a12d52c3c76c5c6e0d583f24fdfc654beef2857b23717628a6878e0e61b6",
+      "url": "firmware/releases/2.4.21-pool/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-pool/manifest.json",
+      "notes": "v1.2 pool protocol (no mux). Reports firmware \"2.4.21\". Use only if mux1 misbehaves; needs a broker that still accepts pool nodes",
+      "commit": "7e52acd"
+    }
+  ]
+}

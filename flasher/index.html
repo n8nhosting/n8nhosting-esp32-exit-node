@@ -57,7 +57,7 @@
     padding: 14px; overflow-x:auto; font-size: .9rem; margin: 8px 0;
   }
   label { display:block; font-size:.85rem; color:var(--muted); margin: 10px 0 4px; }
-  input {
+  input, select {
     width:100%; background: var(--panel2); border:1px solid var(--line);
     color: var(--fg); border-radius:10px; padding:10px 12px; font-size:.95rem;
   }
@@ -81,8 +81,11 @@
   <div class="card">
     <h2><span class="step-n">1</span> เสียบบอร์ดแล้วกดติดตั้ง</h2>
     <p class="muted">เสียบ ESP32-S3 เข้าพอร์ต USB (ใช้พอร์ต <b>USB</b> ของ S3 หรือกดปุ่ม BOOT ค้างแล้วแตะ RST หากเข้าโหมดแฟลชไม่ได้) แล้วกดปุ่มด้านล่าง เลือกพอร์ต Serial ของบอร์ด</p>
+    <label for="fwver">เวอร์ชัน firmware</label>
+    <select id="fwver"><option value="manifest.json">ล่าสุด (แนะนำ)</option></select>
+    <p class="muted" id="fwnote" style="font-size:.85rem;margin:6px 0 0"></p>
     <div class="flash-row">
-      <esp-web-install-button manifest="manifest.json">
+      <esp-web-install-button id="installBtn" manifest="manifest.json">
         <button slot="activate" class="ghost" style="background:var(--accent);color:#fff;border:none;font-weight:600;padding:12px 22px;font-size:1rem;">⚡ ติดตั้ง Firmware</button>
         <span slot="unsupported">เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์</span>
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
@@ -131,6 +134,24 @@
   const gostui = params.get('gostui') || 'https://gost-ui.jbacteam.com';
   document.getElementById('gostui').href = gostui;
   document.getElementById('dash').href = params.get('dash') || location.origin.replace('//flash.','//admin.');
+
+  // Version picker: every archived release can be USB-flashed (rollback).
+  fetch('firmware/releases.json', {cache: 'no-cache'}).then(r => r.ok ? r.json() : null).then(idx => {
+    if (!idx || !idx.releases) return;
+    const sel = document.getElementById('fwver'), note = document.getElementById('fwnote');
+    for (const r of idx.releases) {
+      const o = document.createElement('option');
+      o.value = r.manifest;
+      o.textContent = r.version + (r.version === idx.latest ? ' (ล่าสุด)' : '') + ' — ' + r.protocol;
+      o.dataset.notes = r.notes || '';
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      document.getElementById('installBtn').setAttribute('manifest', sel.value);
+      const o = sel.selectedOptions[0];
+      note.textContent = o.dataset.notes || '';
+    });
+  }).catch(() => {});
 
   function esc(s){ return String(s).replace(/[^\w.\-:@]/g,''); }
   function render(){

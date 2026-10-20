@@ -42,6 +42,9 @@ type brokerNode struct {
 	BytesUp    int64  `json:"bytes_up"`
 	BytesDown  int64  `json:"bytes_down"`
 	PendingOTA string `json:"pending_ota,omitempty"`
+	OTATarget  string `json:"ota_target,omitempty"`
+	OTAStatus  string `json:"ota_status,omitempty"`
+	OTAAt      string `json:"ota_at,omitempty"`
 }
 
 type deviceView struct {
@@ -74,7 +77,7 @@ func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// POST /api/devices/{mac}/block|allow|forget|ota — proxy to the broker.
+// POST /api/devices/{mac}/block|allow|forget|ota|ota-cancel — proxy to the broker.
 func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method"})
