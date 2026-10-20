@@ -26,8 +26,11 @@ services:
       - API_USER=${API_USER}
       - API_PASS=${API_PASS}
       - GOST_PLUGIN_SECRET=${GOST_PLUGIN_SECRET}
+      - SLOT_COUNT=${SLOT_COUNT:-30}
+      - SLOT_SECRET=${SLOT_SECRET}
     ports:
       - "${PROXY_PORT:-8080}:8080"   # customer HTTP/SOCKS5 proxy (public)
+      - "3131-3160:3131-3160"         # per-device slot proxies (slot N = 3130+N)
     expose:
       - "18080"                       # Web API -> Coolify domain (GOST UI)
     depends_on: [broker, admin-api]
@@ -44,6 +47,7 @@ services:
       - TLS_CERT_B64=${TLS_CERT_B64}  # broker server cert (PEM, base64)
       - TLS_KEY_B64=${TLS_KEY_B64}    # broker server key  (PEM, base64)
       - NODES_FILE=/data/nodes.json
+      - SLOT_SECRET=${SLOT_SECRET}    # gost authenticates to the broker per slot
     ports:
       - "${POOL_PORT:-7000}:7000"    # ESP32 nodes connect here (public, TLS)
     expose:
@@ -66,6 +70,7 @@ services:
       - PROXY_PUBLIC_HOST=${PROXY_PUBLIC_HOST}
       - PROXY_PUBLIC_PORT=${PROXY_PUBLIC_PORT:-3128}
       - CRED_KEY=${CRED_KEY}
+      - SLOT_COUNT=${SLOT_COUNT:-30}
     expose:
       - "8088"                        # dashboard + REST (map to admin.<domain>)
     volumes:
