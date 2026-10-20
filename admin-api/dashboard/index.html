@@ -467,7 +467,9 @@ function closeDevice(keepFocus){
   if(keepFocus!==true && dmOpener && dmOpener.isConnected) dmOpener.focus();
   dmOpener=null;
 }
-function slotInput(){ const v=$('#dmSlot').value.trim(); if(v==='') return 0; return /^\d+$/.test(v) ? +v : NaN; }
+// A number input the browser cannot parse reads as "": that is bad input, not
+// "no slot", so it must never become slot 0.
+function slotInput(){ if($('#dmSlot').validity.badInput) return NaN; const v=$('#dmSlot').value.trim(); if(v==='') return 0; return /^\d+$/.test(v) ? +v : NaN; }
 function updPort(){ const s=slotInput(), p=slotPort(s); $('#dmPort').textContent = T('port')+': '+(p?(':'+p):(s===0?T('noPort'):T('slotInvalid'))); }
 $('#dmSlot').addEventListener('input',updPort);
 $('#dmCancel').addEventListener('click',closeDevice);
