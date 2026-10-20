@@ -30,11 +30,6 @@ var migrations = []string{
 	)`,
 }
 
-// dbKeepIdle keeps the single connection open between uses. Tests turn it off:
-// Windows cannot remove a t.TempDir() while SQLite holds files in it, and the
-// tests never close their stores.
-var dbKeepIdle = true
-
 // openDB opens (creating if needed) the database at path and migrates it to
 // the latest schema. One connection only: SQLite has a single writer anyway,
 // and our own goroutines then queue in database/sql instead of hitting
@@ -45,9 +40,6 @@ func openDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if !dbKeepIdle {
-		db.SetMaxIdleConns(0)
-	}
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err

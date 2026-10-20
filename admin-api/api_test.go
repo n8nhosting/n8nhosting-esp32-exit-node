@@ -13,10 +13,7 @@ import (
 )
 
 func newTestServer(t *testing.T) (*server, *http.ServeMux) {
-	st, err := NewStore(filepath.Join(t.TempDir(), "users.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := openTestStore(t, filepath.Join(t.TempDir(), "users.json"))
 	s := &server{store: st, adminToken: "admintok", payToken: "paytok", usageMode: "delta", lastSeen: map[string]int64{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/gost/auth", s.handleAuth)
@@ -146,7 +143,7 @@ func TestObserverQuotaEnforcement(t *testing.T) {
 }
 
 func TestObserverCumulativeMode(t *testing.T) {
-	st, _ := NewStore(filepath.Join(t.TempDir(), "u.json"))
+	st := openTestStore(t, filepath.Join(t.TempDir(), "u.json"))
 	s := &server{store: st, adminToken: "a", payToken: "p", usageMode: "cumulative", lastSeen: map[string]int64{}}
 	st.Create(&User{Username: "e", PassHash: hashPassword("x"), Enabled: true, QuotaGB: 10})
 	ev := func(total int64) observerReq {
@@ -196,10 +193,7 @@ func TestLegacyPlaintextMigration(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "users.json")
 	// v1.0 record shape
 	os.WriteFile(f, []byte(`[{"username":"old","password":"Secret1","enabled":true,"usage_month":"2026-10"}]`), 0o600)
-	st, err := NewStore(f)
-	if err != nil {
-		t.Fatal(err)
-	}
+	st := openTestStore(t, f)
 	if ok, why := st.Authorize("old", "Secret1", time.Now()); !ok {
 		t.Fatalf("legacy user should authenticate after migration: %s", why)
 	}
