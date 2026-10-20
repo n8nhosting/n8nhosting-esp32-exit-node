@@ -1,6 +1,19 @@
 {
-  "latest": "2.4.21-mux1.1",
+  "latest": "2.4.21-mux1.2",
   "releases": [
+    {
+      "version": "2.4.21-mux1.2",
+      "reports": "2.4.21-mux1.2",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 00:55:26",
+      "added": "2026-10-20",
+      "size": 1393024,
+      "sha256": "b01751ace58d9451fdd196085af5b4c86bc204104707965b0d7a3d2377542111",
+      "url": "firmware/releases/2.4.21-mux1.2/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.2/manifest.json",
+      "notes": "64 KB lwIP TCP buffers (faster per stream)",
+      "commit": "2bac35e"
+    },
     {
       "version": "2.4.21-mux1.1",
       "reports": "2.4.21-mux1.1",
