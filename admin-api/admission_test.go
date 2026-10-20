@@ -291,6 +291,49 @@ func TestReservedUsernameRefusedOverHTTP(t *testing.T) {
 	}
 }
 
+// Usernames are [A-Za-z0-9._-]{1,64} wherever a user is created over HTTP, so
+// a name can never break out of the dashboard's markup or the proxy URL.
+func TestUsernameCharsetEnforced(t *testing.T) {
+	s, mux := newTestServer(t)
+	bad := []string{"ab'c", `a"b`, "a b", "<b>", "a/b", "a:b", "a@b", "ä", strings.Repeat("a", 65)}
+	for _, name := range bad {
+		rr, out := doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": name, "password": "pw"})
+		if rr.Code != http.StatusBadRequest || out["error"] != "invalid username" {
+			t.Errorf("POST /api/users %q: %d %v, want 400 invalid username", name, rr.Code, out)
+		}
+	}
+	pay := func(name string) (int, map[string]any) {
+		body, _ := json.Marshal(map[string]any{"username": name, "days": 30})
+		req := httptest.NewRequest("POST", "/webhook/payment", strings.NewReader(string(body)))
+		req.Header.Set("X-Webhook-Token", "paytok")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		var out map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+	for _, name := range []string{"ab'c", `x"y`} {
+		if code, out := pay(name); code != http.StatusBadRequest || out["error"] != "invalid username" {
+			t.Errorf("payment for %q: %d %v, want 400 invalid username", name, code, out)
+		}
+	}
+	for _, name := range append(bad, `x"y`) {
+		if _, err := s.store.Get(name); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%q was created: %v", name, err)
+		}
+	}
+	// the whole charset, up to 64 characters, still works on both paths; the
+	// reserved prefix is still refused
+	createUser(t, mux, map[string]any{"username": "A.b_c-9", "password": "pw"})
+	createUser(t, mux, map[string]any{"username": strings.Repeat("z", 64), "password": "pw"})
+	if code, out := pay("buyer.1"); code != http.StatusOK || out["username"] != "buyer.1" {
+		t.Fatalf("payment for buyer.1: %d %v", code, out)
+	}
+	if rr, out := doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": "_measure-q", "password": "pw"}); rr.Code != http.StatusBadRequest || out["error"] != "reserved username" {
+		t.Fatalf("reserved prefix: %d %v", rr.Code, out)
+	}
+}
+
 func TestDeviceSlotAssignmentForwardsToBroker(t *testing.T) {
 	initCredKey("", "admintok")
 	t.Setenv("PROXY_PUBLIC_HOST", "203.0.113.9")

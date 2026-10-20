@@ -52,6 +52,10 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username required"})
 			return
 		}
+		if !validUsername(in.Username) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid username"})
+			return
+		}
 		if isReservedUsername(in.Username) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reserved username"})
 			return

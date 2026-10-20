@@ -219,11 +219,16 @@ async function viewOverview(){
 }
 
 /* ---- Users ---- */
+// The rendered users by username: row buttons carry only data-user, never the
+// user object or the name inside inline script.
+let usersByName = new Map();
 async function viewUsers(){
-  $('#view').innerHTML = `<div class="head"><h2>Users</h2><button onclick="openUser()">+ New user</button></div>
+  $('#view').innerHTML = `<div class="head"><h2>Users</h2><button type="button" id="newUserBtn">+ New user</button></div>
     <div id="utbl">Loading…</div>`;
+  $('#newUserBtn').addEventListener('click',()=>openUser());
   try{
     const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices').catch(()=>[])]);
+    usersByName = new Map(users.map(u=>[u.username,u]));
     window._deviceMacs = (devices||[]).map(d=>d.mac);
     window._devByMac = Object.fromEntries((devices||[]).map(d=>[d.mac,d]));
     if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
@@ -242,26 +247,34 @@ async function viewUsers(){
         const up = dv ? slotPort(dv.slot) : 0;
         if(up) devLabel += ` <span class="mono">\u00b7 :${esc(up)}</span>`;
       }
+      const un = esc(u.username);
       const dev = u.device_mac
-        ? `${devLabel} <button type="button" class="link" data-assign="${esc(u.username)}">${esc(T('change'))}</button>`
-        : `<button type="button" class="link" data-assign="${esc(u.username)}">${esc(T('assign'))}</button>`;
+        ? `${devLabel} <button type="button" class="link" data-act="assign" data-user="${un}">${esc(T('change'))}</button>`
+        : `<button type="button" class="link" data-act="assign" data-user="${un}">${esc(T('assign'))}</button>`;
       return `<tr>
-        <td class="mono">${esc(u.username)}</td>
+        <td class="mono">${un}</td>
         <td>${st}</td>
         <td>${u.rate_mbps>0?u.rate_mbps+' Mbps':'—'}</td>
         <td>${quota}${over?' ⚠':''}</td>
         <td>${exp?exp.toISOString().slice(0,10):'never'}</td>
         <td>${dev}</td>
         <td class="right row-actions">
-          <button onclick="copyCreds('${esc(u.username)}')">Copy conn</button>
-          <button class="sec" onclick='openUser(${JSON.stringify(u)})'>Edit</button>
-          <button class="sec" onclick="userAction('${esc(u.username)}','${u.enabled?'disable':'enable'}')">${u.enabled?'Disable':'Enable'}</button>
-          <button class="sec" onclick="userAction('${esc(u.username)}','extend')">+30d</button>
-          <button class="danger" onclick="delUser('${esc(u.username)}')">Delete</button>
+          <button type="button" data-act="copy" data-user="${un}">Copy conn</button>
+          <button type="button" class="sec" data-act="edit" data-user="${un}">Edit</button>
+          <button type="button" class="sec" data-act="${u.enabled?'disable':'enable'}" data-user="${un}">${u.enabled?'Disable':'Enable'}</button>
+          <button type="button" class="sec" data-act="extend" data-user="${un}">+30d</button>
+          <button type="button" class="danger" data-act="delete" data-user="${un}">Delete</button>
         </td></tr>`;
     }).join('');
     $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-    $('#utbl').querySelectorAll('[data-assign]').forEach(b=>b.addEventListener('click',()=>assignDevice(b.dataset.assign)));
+    $('#utbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
+      const name=b.dataset.user, act=b.dataset.act;
+      if(act==='copy') copyCreds(name);
+      else if(act==='edit'){ const u=usersByName.get(name); if(u) openUser(u); }
+      else if(act==='assign') assignDevice(name);
+      else if(act==='delete') delUser(name);
+      else userAction(name,act); // enable | disable | extend
+    }));
   }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 

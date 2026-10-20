@@ -21,7 +21,7 @@ import (
 //
 // Body:
 //   {
-//     "username":  "alice",      // required; created if missing
+//     "username":  "alice",      // required, [A-Za-z0-9._-]{1,64}; created if missing
 //     "password":  "optional",   // set when creating a new user
 //     "days":      30,           // extend expiry by N days
 //     "quota_gb":  50,           // set monthly quota (optional)
@@ -51,6 +51,10 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 	var req payReq
 	if err := json.Unmarshal(body, &req); err != nil || req.Username == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username required"})
+		return
+	}
+	if !validUsername(req.Username) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid username"})
 		return
 	}
 	// a paid plan must never land on an uncapped, seatless measurement user

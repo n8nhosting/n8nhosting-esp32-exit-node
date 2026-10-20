@@ -39,4 +39,15 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 			t.Errorf("dashboard missing %q", want)
 		}
 	}
+	// the users table passes names via data-user to delegated listeners, never
+	// inside inline script (a quote in a name used to break out of it)
+	if !strings.Contains(body, `data-user="${un}"`) {
+		t.Error("users table must carry the username in data-user")
+	}
+	for _, bad := range []string{`onclick="copyCreds`, `onclick='openUser`, `onclick="openUser`, `onclick="userAction`,
+		`onclick="delUser`, `onclick="assignDevice`, `JSON.stringify(u)`} {
+		if strings.Contains(body, bad) {
+			t.Errorf("dashboard still has inline handler %q", bad)
+		}
+	}
 }

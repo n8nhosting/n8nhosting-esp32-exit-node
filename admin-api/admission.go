@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -19,6 +20,12 @@ const measurePrefix = "_measure-"
 // user is uncapped and seatless, so only the store may create one: the HTTP
 // endpoints that create users (admin API, payment webhook) refuse the prefix.
 func isReservedUsername(name string) bool { return strings.HasPrefix(name, measurePrefix) }
+
+// usernameRE is the charset of a username created over HTTP: nothing that
+// needs escaping in markup, a URL's userinfo or a proxy connection string.
+var usernameRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+func validUsername(name string) bool { return usernameRE.MatchString(name) }
 
 // takesSeat reports whether u counts against its board's capacity: enabled,
 // unexpired and not a measurement user.
