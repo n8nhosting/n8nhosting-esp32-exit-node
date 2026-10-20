@@ -56,6 +56,7 @@ extern const uint8_t broker_ca_pem_start[] asm("_binary_broker_ca_pem_start");
 extern const uint8_t broker_ca_pem_end[]   asm("_binary_broker_ca_pem_end");
 
 #define NVS_NS            "rproxy"
+#define RPROXY_PROV_GEN   1   /* bump to force re-provision over stale NVS */
 #define CONNECT_TIMEOUT_S 10
 #define DIAL_TIMEOUT_S    10
 #define BACKOFF_MIN_MS    1000
@@ -229,9 +230,18 @@ static void cfg_load(rproxy_config_t *c)
     cfg_from_build(c);     /* start from provisioning defaults                 */
 
     if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        size_t n; uint8_t b; uint16_t port;
-        /* "prov" marks that NVS has been written at least once. */
+        size_t n; uint8_t b; uint16_t port; uint32_t gen = 0;
+        /* "prov" marks that NVS has been written at least once. Re-provision
+         * (ignore stale NVS) when the build's provisioning generation differs
+         * from what is stored, so an OTA/flash that changes the baked-in
+         * defaults takes effect without a manual erase. */
         if (nvs_get_u8(h, "prov", &b) == ESP_OK) have_nvs = true;
+        if (nvs_get_u32(h, "prov_gen", &gen) != ESP_OK) gen = 0;
+        if (have_nvs && gen != RPROXY_PROV_GEN) {
+            have_nvs = false;   /* stale generation: fall back to build defaults */
+            ESP_LOGW(TAG, "provisioning generation changed (%u->%u); re-applying build defaults",
+                     (unsigned)gen, (unsigned)RPROXY_PROV_GEN);
+        }
         if (have_nvs) {
             n = sizeof(c->host);  if (nvs_get_str(h, "host", c->host, &n) != ESP_OK) {}
             n = sizeof(c->token); if (nvs_get_str(h, "token", c->token, &n) != ESP_OK) {}
@@ -259,6 +269,7 @@ static void cfg_save(const rproxy_config_t *c)
     nvs_set_u8(h, "enabled", c->enabled ? 1 : 0);
     nvs_set_u8(h, "tls", c->use_tls ? 1 : 0);
     nvs_set_u8(h, "prov", 1);
+    nvs_set_u32(h, "prov_gen", RPROXY_PROV_GEN);
     nvs_commit(h);
     nvs_close(h);
 }
