@@ -21,9 +21,17 @@ import (
 // withMuxTimers shortens the production timers for one test.
 func withMuxTimers(t *testing.T, idle, drain, evictMin, reap time.Duration) {
 	t.Helper()
-	oi, od, oe, or := muxIdleTimeout, muxHalfCloseDrain, muxEvictMinIdle, muxReapEvery
-	muxIdleTimeout, muxHalfCloseDrain, muxEvictMinIdle, muxReapEvery = idle, drain, evictMin, reap
-	t.Cleanup(func() { muxIdleTimeout, muxHalfCloseDrain, muxEvictMinIdle, muxReapEvery = oi, od, oe, or })
+	olds := [4]time.Duration{muxIdleTimeout.Get(), muxHalfCloseDrain.Get(), muxEvictMinIdle.Get(), muxReapEvery.Get()}
+	muxIdleTimeout.Set(idle)
+	muxHalfCloseDrain.Set(drain)
+	muxEvictMinIdle.Set(evictMin)
+	muxReapEvery.Set(reap)
+	t.Cleanup(func() {
+		muxIdleTimeout.Set(olds[0])
+		muxHalfCloseDrain.Set(olds[1])
+		muxEvictMinIdle.Set(olds[2])
+		muxReapEvery.Set(olds[3])
+	})
 }
 
 // closedWithin reports whether the peer closes/resets c within d.

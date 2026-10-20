@@ -367,7 +367,7 @@ func (b *broker) evictIdleStream(tried map[*muxSession]bool) bool {
 	b.muxMu.Lock()
 	muxes := append([]*muxSession(nil), b.muxes...)
 	b.muxMu.Unlock()
-	since := time.Now().Add(-muxEvictMinIdle)
+	since := time.Now().Add(-muxEvictMinIdle.Get())
 	var victim *muxStream
 	var on *muxSession
 	for _, m := range muxes {

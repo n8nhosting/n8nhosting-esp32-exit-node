@@ -61,12 +61,24 @@ const (
 	muxOpenWait  = 20 * time.Second
 )
 
+// atomicDur is a duration that tests may change while link goroutines read it.
+type atomicDur struct{ ns atomic.Int64 }
+
+func newAtomicDur(d time.Duration) *atomicDur {
+	a := &atomicDur{}
+	a.ns.Store(int64(d))
+	return a
+}
+
+func (a *atomicDur) Get() time.Duration  { return time.Duration(a.ns.Load()) }
+func (a *atomicDur) Set(d time.Duration) { a.ns.Store(int64(d)) }
+
 // Capacity management. Variables (not consts) so tests can shorten them.
 var (
-	muxIdleTimeout    = 90 * time.Second // no data either way -> close the stream
-	muxHalfCloseDrain = 30 * time.Second // after one side's FIN, the other side gets this long
-	muxEvictMinIdle   = 5 * time.Second  // a stream must be at least this idle to be evicted
-	muxReapEvery      = 5 * time.Second  // how often idle/half-closed streams are checked
+	muxIdleTimeout    = newAtomicDur(90 * time.Second) // no data either way -> close the stream
+	muxHalfCloseDrain = newAtomicDur(30 * time.Second) // after one side's FIN, the other side gets this long
+	muxEvictMinIdle   = newAtomicDur(5 * time.Second)  // a stream must be at least this idle to be evicted
+	muxReapEvery      = newAtomicDur(5 * time.Second)  // how often idle/half-closed streams are checked
 )
 
 var errStreamReset = errors.New("stream reset")
@@ -241,7 +253,7 @@ func (s *muxSession) dispatch(typ byte, sid uint32, p []byte) {
 func (s *muxSession) keepalive() {
 	t := time.NewTicker(muxPingEvery)
 	defer t.Stop()
-	reap := time.NewTicker(muxReapEvery)
+	reap := time.NewTicker(muxReapEvery.Get())
 	defer reap.Stop()
 	for {
 		select {
@@ -387,10 +399,10 @@ func (st *muxStream) expired(now time.Time) bool {
 	if !st.opened.Load() {
 		return false // still dialing; muxOpenWait bounds that
 	}
-	if fin := st.finAt.Load(); fin != 0 && now.Sub(time.Unix(0, fin)) > muxHalfCloseDrain {
+	if fin := st.finAt.Load(); fin != 0 && now.Sub(time.Unix(0, fin)) > muxHalfCloseDrain.Get() {
 		return true
 	}
-	return now.Sub(time.Unix(0, st.lastActive.Load())) > muxIdleTimeout
+	return now.Sub(time.Unix(0, st.lastActive.Load())) > muxIdleTimeout.Get()
 }
 
 func (st *muxStream) markReset() {
