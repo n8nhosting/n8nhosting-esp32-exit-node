@@ -361,6 +361,7 @@ static int dial_target(const char *host, uint16_t port)
 }
 
 static void start_ota(const char *url);
+static void ota_confirm(const char *why);
 
 /* ---- multiplexed link ("mux1") ------------------------------------------
  *
