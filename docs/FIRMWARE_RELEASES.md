@@ -21,11 +21,15 @@ the dashboard's **Update FW** lists the same releases.
 3. Archive it and, once tested on one board, make it the default:
 
 ```
-tools/fw_release.py add firmware/build_s3n16r8 --notes "what changed" --commit $(git rev-parse --short HEAD)
+tools/fw_release.py add firmware/build_s3n16r8 --status testing \
+    --title "one-line headline (Thai)" --notes "what changed" --commit $(git rev-parse --short HEAD)
 tools/fw_release.py add firmware/build_s3n16r8 --latest      # same, and make it the default
 tools/fw_release.py list
 ```
 
+   `--title` / `--notes` are what the flasher page's version list and the
+   dashboard picker show; `--status` is `testing`, `stable` (default) or
+   `legacy`, and promoting a release with `latest` makes it `stable`.
    The version is read from the image itself, so a bin cannot be filed under
    the wrong name. Commit `flasher/` and redeploy the flasher on Coolify.
 4. Optional: tag the commit, `git tag fw-<version> && git push origin fw-<version>`.
