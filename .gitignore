@@ -6,3 +6,7 @@ firmware/build_*/
 firmware/sdkconfig
 # OS
 .DS_Store
+
+# local tooling
+.worktrees/
+.superpowers/
