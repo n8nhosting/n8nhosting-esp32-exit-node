@@ -1,0 +1,7 @@
+dependencies:
+  esp_wireguard:
+    git: https://github.com/martin-ger/esp_wireguard_idf_5.5.x.git
+  # espressif/led_strip and espressif/mdns are vendored locally under
+  # components/ (led_strip, espressif__mdns) because the Espressif component
+  # registry is not reachable from this build environment. Local components
+  # override managed ones, so the firmware builds identically.

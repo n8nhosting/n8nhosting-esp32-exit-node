@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ESP32-S3 Exit Node Flasher</title>
+<meta name="description" content="Flash ESP32-S3 (N16R8) exit-node firmware from your browser and configure it to connect to the VPS broker." />
+<script type="module" src="https://unpkg.com/esp-web-tools@10.0.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171c24; --panel2: #1e2530; --line: #2a323f;
+    --fg: #e8edf3; --muted: #9aa7b8; --accent: #4b9fff; --accent2: #35d6a4;
+    --warn: #ffcc66; --danger: #ff6b6b; --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:#f3f5f8; --panel:#ffffff; --panel2:#f0f3f7; --line:#dde3ec;
+      --fg:#121821; --muted:#5a6678; --accent:#1f6feb; --accent2:#0ca678;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0e1116; --panel:#171c24; --panel2:#1e2530; --line:#2a323f;
+    --fg:#e8edf3; --muted:#9aa7b8; --accent:#4b9fff; --accent2:#35d6a4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  header { text-align: center; margin-bottom: 28px; }
+  h1 { font-size: 1.7rem; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: .98rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px; margin: 18px 0;
+  }
+  .card h2 { font-size: 1.15rem; margin: 0 0 12px; display:flex; align-items:center; gap:10px;}
+  .step-n {
+    display:inline-flex; width:26px; height:26px; border-radius:50%;
+    background: var(--accent); color:#fff; align-items:center; justify-content:center;
+    font-size:.9rem; font-weight:700; flex:none;
+  }
+  .flash-row { display:flex; justify-content:center; padding: 10px 0; }
+  esp-web-install-button { --esp-tools-button-color: var(--accent); }
+  button.ghost {
+    background: var(--panel2); color: var(--fg); border:1px solid var(--line);
+    border-radius: 10px; padding: 10px 16px; font-size: .95rem; cursor:pointer;
+  }
+  button.ghost:hover { border-color: var(--accent); }
+  .muted { color: var(--muted); }
+  .warn { color: var(--warn); }
+  code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  pre {
+    background: var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding: 14px; overflow-x:auto; font-size: .9rem; margin: 8px 0;
+  }
+  label { display:block; font-size:.85rem; color:var(--muted); margin: 10px 0 4px; }
+  input {
+    width:100%; background: var(--panel2); border:1px solid var(--line);
+    color: var(--fg); border-radius:10px; padding:10px 12px; font-size:.95rem;
+  }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px){ .grid{ grid-template-columns: 1fr; } }
+  .cmds { position:relative; }
+  .copy-btn { position:absolute; top:8px; right:8px; font-size:.78rem; padding:4px 10px; }
+  a { color: var(--accent); }
+  .pill { display:inline-block; font-size:.75rem; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:2px 10px; color:var(--muted); }
+  .notice { border-left:3px solid var(--warn); padding-left:12px; }
+  footer { text-align:center; color:var(--muted); font-size:.85rem; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ESP32-S3 Exit Node Flasher</h1>
+    <div class="sub">Flash firmware ลงบอร์ด ESP32-S3 (N16R8) แล้วตั้งค่าให้ต่อออกไปหา VPS broker • <span class="pill">Chrome / Edge เท่านั้น</span></div>
+  </header>
+
+  <div class="card">
+    <h2><span class="step-n">1</span> เสียบบอร์ดแล้วกดติดตั้ง</h2>
+    <p class="muted">เสียบ ESP32-S3 เข้าพอร์ต USB (ใช้พอร์ต <b>USB</b> ของ S3 หรือกดปุ่ม BOOT ค้างแล้วแตะ RST หากเข้าโหมดแฟลชไม่ได้) แล้วกดปุ่มด้านล่าง เลือกพอร์ต Serial ของบอร์ด</p>
+    <div class="flash-row">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="ghost" style="background:var(--accent);color:#fff;border:none;font-weight:600;padding:12px 22px;font-size:1rem;">⚡ ติดตั้ง Firmware</button>
+        <span slot="unsupported">เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์</span>
+        <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
+      </esp-web-install-button>
+    </div>
+    <p class="muted" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21 + rproxy 1.0 • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-n">2</span> ต่อ WiFi บ้าน (STA)</h2>
+    <p>หลังแฟลชเสร็จ บอร์ดจะเปิด WiFi ชื่อ <code>ESP32_NAT_Router</code> (เปิด ไม่มีรหัส)</p>
+    <ol>
+      <li>เชื่อมต่อ WiFi <code>ESP32_NAT_Router</code> ด้วยมือถือหรือโน้ตบุ๊ก</li>
+      <li>เปิด <a href="http://192.168.4.1" target="_blank">http://192.168.4.1</a> (หรือ <code>http://esp32-nat-router.local</code>)</li>
+      <li>ใส่ชื่อ/รหัส WiFi บ้าน (อินเทอร์เน็ตไทย) ในหน้า STA แล้วกด <b>Save &amp; Reboot</b></li>
+    </ol>
+    <p class="muted notice">บอร์ดนี้คือ “ปลายทางออกเน็ต” — ลูกค้าที่ต่อผ่าน VPS จะออกเน็ตด้วย IP ของ WiFi บ้านที่ตั้งไว้ตรงนี้</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-n">3</span> ตั้งค่าให้ต่อหา VPS broker</h2>
+    <p class="muted">กรอกค่าแล้วคัดลอกคำสั่ง ไปวางใน <b>Console</b> ของบอร์ด (ปุ่ม <i>Logs &amp; Console</i> บน esp-web-tools ด้านบน แล้วกด Enter ทีละบรรทัด) หรือผ่าน Serial/Remote Console</p>
+    <div class="grid">
+      <div><label>Broker host (VPS)</label><input id="host" value="broker.example.com" /></div>
+      <div><label>Broker port</label><input id="port" value="7000" /></div>
+      <div><label>Token (ต้องตรงกับฝั่ง VPS)</label><input id="token" value="" placeholder="วางค่า POOL_TOKEN" /></div>
+      <div><label>Pool (จำนวนการเชื่อมต่อค้างไว้ 1–8)</label><input id="pool" value="4" /></div>
+    </div>
+    <div class="cmds">
+      <button class="ghost copy-btn" onclick="copyCmds()">คัดลอก</button>
+      <pre id="cmds"></pre>
+    </div>
+    <p class="muted" style="font-size:.85rem">พิมพ์ <code>rproxy status</code> เพื่อตรวจสถานะ — ควรเห็น workers connected และ uplink เป็น “STA has IP”</p>
+    <p class="warn" style="font-size:.85rem">⚠️ เวอร์ชันนี้ช่วง ESP32↔VPS เป็น TCP ธรรมดา (ยังไม่เข้ารหัส) — ใช้ token สุ่มยาว ๆ และจำกัด firewall ของ broker ให้รับเฉพาะ IP บ้านช่วงทดสอบ</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="step-n">4</span> จัดการผู้ใช้ / ขาย</h2>
+    <p>เพิ่ม/ลบผู้ใช้ ตั้งความเร็ว โควตา และวันหมดอายุ ผ่าน Admin API หรือ GOST UI</p>
+    <p><a id="gostui" href="#" target="_blank">เปิด GOST UI →</a> &nbsp;·&nbsp; <span class="muted">Admin API: ดู README สำหรับ endpoint</span></p>
+  </div>
+
+  <footer>
+    ESP32 Proxy Platform • firmware จาก <a href="https://github.com/martin-ger/esp32_nat_router" target="_blank">esp32_nat_router</a> (MIT) + rproxy component
+  </footer>
+</div>
+
+<script>
+  // Prefill GOST UI link if provided via ?gostui= or a known default.
+  const params = new URLSearchParams(location.search);
+  const gostui = params.get('gostui') || 'https://gost-ui.jbacteam.com';
+  document.getElementById('gostui').href = gostui;
+
+  function esc(s){ return String(s).replace(/[^\w.\-:@]/g,''); }
+  function render(){
+    const host = esc(document.getElementById('host').value);
+    const port = esc(document.getElementById('port').value);
+    const token = document.getElementById('token').value.trim();
+    const pool = esc(document.getElementById('pool').value);
+    document.getElementById('cmds').textContent =
+      `rproxy server ${host} ${port}\n` +
+      `rproxy token ${token || '<YOUR_TOKEN>'}\n` +
+      `rproxy pool ${pool}\n` +
+      `rproxy enable\n` +
+      `rproxy status`;
+  }
+  function copyCmds(){
+    navigator.clipboard.writeText(document.getElementById('cmds').textContent);
+  }
+  ['host','port','token','pool'].forEach(id =>
+    document.getElementById(id).addEventListener('input', render));
+  render();
+</script>
+</body>
+</html>

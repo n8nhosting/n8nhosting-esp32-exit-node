@@ -1,0 +1,70 @@
+# GOST v3 config for the exit-node platform (full-stack compose).
+#
+# Customer traffic:  client --HTTP CONNECT (user:pass)--> :8080
+#   -> auther plugin   (admin-api /gost/auth)      authenticate + quota/expiry
+#   -> limiter plugin  (admin-api /gost/limiter)   per-user rate cap
+#   -> observer plugin (admin-api /gost/observer)  traffic accounting
+#   -> chain-0 (socks5 broker:1080) -> ESP32 pool -> home WiFi exit (Thai IP)
+#
+# Web API (:18080) is used by GOST UI. Protect it with api.auth below.
+
+api:
+  addr: ":18080"
+  pathPrefix: ""
+  accesslog: false
+  auth:
+    username: ${API_USER}
+    password: ${API_PASS}
+
+log:
+  level: info
+  format: json
+  output: stderr
+
+services:
+  - name: service-0
+    addr: ":8080"
+    handler:
+      type: http
+      auther: auther-0
+      limiter: limiter-0
+      chain: chain-0
+    listener:
+      type: tcp
+    observer: observer-0
+    metadata:
+      enableStats: true
+      observePeriod: 10s
+
+chains:
+  - name: chain-0
+    hops:
+      - name: hop-0
+        nodes:
+          - name: node-0
+            addr: broker:1080
+            connector:
+              type: socks5
+            dialer:
+              type: tcp
+
+authers:
+  - name: auther-0
+    plugin:
+      type: http
+      addr: http://admin-api:8088/gost/auth
+      timeout: 5s
+
+limiters:
+  - name: limiter-0
+    plugin:
+      type: http
+      addr: http://admin-api:8088/gost/limiter
+      timeout: 5s
+
+observers:
+  - name: observer-0
+    plugin:
+      type: http
+      addr: http://admin-api:8088/gost/observer
+      timeout: 5s

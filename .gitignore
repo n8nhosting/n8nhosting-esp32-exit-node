@@ -1,0 +1,8 @@
+# Go
+/broker/broker
+/admin-api/admin-api
+# firmware build artifacts
+firmware/build_*/
+firmware/sdkconfig
+# OS
+.DS_Store

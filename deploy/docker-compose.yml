@@ -1,0 +1,70 @@
+# ESP32 exit-node platform — full stack for Coolify (git-based Docker Compose).
+#
+# Services (one compose network, so all internal DNS "just works"):
+#   gost       customer HTTP proxy + Web API (for GOST UI); auth/limit/quota via
+#              admin-api plugins; outbound chain to broker.
+#   broker     accepts ESP32 pool connections (:7000) and serves GOST a SOCKS5
+#              upstream (:1080) that dials through the ESP32 home-WiFi exit.
+#   admin-api  user/billing management + GOST auth/limiter/observer plugins.
+#   flasher    static ESP Web Tools page to flash the ESP32-S3 firmware.
+#
+# Published to the host (must be reachable):
+#   8080  -> customer HTTP proxy      (customers abroad connect here: user:pass)
+#   7000  -> broker pool              (your ESP32 at home connects out to here)
+# Internal only (reach via Coolify domains/Traefik, not host ports):
+#   gost  18080  -> map to e.g. gost-api.<domain>  (GOST UI connects here)
+#   flasher 80   -> map to e.g. flash.<domain>
+#   admin-api 8088 -> optional: map to admin.<domain> for the REST API (token-gated)
+#
+# Set the required secrets in Coolify → Environment Variables (see .env.example).
+
+services:
+  gost:
+    build: ./gost
+    restart: unless-stopped
+    environment:
+      - API_USER=${API_USER}
+      - API_PASS=${API_PASS}
+    ports:
+      - "${PROXY_PORT:-8080}:8080"   # customer HTTP proxy (public)
+    expose:
+      - "18080"                       # Web API -> Coolify domain (GOST UI)
+    depends_on: [broker, admin-api]
+
+  broker:
+    build: ../broker
+    restart: unless-stopped
+    environment:
+      - POOL_TOKEN=${POOL_TOKEN}
+      - POOL_ADDR=:7000
+      - SOCKS_ADDR=:1080
+      - STATUS_ADDR=:7001
+      - DIAL_WAIT_SECONDS=10
+    ports:
+      - "${POOL_PORT:-7000}:7000"    # ESP32 nodes connect here (public)
+    expose:
+      - "1080"                        # SOCKS5 upstream for gost (internal)
+      - "7001"                        # status (internal)
+
+  admin-api:
+    build: ../admin-api
+    restart: unless-stopped
+    environment:
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET}
+      - DATA_FILE=/data/users.json
+      - USAGE_MODE=${USAGE_MODE:-delta}
+      - LISTEN_ADDR=:8088
+    expose:
+      - "8088"                        # plugins (internal) + REST (via domain)
+    volumes:
+      - admin_data:/data
+
+  flasher:
+    build: ../flasher
+    restart: unless-stopped
+    expose:
+      - "80"                          # map to flash.<domain> in Coolify
+
+volumes:
+  admin_data:

@@ -1,0 +1,23 @@
+# ESP32-S3 N16R8 overlay: 16 MB flash + 8 MB Octal PSRAM.
+# Apply after sdkconfig.defaults and sdkconfig.defaults.esp32s3.
+
+# --- 16 MB flash ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=n
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# --- 16 MB partition table with 3 MB OTA slots ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_16mb.csv"
+
+# --- Octal SPI PSRAM (R8) ---
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+# Keep small allocations in internal RAM; large buffers (relay) ask for PSRAM
+# explicitly via heap_caps_malloc(MALLOC_CAP_SPIRAM).
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

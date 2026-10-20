@@ -1,0 +1,19 @@
+dependencies:
+  esp_wireguard:
+    component_hash: d3845c88b511f24b1175ac0e0b5577b245c556b40c4fe784a91c432487377729
+    dependencies: []
+    source:
+      git: https://github.com/martin-ger/esp_wireguard_idf_5.5.x.git
+      path: .
+      type: git
+    version: 02a24fad29365db09e0088df2f8c4414632fe35a
+  idf:
+    source:
+      type: idf
+    version: 5.5.6
+direct_dependencies:
+- esp_wireguard
+- idf
+manifest_hash: 389b48d473ea7cbed5a7f61262611de5fd579d2b3e1847584bca757bf572d3d9
+target: esp32s3
+version: 2.0.0
