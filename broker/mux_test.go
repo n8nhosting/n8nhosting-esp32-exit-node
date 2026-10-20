@@ -356,6 +356,12 @@ func TestMuxOTADeliveredToConnectedLink(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("OTA not delivered while link stayed up")
 	}
+	// the live-link push goes through takeOTA like a push at HELLO
+	for _, v := range b.reg.list() {
+		if v.MAC == "aa:bb:cc:dd:ee:60" && v.OTAStatus != "sent" {
+			t.Fatalf("OTA status %q after a live-link push, want sent", v.OTAStatus)
+		}
+	}
 }
 
 func TestMuxOTAAndBlock(t *testing.T) {

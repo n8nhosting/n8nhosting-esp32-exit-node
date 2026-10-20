@@ -459,6 +459,39 @@ func TestPoolFlagEndpointAndPersistence(t *testing.T) {
 	}
 }
 
+// Slot, pool flag and OTA status share one persisted record: all of them
+// survive a restart, and an update delivered before it is still judged against
+// the firmware it was sent from.
+func TestRegistryPersistsSlotPoolAndOTAStatus(t *testing.T) {
+	file := t.TempDir() + "/nodes.json"
+	const mac = "aa:bb:cc:dd:ee:7b"
+	r := newRegistry(file)
+	r.touch(mac, "1.0", "1.2.3.4", 500, "")
+	pool := false
+	if err := r.setSlotPool(mac, 2, &pool); err != nil {
+		t.Fatal(err)
+	}
+	if !r.setOTA(mac, "https://flash.example/next.bin", "") {
+		t.Fatal("setOTA")
+	}
+	if u := r.takeOTA(r.nodes[mac]); u == "" {
+		t.Fatal("takeOTA returned no URL")
+	}
+	r2 := newRegistry(file) // restart
+	n := r2.nodes[mac]
+	if n == nil || n.Slot != 2 || n.Pool || n.inPool() || n.OTAStatus != "sent" || n.OTAAt == "" || n.otaFromFW != "1.0" {
+		t.Fatalf("not restored: %+v", n)
+	}
+	// no target version: any firmware change counts as done
+	r2.touch(mac, "1.1", "1.2.3.4", 5, "")
+	if n.OTAStatus != "ok" {
+		t.Fatalf("status %q, want ok", n.OTAStatus)
+	}
+	if n := newRegistry(file).nodes[mac]; n == nil || n.OTAStatus != "ok" || n.Slot != 2 || n.Pool {
+		t.Fatalf("after ok: %+v", n)
+	}
+}
+
 // POST /nodes/{mac}/slot assigns, moves and clears slots, refuses a slot held
 // by another board, and the assignment survives a restart.
 func TestSlotEndpointAndPersistence(t *testing.T) {
