@@ -18,7 +18,7 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px}
   #login .card{width:340px}
   h1{font-size:1.25rem;margin:0 0 4px} .sub{color:var(--muted);font-size:.9rem;margin-bottom:18px}
-  input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:10px 12px;font-size:.95rem;margin-top:4px}
+  input,select,textarea{width:100%;font-family:inherit;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:10px 12px;font-size:.95rem;margin-top:4px}
   label{font-size:.8rem;color:var(--muted)}
   button{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:600;cursor:pointer;font-size:.92rem}
   button.sec{background:var(--panel2);border:1px solid var(--line);color:var(--fg)}
@@ -53,6 +53,11 @@
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:10}
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px;width:380px}
   .modal h3{margin:0 0 14px}
+  .modal.wide{width:460px;max-width:94vw}
+  .field.inline label{display:flex;gap:8px;align-items:center}
+  .field.inline input{width:auto;margin:0}
+  button.link{background:none;border:none;padding:0;color:var(--muted);font-weight:400;cursor:pointer;font-size:inherit;text-decoration:underline}
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .field{margin-bottom:12px}
   .err{color:var(--bad);font-size:.85rem;margin-top:8px;min-height:1em}
   .muted{color:var(--muted)} .right{text-align:right}
@@ -108,7 +113,32 @@
   </div>
 </div>
 
+<!-- device modal -->
+<div class="modal-bg" id="dmodal">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="dmTitle">
+    <h3 id="dmTitle">Edit device</h3>
+    <div class="field"><label for="dmName">Name</label><input id="dmName" autocomplete="off" /></div>
+    <div class="field"><label for="dmKind">Kind</label>
+      <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select></div>
+    <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
+    <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
+    <div class="field"><label for="dmWifi">WiFi password <span class="muted" id="dmWifiHint"></span></label><input id="dmWifi" type="password" autocomplete="new-password" /></div>
+    <div class="field inline"><label for="dmWifiClear"><input id="dmWifiClear" type="checkbox" /> <span id="dmWifiClearLbl"></span></label></div>
+    <div class="field"><label for="dmNotes">Notes</label><textarea id="dmNotes" rows="3"></textarea></div>
+    <div class="err" id="dmErr" role="alert"></div>
+    <div class="right"><button type="button" class="sec" id="dmCancel"></button> <button type="button" id="dmSave"></button></div>
+  </div>
+</div>
+
 <script>
+const i18n = {
+  name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
+  edit:'Edit', reveal:'Reveal', unmeasured:'\u2014 unmeasured', assign:'assign\u2026', change:'change',
+  save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
+  wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
+  mbps:'Mbps', openMap:'Open in OpenStreetMap'
+};
+const T = k => i18n[k] ?? k;
 const $ = s => document.querySelector(s);
 let TOKEN = localStorage.getItem('adm_tok') || '';
 
@@ -177,6 +207,7 @@ async function viewUsers(){
   try{
     const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices').catch(()=>[])]);
     window._deviceMacs = (devices||[]).map(d=>d.mac);
+    window._devByMac = Object.fromEntries((devices||[]).map(d=>[d.mac,d]));
     if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
     const rows = users.map(u=>{
       const quota = u.quota_gb>0 ? `${u.usage_gb.toFixed(2)} / ${u.quota_gb} GB` : `${u.usage_gb.toFixed(2)} GB`;
@@ -186,9 +217,15 @@ async function viewUsers(){
       let st = u.enabled ? '<span class="pill ok">active</span>' : '<span class="pill off">disabled</span>';
       if(expired) st='<span class="pill bad">expired</span>';
       else if(over) st='<span class="pill warn">over quota</span>';
+      const dv = (window._devByMac||{})[u.device_mac];
+      let devLabel = '';
+      if(u.device_mac){
+        devLabel = dv && dv.name ? `${esc(dv.name)} <span class="mono muted">(${esc(u.device_mac)})</span>` : `<span class="mono">${esc(u.device_mac)}</span>`;
+        if(dv && dv.slot>0) devLabel += ` <span class="mono">:${esc(dv.port)}</span>`;
+      }
       const dev = u.device_mac
-        ? `<span class="mono">${esc(u.device_mac)}</span> <a class="muted" style="cursor:pointer" onclick="assignDevice('${esc(u.username)}')">change</a>`
-        : `<a class="muted" style="cursor:pointer" onclick="assignDevice('${esc(u.username)}')">assign…</a>`;
+        ? `${devLabel} <button type="button" class="link" data-assign="${esc(u.username)}">${esc(T('change'))}</button>`
+        : `<button type="button" class="link" data-assign="${esc(u.username)}">${esc(T('assign'))}</button>`;
       return `<tr>
         <td class="mono">${esc(u.username)}</td>
         <td>${st}</td>
@@ -205,6 +242,7 @@ async function viewUsers(){
         </td></tr>`;
     }).join('');
     $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#utbl').querySelectorAll('[data-assign]').forEach(b=>b.addEventListener('click',()=>assignDevice(b.dataset.assign)));
   }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 
@@ -272,29 +310,49 @@ async function viewDevices(){
   try{
     const nodes = await api('/api/devices') || [];
     if(!nodes.length){ $('#dtbl').innerHTML='<p class="muted">No devices have connected yet.</p>'; return; }
+    window._devs = Object.fromEntries(nodes.map(n=>[n.mac,n]));
     const rows = nodes.map(n=>{
       let st = n.blocked?'<span class="pill bad">blocked</span>':(n.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>');
       const g = n.geo||{};
-      const loc = [g.city,g.country].filter(Boolean).join(', ') || '—';
-      const users = (n.users&&n.users.length)? n.users.map(esc).join(', ') : '<span class="muted">—</span>';
+      const cityLoc = [g.city,g.country].filter(Boolean).join(', ') || '\u2014';
+      const hasPos = typeof n.lat==='number' && typeof n.lon==='number';
+      const loc = hasPos
+        ? `<a target="_blank" rel="noopener noreferrer" title="${esc(T('openMap'))}" href="https://www.openstreetmap.org/?mlat=${n.lat}&amp;mlon=${n.lon}#map=16/${n.lat}/${n.lon}">${esc(n.lat.toFixed(4)+', '+n.lon.toFixed(4))}</a>`
+        : esc(cityLoc);
+      const mac = esc(n.mac);
+      const users = (n.users&&n.users.length)? n.users.map(esc).join(', ') : '<span class="muted">\u2014</span>';
+      const wifi = `<span data-wifi="${mac}">${esc(n.ssid||'\u2014')} ${n.wifi_password_set
+        ? `<span class="mono">\u2022\u2022\u2022\u2022</span> <button type="button" class="sec" data-act="reveal" data-mac="${mac}">${esc(T('reveal'))}</button>`
+        : `<span class="muted">(${esc(T('notSet'))})</span>`}</span>`;
+      const cap = n.capacity_mbps>0 ? `${esc(n.capacity_mbps)} ${esc(T('mbps'))}` : `<span class="pill warn">${esc(T('unmeasured'))}</span>`;
       return `<tr>
-        <td class="mono">${esc(n.mac)}</td>
+        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div></td>
+        <td>${esc(n.kind||'\u2014')}</td>
         <td>${st}</td>
-        <td>${users}</td>
-        <td>${esc(n.ssid||'—')}</td>
-        <td class="mono">${esc(n.remote_ip||'—')}</td>
-        <td>${esc(loc)}</td>
-        <td class="muted">${esc(g.isp||'—')}</td>
+        <td>${users}<div class="muted">${esc(n.active_users??0)}/${esc(n.max_users??0)}</div></td>
+        <td>${wifi}</td>
+        <td class="mono">${esc(n.remote_ip||'\u2014')}</td>
+        <td>${loc}</td>
+        <td>${cap}</td>
+        <td class="muted">${esc(g.isp||'\u2014')}</td>
         <td>${fmtUptime(n.uptime_sec)}</td>
-        <td>↑${fmtBytes(n.bytes_up)} ↓${fmtBytes(n.bytes_down)}</td>
+        <td>\u2191${fmtBytes(n.bytes_up)} \u2193${fmtBytes(n.bytes_down)}</td>
         <td class="mono muted">${esc(n.firmware||'')}${n.pending_ota?' <span class="pill warn">OTA</span>':''}</td>
         <td class="right row-actions">
-          <button class="sec" onclick="otaDevice('${esc(n.mac)}')">Update FW</button>
-          <button class="sec" onclick="devAction('${esc(n.mac)}','${n.blocked?'allow':'block'}')">${n.blocked?'Allow':'Block'}</button>
-          <button class="danger" onclick="devAction('${esc(n.mac)}','forget')">Forget</button>
+          <button type="button" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>
+          <button type="button" class="sec" data-act="ota" data-mac="${mac}">Update FW</button>
+          <button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow':'Block'}</button>
+          <button type="button" class="danger" data-act="forget" data-mac="${mac}">Forget</button>
         </td></tr>`;
     }).join('');
-    $('#dtbl').innerHTML = `<table><thead><tr><th>MAC</th><th>Status</th><th>Users</th><th>SSID</th><th>Exit IP</th><th>Location</th><th>ISP</th><th>Uptime</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#dtbl').innerHTML = `<table><thead><tr><th>${esc(T('name'))}</th><th>${esc(T('kind'))}</th><th>Status</th><th>${esc(T('users'))}</th><th>${esc(T('wifi'))}</th><th>Exit IP</th><th>${esc(T('location'))}</th><th>${esc(T('capacity'))}</th><th>ISP</th><th>Uptime</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#dtbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
+      const mac=b.dataset.mac, act=b.dataset.act;
+      if(act==='edit') openDevice(mac,b);
+      else if(act==='reveal') revealWifi(mac,b);
+      else if(act==='ota') otaDevice(mac);
+      else devAction(mac,act);
+    }));
   }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 function fmtUptime(s){ s=+s||0; if(!s) return '—'; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
@@ -309,6 +367,69 @@ async function otaDevice(mac){
 }
 async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))return;
   await api('/api/devices/'+encodeURIComponent(mac)+'/'+a,{method:'POST'}); viewDevices(); }
+
+/* ---- Device editor ---- */
+let editDev=null, dmOpener=null;
+function openDevice(mac, opener){
+  const d = (window._devs||{})[mac]; if(!d) return;
+  editDev = d; dmOpener = opener||document.activeElement;
+  $('#dmTitle').textContent = T('editDevice')+' '+d.mac;
+  $('#dmName').value = d.name||'';
+  $('#dmKind').value = d.kind==='dedicated'?'dedicated':'shared';
+  $('#dmLat').value = typeof d.lat==='number'?d.lat:''; $('#dmLon').value = typeof d.lon==='number'?d.lon:'';
+  $('#dmWifi').value=''; $('#dmWifiHint').textContent = d.wifi_password_set?T('wifiSet'):'';
+  $('#dmWifiClear').checked=false; $('#dmWifiClear').disabled=!d.wifi_password_set;
+  $('#dmWifiClearLbl').textContent=T('wifiClear');
+  $('#dmNotes').value = d.notes||'';
+  $('#dmCancel').textContent=T('cancel'); $('#dmSave').textContent=T('save');
+  $('#dmErr').textContent=''; $('#dmodal').style.display='flex';
+  $('#dmName').focus();
+}
+function closeDevice(){
+  $('#dmodal').style.display='none'; editDev=null;
+  if(dmOpener && dmOpener.isConnected) dmOpener.focus();
+  dmOpener=null;
+}
+$('#dmCancel').addEventListener('click',closeDevice);
+$('#dmSave').addEventListener('click', async ()=>{
+  if(!editDev) return;
+  const body = { name:$('#dmName').value.trim(), kind:$('#dmKind').value, notes:$('#dmNotes').value };
+  const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
+  if(lat!=='') body.lat = +lat;
+  if(lon!=='') body.lon = +lon;
+  if($('#dmWifiClear').checked) body.wifi_password = '';
+  else if($('#dmWifi').value) body.wifi_password = $('#dmWifi').value;
+  $('#dmErr').textContent=''; $('#dmSave').disabled=true;
+  try{
+    await api('/api/devices/'+encodeURIComponent(editDev.mac),{method:'PUT',body:JSON.stringify(body)});
+    closeDevice(); viewDevices();
+  }catch(e){ $('#dmErr').textContent=e.message; }
+  finally{ $('#dmSave').disabled=false; }
+});
+// Reveal the WiFi password for 10 s, then hide it again.
+const revealTimers = {};
+async function revealWifi(mac, btn){
+  const box = btn.closest('[data-wifi]'); if(!box) return;
+  const d = (window._devs||{})[mac]||{};
+  try{
+    const r = await api('/api/devices/'+encodeURIComponent(mac)+'/reveal-wifi',{method:'POST'});
+    clearTimeout(revealTimers[mac]);
+    const prev = box.innerHTML;
+    box.textContent = (d.ssid||'\u2014')+' ';
+    const pw = document.createElement('span'); pw.className='mono'; pw.textContent = r.wifi_password || '(empty)';
+    box.appendChild(pw);
+    revealTimers[mac] = setTimeout(()=>{
+      if(!box.isConnected) return;
+      box.innerHTML = prev;
+      const nb = box.querySelector('button[data-act="reveal"]'); if(nb) nb.addEventListener('click',()=>revealWifi(mac,nb));
+    }, 10000);
+  }catch(e){ alert(T('revealFailed')+e.message); }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  if($('#dmodal').style.display==='flex') closeDevice();
+  else if($('#umodal').style.display==='flex') closeModal();
+});
 
 /* ---- Settings ---- */
 function viewSettings(){
