@@ -159,6 +159,7 @@ func (s *server) handleObserver(w http.ResponseWriter, r *http.Request) {
 		var add int64
 		if s.usageMode == "cumulative" {
 			key := e.Service + "|" + e.Client
+			s.lastSeenMu.Lock()
 			prev := s.lastSeen[key]
 			if total >= prev {
 				add = total - prev
@@ -166,6 +167,7 @@ func (s *server) handleObserver(w http.ResponseWriter, r *http.Request) {
 				add = total // counter reset (new connection)
 			}
 			s.lastSeen[key] = total
+			s.lastSeenMu.Unlock()
 		} else {
 			add = total
 		}

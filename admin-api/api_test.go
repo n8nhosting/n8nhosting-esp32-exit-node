@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -164,6 +166,37 @@ func TestObserverCumulativeMode(t *testing.T) {
 	u, _ := st.Get("e")
 	if u.UsageBytes != 300 {
 		t.Fatalf("cumulative accounting wrong: got %d want 300", u.UsageBytes)
+	}
+}
+
+// gost calls the observer concurrently (one callback per service), so the
+// cumulative-mode last-seen totals must be guarded; run with -race.
+func TestObserverCumulativeConcurrent(t *testing.T) {
+	st := openTestStore(t, filepath.Join(t.TempDir(), "u.json"))
+	s := &server{store: st, adminToken: "a", payToken: "p", usageMode: "cumulative", lastSeen: map[string]int64{}}
+	const clients, steps = 8, 20
+	for i := 0; i < clients; i++ {
+		if err := st.Create(&User{Username: fmt.Sprintf("c%d", i), PassHash: "x", Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < clients; i++ {
+		wg.Add(1)
+		go func(client string) {
+			defer wg.Done()
+			for k := 1; k <= steps; k++ { // each callback reports the running total
+				b, _ := json.Marshal(observerReq{Events: []observerEvent{{Kind: "handler", Service: "s0", Client: client, Type: "stats",
+					Stats: &observerStats{InputBytes: uint64(100 * k)}}}})
+				s.handleObserver(httptest.NewRecorder(), httptest.NewRequest("POST", "/gost/observer", bytes.NewReader(b)))
+			}
+		}(fmt.Sprintf("c%d", i))
+	}
+	wg.Wait()
+	for i := 0; i < clients; i++ {
+		if u, err := st.Get(fmt.Sprintf("c%d", i)); err != nil || u.UsageBytes != 100*steps {
+			t.Fatalf("c%d usage = %+v %v, want %d", i, u, err, 100*steps)
+		}
 	}
 }
 
