@@ -40,6 +40,9 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		list := s.store.List()
 		out := make([]PublicUser, 0, len(list))
 		for _, u := range list {
+			if isReservedUsername(u.Username) {
+				continue // a capacity measurement's throwaway user
+			}
 			out = append(out, u.Public())
 		}
 		writeJSON(w, http.StatusOK, out)

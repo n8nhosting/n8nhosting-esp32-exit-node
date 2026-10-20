@@ -16,6 +16,9 @@
 //	  PUT    /api/users/{name}
 //	  DELETE /api/users/{name}
 //	  POST   /api/users/{name}/enable | /disable | /reset-quota | /extend
+//	  POST   /api/devices/{mac}/measure - capacity through the board's slot
+//	         port: SPEEDTEST_URL (default https://flash.jbacteam.com/speedtest.bin)
+//	         via gost at GOST_INTERNAL_HOST (default gost) port 3130+slot
 //
 //	Payment webhook (shared-secret, generic PSP adapter):
 //	  POST /webhook/payment
@@ -45,6 +48,10 @@ type server struct {
 	// admitMu holds a capacity check (admit) and the binding it allows
 	// together, so two assigns cannot both take the last seat
 	admitMu sync.Mutex
+	// measureMu guards measuring, the MACs with a capacity measurement
+	// running (measure.go); a nil map is an empty set
+	measureMu sync.Mutex
+	measuring map[string]bool
 }
 
 func envOr(k, def string) string {

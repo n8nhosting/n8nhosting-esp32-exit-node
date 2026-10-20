@@ -113,12 +113,13 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			group[n.RemoteIP] = append(group[n.RemoteIP], n.MAC)
 		}
 	}
-	// users bound per MAC, and the seats they take (takesSeat) per MAC
+	// users bound per MAC, and the seats they take (takesSeat) per MAC; a
+	// measurement user is neither listed nor counted
 	byMAC := map[string][]string{}
 	activeByMAC := map[string]int{}
 	now := time.Now()
 	for _, u := range s.store.List() {
-		if u.DeviceMAC == "" {
+		if u.DeviceMAC == "" || isReservedUsername(u.Username) {
 			continue
 		}
 		byMAC[u.DeviceMAC] = append(byMAC[u.DeviceMAC], u.Username)
@@ -312,7 +313,7 @@ func (s *server) handleRevealWifi(w http.ResponseWriter, r *http.Request, mac st
 	writeJSON(w, http.StatusOK, map[string]string{"wifi_password": decryptCred(d.WifiPasswordEnc)})
 }
 
-// PUT /api/devices/{mac}, POST /api/devices/{mac}/slot|reveal-wifi (local); any
+// PUT /api/devices/{mac}, POST /api/devices/{mac}/slot|reveal-wifi|measure (local); any
 // other POST /api/devices/{mac}/block|allow|forget|ota is proxied to the broker.
 func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	rest := r.URL.Path[len("/api/devices/"):]
@@ -334,6 +335,12 @@ func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if r.Method == http.MethodPost && strings.HasSuffix(rest, "/measure") {
+		if mac := strings.TrimSuffix(rest, "/measure"); mac != "" && !strings.Contains(mac, "/") {
+			s.handleMeasure(w, r, mac)
+			return
+		}
+	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method"})
 		return
@@ -352,7 +359,12 @@ func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/overview — one call for the dashboard header cards.
 func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	users := s.store.List()
+	users := []*User{}
+	for _, u := range s.store.List() {
+		if !isReservedUsername(u.Username) { // a measurement is not a customer
+			users = append(users, u)
+		}
+	}
 	active, over, expired := 0, 0, 0
 	var monthBytes int64
 	now := time.Now()
