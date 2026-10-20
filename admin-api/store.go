@@ -1,23 +1,24 @@
-// store.go - a small, dependency-free JSON-file user store with month-based
-// quota accounting. Suitable for the modest user counts of a single node.
+// store.go - the proxy user store (SQLite users table) with month-based quota
+// accounting. Every call reads and writes the database; there is no cache.
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -145,55 +146,70 @@ func (u *User) Public() PublicUser {
 }
 
 type Store struct {
-	mu    sync.RWMutex
-	path  string
-	users map[string]*User
+	db *sql.DB
 }
 
 var ErrNotFound = errors.New("user not found")
 var ErrExists = errors.New("user already exists")
 
+// NewStore opens the store. A path ending in .json names the legacy users
+// file: the database is platform.db beside it, and the file is imported once
+// (importLegacyJSON). Any other path is the database itself.
 func NewStore(path string) (*Store, error) {
-	s := &Store{path: path, users: map[string]*User{}}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
-	if err == nil {
-		var list []*User
-		if err := json.Unmarshal(data, &list); err != nil {
-			return nil, err
-		}
-		migrated := false
-		for _, u := range list {
-			if u.PassHash == "" && u.LegacyPassword != "" {
-				u.PassHash = hashPassword(u.LegacyPassword) // upgrade v1.0 plaintext
-				u.LegacyPassword = ""
-				migrated = true
-			}
-			s.users[u.Username] = u
-		}
-		if migrated {
-			_ = s.flush()
-		}
-	} else if !os.IsNotExist(err) {
+	dbPath, legacy := path, ""
+	if strings.HasSuffix(path, ".json") {
+		dbPath, legacy = filepath.Join(filepath.Dir(path), "platform.db"), path
+	}
+	db, err := openDB(dbPath)
+	if err != nil {
 		return nil, err
 	}
-	return s, nil
+	if legacy != "" {
+		if err := importLegacyJSON(db, legacy); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	return &Store{db: db}, nil
 }
 
-// flush writes the store atomically (temp file + rename).
-func (s *Store) flush() error {
-	list := make([]*User, 0, len(s.users))
-	for _, u := range s.users {
-		list = append(list, u)
+// DB is the store's database, shared with the other platform tables.
+func (s *Store) DB() *sql.DB { return s.db }
+
+// userCols and userArgs list the users columns in one fixed order.
+const userCols = `username, pass_hash, cred_enc, enabled, expires_at, rate_mbps,
+	quota_gb, usage_bytes, usage_month, created_at, note, device_mac`
+
+func userArgs(u *User) []any {
+	return []any{u.Username, u.PassHash, u.CredEnc, u.Enabled, u.ExpiresAt, u.RateMbps,
+		u.QuotaGB, u.UsageBytes, u.UsageMonth, u.CreatedAt, u.Note, u.DeviceMAC}
+}
+
+const (
+	selectUser = `SELECT ` + userCols + ` FROM users WHERE username = ?`
+	insertUser = `INSERT INTO users (` + userCols + `) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT (username) DO NOTHING`
+	// updateUser takes userArgs minus the username, then the username.
+	updateUser = `UPDATE users SET pass_hash = ?, cred_enc = ?, enabled = ?, expires_at = ?,
+		rate_mbps = ?, quota_gb = ?, usage_bytes = ?, usage_month = ?, created_at = ?,
+		note = ?, device_mac = ? WHERE username = ?`
+)
+
+// scanUser reads one userCols row; no row is ErrNotFound.
+func scanUser(row interface{ Scan(...any) error }) (*User, error) {
+	u := &User{}
+	err := row.Scan(&u.Username, &u.PassHash, &u.CredEnc, &u.Enabled, &u.ExpiresAt, &u.RateMbps,
+		&u.QuotaGB, &u.UsageBytes, &u.UsageMonth, &u.CreatedAt, &u.Note, &u.DeviceMAC)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
 	}
-	data, _ := json.MarshalIndent(list, "", "  ")
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+	if err != nil {
+		return nil, err
 	}
-	return os.Rename(tmp, s.path)
+	return u, nil
 }
 
 func monthKey(t time.Time) string { return t.UTC().Format("2006-01") }
@@ -208,87 +224,96 @@ func (u *User) rollMonth(now time.Time) {
 }
 
 func (s *Store) List() []*User {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*User, 0, len(s.users))
-	for _, u := range s.users {
-		cp := *u
-		out = append(out, &cp)
+	out := []*User{}
+	rows, err := s.db.Query(`SELECT ` + userCols + ` FROM users ORDER BY username`)
+	if err != nil {
+		log.Printf("store: list users: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			log.Printf("store: list users: %v", err)
+			return out
+		}
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: list users: %v", err)
 	}
 	return out
 }
 
 func (s *Store) Get(username string) (*User, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	u, ok := s.users[username]
-	if !ok {
-		return nil, ErrNotFound
-	}
-	cp := *u
-	return &cp, nil
+	return scanUser(s.db.QueryRow(selectUser, username))
 }
 
 func (s *Store) Create(u *User) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.users[u.Username]; ok {
-		return ErrExists
-	}
 	if u.CreatedAt == "" {
 		u.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	u.UsageMonth = monthKey(time.Now())
-	s.users[u.Username] = u
-	return s.flush()
-}
-
-// Update applies a mutator under the lock and persists.
-func (s *Store) Update(username string, fn func(*User) error) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.users[username]
-	if !ok {
-		return ErrNotFound
-	}
-	if err := fn(u); err != nil {
+	res, err := s.db.Exec(insertUser, userArgs(u)...)
+	if err != nil {
 		return err
 	}
-	return s.flush()
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrExists
+	}
+	return nil
+}
+
+// Update applies a mutator to the stored user and persists it, all inside one
+// write transaction so concurrent updates never lose each other's changes.
+// fn must not call back into the store.
+func (s *Store) Update(username string, fn func(*User) error) error {
+	ctx := context.Background()
+	return inTx(ctx, s.db, func(c *sql.Conn) error {
+		u, err := scanUser(c.QueryRowContext(ctx, selectUser, username))
+		if err != nil {
+			return err
+		}
+		if err := fn(u); err != nil {
+			return err
+		}
+		_, err = c.ExecContext(ctx, updateUser, append(userArgs(u)[1:], username)...)
+		return err
+	})
 }
 
 func (s *Store) Delete(username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.users[username]; !ok {
+	res, err := s.db.Exec(`DELETE FROM users WHERE username = ?`, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	delete(s.users, username)
-	return s.flush()
+	return nil
 }
 
 // AddUsage records additional bytes for a user, rolling the month if needed.
-// Returns the user's post-update usage and quota state.
+// Unknown users are ignored.
 func (s *Store) AddUsage(username string, bytes int64, now time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.users[username]
-	if !ok {
-		return
+	err := s.Update(username, func(u *User) error {
+		u.rollMonth(now)
+		u.UsageBytes += bytes
+		return nil
+	})
+	if err != nil && err != ErrNotFound {
+		log.Printf("store: add usage user=%q: %v", username, err)
 	}
-	u.rollMonth(now)
-	u.UsageBytes += bytes
-	// best-effort flush; usage writes are frequent so ignore the error here
-	_ = s.flush()
 }
 
 // Authorize reports whether the user may open a new connection now, and why not.
 func (s *Store) Authorize(username, password string, now time.Time) (bool, string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.users[username]
-	if !ok {
+	u, err := s.Get(username)
+	if err == ErrNotFound {
 		return false, "unknown user"
+	}
+	if err != nil {
+		return false, "store: " + err.Error()
 	}
 	if !verifyPassword(u.PassHash, password) {
 		return false, "bad password"
@@ -301,7 +326,12 @@ func (s *Store) Authorize(username, password string, now time.Time) (bool, strin
 			return false, "expired"
 		}
 	}
+	month := u.UsageMonth
 	u.rollMonth(now)
+	if u.UsageMonth != month {
+		// persist the new month's reset, as the old in-memory store did
+		_ = s.Update(username, func(x *User) error { x.rollMonth(now); return nil })
+	}
 	if u.QuotaGB > 0 {
 		quotaBytes := int64(u.QuotaGB * 1024 * 1024 * 1024)
 		if u.UsageBytes >= quotaBytes {
@@ -313,13 +343,12 @@ func (s *Store) Authorize(username, password string, now time.Time) (bool, strin
 
 // RateBytesPerSec returns the per-user rate cap in bytes/sec (0 = unlimited).
 func (s *Store) RateBytesPerSec(username string) int64 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	u, ok := s.users[username]
-	if !ok || u.RateMbps <= 0 {
+	var mbps float64
+	err := s.db.QueryRow(`SELECT rate_mbps FROM users WHERE username = ?`, username).Scan(&mbps)
+	if err != nil || mbps <= 0 {
 		return 0
 	}
-	return int64(u.RateMbps * 1_000_000 / 8)
+	return int64(mbps * 1_000_000 / 8)
 }
 
 func randToken(n int) string {
