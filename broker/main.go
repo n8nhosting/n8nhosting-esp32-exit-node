@@ -96,6 +96,9 @@ type broker struct {
 	bytesUp     int64
 	bytesDown   int64
 	started     time.Time
+
+	streamsEvicted    int64 // mux streams reset to make room on a full link
+	streamsIdleClosed int64 // mux streams closed by the idle / half-close reaper
 }
 
 func main() {
@@ -268,6 +271,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int)
 	}
 	c.SetReadDeadline(time.Time{})
 	s := newMuxSession(c, br, n, maxStreams)
+	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
 	if url := b.reg.takeOTA(n); url != "" {
 		log.Printf("ota: pushing %s to %s (mux)", url, n.MAC)
 		s.writeFrame(frameOTA, 0, []byte(url))
@@ -332,6 +336,9 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (
 	for {
 		m := b.pickMux(tried)
 		if m == nil {
+			if b.evictIdleStream(tried) {
+				continue // a slot was just freed
+			}
 			return nil, 0, false
 		}
 		tried[m] = true
@@ -349,6 +356,34 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (
 			return nil, repHostFail, true
 		}
 	}
+}
+
+// evictIdleStream makes room on a full link by resetting the stream that has
+// been idle longest (at least muxEvictMinIdle), across links not in `tried`.
+// Browsers reopen a parked keep-alive connection transparently, so this beats
+// refusing the new customer. Returns false if nothing qualifies.
+func (b *broker) evictIdleStream(tried map[*muxSession]bool) bool {
+	b.muxMu.Lock()
+	muxes := append([]*muxSession(nil), b.muxes...)
+	b.muxMu.Unlock()
+	since := time.Now().Add(-muxEvictMinIdle)
+	var victim *muxStream
+	var on *muxSession
+	for _, m := range muxes {
+		if tried[m] || m.isClosed() || m.node.isBlocked() {
+			continue
+		}
+		if st := m.oldestIdle(since); st != nil && (victim == nil || st.lastActive.Load() < victim.lastActive.Load()) {
+			victim, on = st, m
+		}
+	}
+	if victim == nil {
+		return false
+	}
+	on.abort(victim)
+	atomic.AddInt64(&b.streamsEvicted, 1)
+	log.Printf("mux %s: link full, evicted idle stream %d", on.node.MAC, victim.id)
+	return true
 }
 
 func (b *broker) takeIdle(deadline time.Time) *idleConn {
@@ -606,17 +641,19 @@ func (b *broker) serveStatus() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
-			"idle_nodes":    len(b.idle),
-			"mux_links":     b.muxCount(),
-			"nodes_online":  b.reg.onlineCount(),
-			"nodes_total":   b.reg.count(),
-			"dials_ok":      atomic.LoadInt64(&b.dialsOK),
-			"dials_err":     atomic.LoadInt64(&b.dialsErr),
-			"dials_no_node": atomic.LoadInt64(&b.dialsNoNode),
-			"bytes_up":      atomic.LoadInt64(&b.bytesUp),
-			"bytes_down":    atomic.LoadInt64(&b.bytesDown),
-			"uptime_sec":    int64(time.Since(b.started).Seconds()),
-			"tls":           b.cfg.tlsCert != "",
+			"idle_nodes":          len(b.idle),
+			"mux_links":           b.muxCount(),
+			"nodes_online":        b.reg.onlineCount(),
+			"nodes_total":         b.reg.count(),
+			"dials_ok":            atomic.LoadInt64(&b.dialsOK),
+			"dials_err":           atomic.LoadInt64(&b.dialsErr),
+			"dials_no_node":       atomic.LoadInt64(&b.dialsNoNode),
+			"streams_evicted":     atomic.LoadInt64(&b.streamsEvicted),
+			"streams_idle_closed": atomic.LoadInt64(&b.streamsIdleClosed),
+			"bytes_up":            atomic.LoadInt64(&b.bytesUp),
+			"bytes_down":          atomic.LoadInt64(&b.bytesDown),
+			"uptime_sec":          int64(time.Since(b.started).Seconds()),
+			"tls":                 b.cfg.tlsCert != "",
 		})
 	})
 	mux.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {

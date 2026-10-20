@@ -61,6 +61,14 @@ const (
 	muxOpenWait  = 20 * time.Second
 )
 
+// Capacity management. Variables (not consts) so tests can shorten them.
+var (
+	muxIdleTimeout    = 90 * time.Second // no data either way -> close the stream
+	muxHalfCloseDrain = 30 * time.Second // after one side's FIN, the other side gets this long
+	muxEvictMinIdle   = 5 * time.Second  // a stream must be at least this idle to be evicted
+	muxReapEvery      = 5 * time.Second  // how often idle/half-closed streams are checked
+)
+
 var errStreamReset = errors.New("stream reset")
 
 type muxSession struct {
@@ -78,6 +86,8 @@ type muxSession struct {
 	done    chan struct{}
 
 	lastRx atomic.Int64 // unix nanos of the last frame received
+
+	evicted, idleClosed *int64 // broker-wide counters (nil = don't count)
 }
 
 type muxStream struct {
@@ -85,6 +95,10 @@ type muxStream struct {
 	s  *muxSession
 
 	openRes chan string // "" = OK, else the node's error reason
+
+	opened     atomic.Bool  // OPEN_OK received; eligible for reaping/eviction
+	lastActive atomic.Int64 // unix nanos of the last DATA either way (or open)
+	finAt      atomic.Int64 // unix nanos of the first FIN either way, 0 = none
 
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -188,6 +202,7 @@ func (s *muxSession) dispatch(typ byte, sid uint32, p []byte) {
 		default:
 		}
 	case frameData:
+		st.touch()
 		st.mu.Lock()
 		if len(st.rx)+len(p) > muxWindow {
 			st.mu.Unlock()
@@ -200,6 +215,7 @@ func (s *muxSession) dispatch(typ byte, sid uint32, p []byte) {
 		st.cond.Broadcast()
 		st.mu.Unlock()
 	case frameFin:
+		st.markFin()
 		st.mu.Lock()
 		st.rxEOF = true
 		st.cond.Broadcast()
@@ -223,10 +239,14 @@ func (s *muxSession) dispatch(typ byte, sid uint32, p []byte) {
 func (s *muxSession) keepalive() {
 	t := time.NewTicker(muxPingEvery)
 	defer t.Stop()
+	reap := time.NewTicker(muxReapEvery)
+	defer reap.Stop()
 	for {
 		select {
 		case <-s.done:
 			return
+		case <-reap.C:
+			s.reapIdle()
 		case <-t.C:
 			if s.node.isBlocked() {
 				log.Printf("mux %s: node blocked, closing link", s.node.MAC)
@@ -275,6 +295,7 @@ func (s *muxSession) open(host string, port int) (*muxStream, string) {
 	s.nextID++
 	st := &muxStream{id: s.nextID, s: s, openRes: make(chan string, 1), credit: muxWindow}
 	st.cond = sync.NewCond(&st.mu)
+	st.touch()
 	s.streams[st.id] = st
 	s.mu.Unlock()
 
@@ -288,6 +309,8 @@ func (s *muxSession) open(host string, port int) (*muxStream, string) {
 			s.forget(st.id)
 			return nil, r
 		}
+		st.touch()
+		st.opened.Store(true)
 		return st, ""
 	case <-time.After(muxOpenWait):
 		s.writeFrame(frameRst, st.id, nil)
@@ -300,6 +323,66 @@ func (s *muxSession) forget(id uint32) {
 	s.mu.Lock()
 	delete(s.streams, id)
 	s.mu.Unlock()
+}
+
+// abort resets a stream from the broker side: the node drops it, the slot is
+// freed right away (so a waiting customer can take it) and relay() unwinds,
+// closing the customer connection.
+func (s *muxSession) abort(st *muxStream) {
+	s.writeFrame(frameRst, st.id, nil)
+	s.forget(st.id)
+	st.markReset()
+}
+
+// reapIdle closes streams that carried no data for muxIdleTimeout, and
+// half-closed streams whose other side did not finish within muxHalfCloseDrain.
+func (s *muxSession) reapIdle() {
+	now := time.Now()
+	var victims []*muxStream
+	s.mu.Lock()
+	for _, st := range s.streams {
+		if st.expired(now) {
+			victims = append(victims, st)
+		}
+	}
+	s.mu.Unlock()
+	for _, st := range victims {
+		s.abort(st)
+		if s.idleClosed != nil {
+			atomic.AddInt64(s.idleClosed, 1)
+		}
+	}
+}
+
+// oldestIdle returns the opened stream with the oldest activity, provided it
+// has been idle since before `since`; nil if none qualifies.
+func (s *muxSession) oldestIdle(since time.Time) *muxStream {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var best *muxStream
+	for _, st := range s.streams {
+		if !st.opened.Load() || st.lastActive.Load() > since.UnixNano() {
+			continue
+		}
+		if best == nil || st.lastActive.Load() < best.lastActive.Load() {
+			best = st
+		}
+	}
+	return best
+}
+
+func (st *muxStream) touch() { st.lastActive.Store(time.Now().UnixNano()) }
+
+func (st *muxStream) markFin() { st.finAt.CompareAndSwap(0, time.Now().UnixNano()) }
+
+func (st *muxStream) expired(now time.Time) bool {
+	if !st.opened.Load() {
+		return false // still dialing; muxOpenWait bounds that
+	}
+	if fin := st.finAt.Load(); fin != 0 && now.Sub(time.Unix(0, fin)) > muxHalfCloseDrain {
+		return true
+	}
+	return now.Sub(time.Unix(0, st.lastActive.Load())) > muxIdleTimeout
 }
 
 func (st *muxStream) markReset() {
@@ -366,6 +449,7 @@ func (st *muxStream) Write(p []byte) (int, error) {
 		if err := st.s.writeFrame(frameData, st.id, p[:n]); err != nil {
 			return written, err
 		}
+		st.touch()
 		written += n
 		p = p[n:]
 	}
@@ -406,6 +490,7 @@ func (st *muxStream) relay(client net.Conn) (up, down int64) {
 		up = n
 		if err == nil {
 			st.s.writeFrame(frameFin, st.id, nil)
+			st.markFin()
 		} else if !errors.Is(err, errStreamReset) {
 			st.s.writeFrame(frameRst, st.id, nil)
 			st.markReset()
