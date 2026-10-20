@@ -342,7 +342,7 @@ func TestMuxOTAAndBlock(t *testing.T) {
 
 	mac := "aa:bb:cc:dd:ee:52"
 	b.reg.touch(mac, "", "", 0, "")
-	b.reg.setOTA(mac, "https://flash.example/fw.bin")
+	b.reg.setOTA(mac, "https://flash.example/fw.bin", "")
 	ota := make(chan string, 1)
 	go runMuxNode(t, poolLn.Addr().String(), "tok", mac, true, 24, ota, stop)
 	select {

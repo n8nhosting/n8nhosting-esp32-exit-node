@@ -108,6 +108,19 @@
   </div>
 </div>
 
+<!-- firmware update modal -->
+<div class="modal-bg" id="fwmodal">
+  <div class="modal" style="width:440px">
+    <h3 id="fwTitle">Update firmware</h3>
+    <div class="field"><label>Version</label><select id="fwSel"></select></div>
+    <div class="field" id="fwUrlRow" style="display:none"><label>Firmware URL (https://…/esp32_nat_router.bin)</label><input id="fwUrl" /></div>
+    <div class="muted" id="fwNotes" style="font-size:.85rem;min-height:1.2em;margin-bottom:10px"></div>
+    <div class="banner" style="font-size:.82rem">The device downloads over HTTPS and reboots. If the new firmware cannot reach the broker within 5 minutes (or crashes), the board rolls itself back to the previous one; the FW column then shows <span class="pill bad">rolled back</span>.</div>
+    <div class="err" id="fwErr"></div>
+    <div class="right"><button class="sec" onclick="closeFw()">Cancel</button> <button id="fwGo">Push update</button></div>
+  </div>
+</div>
+
 <script>
 const $ = s => document.querySelector(s);
 let TOKEN = localStorage.getItem('adm_tok') || '';
@@ -268,9 +281,10 @@ async function delUser(u){ if(!confirm('Delete user '+u+'?'))return; await api('
 
 /* ---- Devices ---- */
 async function viewDevices(){
-  $('#view').innerHTML = `<div class="head"><h2>Exit devices (ESP32-S3)</h2><button class="sec" onclick="route('devices')">Refresh</button></div><div id="dtbl">Loading…</div>`;
+  $('#view').innerHTML = `<div class="head"><h2>Exit devices (ESP32-S3)</h2><div><button class="sec" onclick="otaAll()">Update all online…</button> <button class="sec" onclick="route('devices')">Refresh</button></div></div><div id="dtbl">Loading…</div>`;
   try{
     const nodes = await api('/api/devices') || [];
+    window._nodes = nodes;
     if(!nodes.length){ $('#dtbl').innerHTML='<p class="muted">No devices have connected yet.</p>'; return; }
     const rows = nodes.map(n=>{
       let st = n.blocked?'<span class="pill bad">blocked</span>':(n.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>');
@@ -287,7 +301,7 @@ async function viewDevices(){
         <td class="muted">${esc(g.isp||'—')}</td>
         <td>${fmtUptime(n.uptime_sec)}</td>
         <td>↑${fmtBytes(n.bytes_up)} ↓${fmtBytes(n.bytes_down)}</td>
-        <td class="mono muted">${esc(n.firmware||'')}${n.pending_ota?' <span class="pill warn">OTA</span>':''}</td>
+        <td class="mono muted">${esc(n.firmware||'')} ${otaPill(n)}</td>
         <td class="right row-actions">
           <button class="sec" onclick="otaDevice('${esc(n.mac)}')">Update FW</button>
           <button class="sec" onclick="devAction('${esc(n.mac)}','${n.blocked?'allow':'block'}')">${n.blocked?'Allow':'Block'}</button>
@@ -298,14 +312,69 @@ async function viewDevices(){
   }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 function fmtUptime(s){ s=+s||0; if(!s) return '—'; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
-async function otaDevice(mac){
-  const def = localStorage.getItem('ota_url') || (location.protocol+'//'+location.hostname.replace(/^admin\./,'flash.')+'/firmware/esp32_nat_router.bin');
-  const url = prompt('Firmware URL to push to '+mac+'\n(the device downloads it over HTTPS and reboots):', def);
-  if(!url) return;
-  localStorage.setItem('ota_url', url);
-  await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url})});
-  alert('Queued. The device will update on its next connection (within seconds while online).');
-  viewDevices();
+/* ---- Firmware versions / OTA ---- */
+function otaPill(n){
+  const t = n.ota_target ? ' → '+n.ota_target : '';
+  const at = n.ota_at ? ' ('+new Date(n.ota_at).toLocaleString()+')' : '';
+  const cancel = n.pending_ota ? ` <a class="muted" style="cursor:pointer" onclick="devAction('${esc(n.mac)}','ota-cancel')">cancel</a>` : '';
+  switch(n.ota_status){
+    case 'queued': return `<span class="pill warn" title="waiting for the device to connect${esc(at)}">queued${esc(t)}</span>${cancel}`;
+    case 'sent':   return `<span class="pill warn" title="device is downloading / rebooting${esc(at)}">updating${esc(t)}</span>`;
+    case 'failed': return `<span class="pill bad" title="device rebooted but is still on its old firmware: download failed or the new image rolled back${esc(at)}">rolled back${esc(t)}</span>`;
+    case 'ok':     return n.ota_at && Date.now()-new Date(n.ota_at) < 864e5 ? `<span class="pill ok" title="updated${esc(at)}">updated</span>` : '';
+  }
+  return n.pending_ota ? '<span class="pill warn">OTA</span>'+cancel : '';
+}
+function flashBase(){ return $('#flashLink').href.replace(/\/$/,''); }
+async function loadReleases(){
+  try{
+    const r = await fetch(flashBase()+'/firmware/releases.json',{cache:'no-cache'});
+    if(r.ok) return await r.json();
+  }catch(_){}
+  return {latest:'', releases:[]};
+}
+let fwTargets=[];
+async function openFw(macs, title){
+  fwTargets = macs;
+  $('#fwTitle').textContent = title;
+  $('#fwErr').textContent=''; $('#fwNotes').textContent='Loading versions…';
+  $('#fwmodal').style.display='flex';
+  const idx = await loadReleases();
+  const cur = new Set((window._nodes||[]).filter(n=>macs.includes(n.mac)).map(n=>n.firmware));
+  const opts = idx.releases.map((r,i)=>{
+    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', cur.has(r.reports||r.version)?'current':'', r.protocol].filter(Boolean).join(', ');
+    return `<option value="${i}" ${r.version===idx.latest?'selected':''}>${esc(r.version)}${r.title?' · '+esc(r.title):''} (${esc(tags)})</option>`;
+  });
+  opts.push('<option value="custom">Custom URL…</option>');
+  $('#fwSel').innerHTML = opts.join('');
+  const show = ()=>{
+    const v=$('#fwSel').value, r=idx.releases[+v];
+    $('#fwUrlRow').style.display = v==='custom'?'block':'none';
+    $('#fwNotes').textContent = v==='custom' ? '' : [r.notes, r.built?('built '+r.built):''].filter(Boolean).join(' · ');
+  };
+  $('#fwSel').onchange = show;
+  if(!idx.releases.length){ $('#fwSel').value='custom'; $('#fwUrl').value = localStorage.getItem('ota_url') || flashBase()+'/firmware/esp32_nat_router.bin'; }
+  show();
+  $('#fwGo').onclick = async ()=>{
+    const v=$('#fwSel').value; let url, version='';
+    if(v==='custom'){ url=$('#fwUrl').value.trim(); localStorage.setItem('ota_url',url); }
+    else { const r=idx.releases[+v]; url=flashBase()+'/'+r.url; version=r.reports||r.version; }
+    if(!/^https?:\/\//.test(url)){ $('#fwErr').textContent='URL must start with https://'; return; }
+    let failed=[];
+    for(const mac of fwTargets){
+      try{ await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url,version})}); }
+      catch(e){ failed.push(mac+': '+e.message); }
+    }
+    if(failed.length){ $('#fwErr').textContent='Failed: '+failed.join('; '); return; }
+    closeFw(); viewDevices();
+  };
+}
+function closeFw(){ $('#fwmodal').style.display='none'; }
+function otaDevice(mac){ openFw([mac], 'Update firmware · '+mac); }
+function otaAll(){
+  const macs=(window._nodes||[]).filter(n=>n.online&&!n.blocked).map(n=>n.mac);
+  if(!macs.length){ alert('No online devices.'); return; }
+  openFw(macs, 'Update firmware · '+macs.length+' online device'+(macs.length>1?'s':''));
 }
 async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))return;
   await api('/api/devices/'+encodeURIComponent(mac)+'/'+a,{method:'POST'}); viewDevices(); }
@@ -318,11 +387,11 @@ function viewSettings(){
     <div class="card" style="max-width:560px">
       <div class="field"><label>Flash firmware page URL</label><input id="setFlash" value="${esc(flash)}" /></div>
       <div class="field"><label>GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
-      <div class="field"><label>Default OTA firmware URL (used by "Update FW")</label><input id="setOta" value="${esc(otaUrl)}" /></div>
+      <div class="field"><label>Custom OTA firmware URL (pre-filled for "Custom URL…" in Update FW)</label><input id="setOta" value="${esc(otaUrl)}" /></div>
       <button onclick="saveSettings()">Save</button>
       <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3128</span> (HTTP &amp; SOCKS5, username/password).<br>
       Flash new devices at the Flash page — each self-provisions (TLS, token baked in) and appears under <b>Devices</b> by MAC.<br>
-      <b>OTA:</b> on the Devices tab, "Update FW" pushes the firmware URL above; the device downloads over HTTPS and reboots.</p>
+      <b>OTA:</b> on the Devices tab, "Update FW" lists every firmware release kept on the Flash page (<span class="mono">/firmware/releases.json</span>), older ones included, so a board can be moved back to an earlier version. A new image that cannot reach the broker rolls itself back.</p>
     </div>`;
 }
 function saveSettings(){

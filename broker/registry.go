@@ -22,6 +22,14 @@ type node struct {
 	Blocked    bool   `json:"blocked"`
 	Note       string `json:"note,omitempty"`
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
+	// OTA tracking: queued -> sent -> ok | failed. "failed" means the node came
+	// back after a reboot still on its old firmware (download failed, or the new
+	// image did not confirm itself and the bootloader rolled it back).
+	OTATarget string `json:"ota_target,omitempty"` // firmware version expected after the update
+	OTAStatus string `json:"ota_status,omitempty"`
+	OTAAt     string `json:"ota_at,omitempty"`
+	otaFromFW string // firmware when the OTA was delivered
+	otaUptime uint64 // uptime when the OTA was delivered
 
 	// live counters (atomic)
 	Idle      int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
@@ -58,8 +66,9 @@ func (n *node) online() bool {
 func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
 		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note,
-		PendingOTA: n.PendingOTA, lastSeenT: n.lastSeenT,
-		Idle: atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
+		PendingOTA: n.PendingOTA, OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt,
+		lastSeenT: n.lastSeenT,
+		Idle:      atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
 		BytesUp: atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
 }
@@ -100,9 +109,24 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid string) *node {
 	if ip != "" {
 		n.RemoteIP = ip
 	}
+	rebooted := uptime < n.UptimeSec
 	n.UptimeSec = uptime
 	if ssid != "" {
 		n.SSID = ssid
+	}
+	if n.OTAStatus == "sent" {
+		done := n.Firmware != n.otaFromFW
+		if n.OTATarget != "" {
+			done = n.Firmware == n.OTATarget
+		}
+		switch {
+		case done:
+			n.OTAStatus, n.OTAAt = "ok", n.LastSeen
+			r.saveLocked()
+		case rebooted || uptime < n.otaUptime:
+			n.OTAStatus, n.OTAAt = "failed", n.LastSeen
+			r.saveLocked()
+		}
 	}
 	return n
 }
@@ -149,8 +173,10 @@ func (r *registry) setBlocked(mac string, blocked bool) bool {
 	return true
 }
 
-// setOTA queues a firmware URL for the node; cleared once delivered.
-func (r *registry) setOTA(mac, url string) bool {
+// setOTA queues a firmware URL for the node; cleared once delivered. target is
+// the version the node should report afterwards ("" = any change counts). An
+// empty url cancels a queued update.
+func (r *registry) setOTA(mac, url, target string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n, ok := r.nodes[mac]
@@ -158,6 +184,14 @@ func (r *registry) setOTA(mac, url string) bool {
 		return false
 	}
 	n.PendingOTA = url
+	if url == "" {
+		if n.OTAStatus == "queued" {
+			n.OTATarget, n.OTAStatus, n.OTAAt = "", "", ""
+		}
+	} else {
+		n.OTATarget, n.OTAStatus, n.OTAAt = target, "queued", time.Now().UTC().Format(time.RFC3339)
+	}
+	r.saveLocked()
 	return true
 }
 
@@ -167,6 +201,11 @@ func (r *registry) takeOTA(n *node) string {
 	defer r.mu.Unlock()
 	u := n.PendingOTA
 	n.PendingOTA = ""
+	if u != "" {
+		n.OTAStatus, n.OTAAt = "sent", time.Now().UTC().Format(time.RFC3339)
+		n.otaFromFW, n.otaUptime = n.Firmware, n.UptimeSec
+		r.saveLocked()
+	}
 	return u
 }
 
@@ -191,6 +230,10 @@ type persistedNode struct {
 	SSID      string `json:"ssid,omitempty"`
 	Blocked   bool   `json:"blocked"`
 	Note      string `json:"note,omitempty"`
+	OTATarget string `json:"ota_target,omitempty"`
+	OTAStatus string `json:"ota_status,omitempty"`
+	OTAAt     string `json:"ota_at,omitempty"`
+	OTAFromFW string `json:"ota_from_fw,omitempty"`
 }
 
 func (r *registry) saveLocked() {
@@ -199,7 +242,8 @@ func (r *registry) saveLocked() {
 	}
 	list := make([]persistedNode, 0, len(r.nodes))
 	for _, n := range r.nodes {
-		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note})
+		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note,
+			n.OTATarget, n.OTAStatus, n.OTAAt, n.otaFromFW})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.MkdirAll(filepath.Dir(r.file), 0o755)
@@ -223,7 +267,8 @@ func (r *registry) load() {
 	}
 	for _, p := range list {
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
-			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note}
+			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note,
+			OTATarget: p.OTATarget, OTAStatus: p.OTAStatus, OTAAt: p.OTAAt, otaFromFW: p.OTAFromFW}
 		r.nodes[p.MAC].blk.Store(p.Blocked)
 	}
 }
