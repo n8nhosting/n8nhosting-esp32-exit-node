@@ -28,6 +28,20 @@ var migrations = []string{
 		note        TEXT NOT NULL DEFAULT '',
 		device_mac  TEXT NOT NULL DEFAULT ''
 	)`,
+	// v2: operator-owned device records, keyed by MAC
+	`CREATE TABLE devices (
+		mac                     TEXT PRIMARY KEY,
+		name                    TEXT NOT NULL DEFAULT '',
+		kind                    TEXT NOT NULL DEFAULT 'shared',
+		slot                    INTEGER UNIQUE,
+		capacity_mbps           REAL NOT NULL DEFAULT 0,
+		capacity_measured_at    TEXT NOT NULL DEFAULT '',
+		capacity_active_streams INTEGER NOT NULL DEFAULT 0,
+		lat                     REAL,
+		lon                     REAL,
+		wifi_password_enc       TEXT NOT NULL DEFAULT '',
+		notes                   TEXT NOT NULL DEFAULT ''
+	)`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

@@ -34,6 +34,7 @@ import (
 
 type server struct {
 	store      *Store
+	devices    *DeviceStore
 	adminToken string
 	payToken   string
 	usageMode  string // "delta" (default) or "cumulative"
@@ -59,6 +60,7 @@ func main() {
 	}
 	s := &server{
 		store:      store,
+		devices:    NewDeviceStore(store.DB()),
 		adminToken: os.Getenv("ADMIN_TOKEN"),
 		payToken:   os.Getenv("PAYMENT_WEBHOOK_SECRET"),
 		usageMode:  envOr("USAGE_MODE", "delta"),

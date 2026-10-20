@@ -14,7 +14,8 @@ import (
 
 func newTestServer(t *testing.T) (*server, *http.ServeMux) {
 	st := openTestStore(t, filepath.Join(t.TempDir(), "users.json"))
-	s := &server{store: st, adminToken: "admintok", payToken: "paytok", usageMode: "delta", lastSeen: map[string]int64{}}
+	s := &server{store: st, devices: NewDeviceStore(st.DB()), adminToken: "admintok", payToken: "paytok", usageMode: "delta", lastSeen: map[string]int64{},
+		geo: &geoCache{data: map[string]geoEntry{}, url: "http://127.0.0.1:1/"}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/gost/auth", s.handleAuth)
 	mux.HandleFunc("/gost/limiter", s.handleLimiter)
@@ -22,6 +23,8 @@ func newTestServer(t *testing.T) (*server, *http.ServeMux) {
 	mux.HandleFunc("/api/users", s.requireAdmin(s.handleUsers))
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
 	mux.HandleFunc("/webhook/payment", s.handlePayment)
+	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
+	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
 	return s, mux
 }
 
