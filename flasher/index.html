@@ -68,6 +68,11 @@
   a { color: var(--accent); }
   .pill { display:inline-block; font-size:.75rem; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:2px 10px; color:var(--muted); }
   .notice { border-left:3px solid var(--warn); padding-left:12px; }
+  .rel { border-top:1px solid var(--line); padding:10px 0; }
+  .rel:first-of-type { border-top:none; padding-top:0; }
+  .rel b { font-size:.98rem; }
+  .rel .meta { color:var(--muted); font-size:.8rem; }
+  .rel p { margin:4px 0 0; font-size:.92rem; }
   footer { text-align:center; color:var(--muted); font-size:.85rem; margin-top:30px; }
 </style>
 </head>
@@ -91,7 +96,7 @@
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
       </esp-web-install-button>
     </div>
-    <p class="muted" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, 40 streams, 64 KB TCP buffers, auto-provision, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+    <p class="muted" style="font-size:.85rem">เวอร์ชันล่าสุด: <b id="fwlatest">2.4.21-mux1.2</b> — NAT Router v2.4.21 + rproxy mux1 (TLS link เดียว, 40 การเชื่อมต่อ, TCP buffer 64 KB, ตั้งค่าอัตโนมัติ, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM • <a href="#history">ประวัติเวอร์ชัน ↓</a></p>
   </div>
 
   <div class="card">
@@ -123,6 +128,12 @@
     <p><a id="dash" href="#" target="_blank">เปิด Dashboard →</a> &nbsp;·&nbsp; <a id="gostui" href="#" target="_blank">GOST config UI →</a></p>
   </div>
 
+  <div class="card" id="history">
+    <h2>ประวัติเวอร์ชัน firmware</h2>
+    <p class="muted" style="font-size:.85rem">ทุกเวอร์ชันด้านล่างเลือกติดตั้งได้จากช่อง “เวอร์ชัน firmware” ในขั้นที่ 1 หรือสั่ง OTA จาก Dashboard</p>
+    <div id="rellist"><p class="muted">กำลังโหลด…</p></div>
+  </div>
+
   <footer>
     ESP32 Proxy Platform • firmware จาก <a href="https://github.com/martin-ger/esp32_nat_router" target="_blank">esp32_nat_router</a> (MIT) + rproxy component
   </footer>
@@ -138,6 +149,22 @@
   // Version picker: every archived release can be USB-flashed (rollback).
   fetch('firmware/releases.json', {cache: 'no-cache'}).then(r => r.ok ? r.json() : null).then(idx => {
     if (!idx || !idx.releases) return;
+    if (idx.latest) document.getElementById('fwlatest').textContent = idx.latest;
+    const list = document.getElementById('rellist');
+    list.textContent = '';
+    let pastLatest = false;  // releases are newest first; ones above "latest" are still being tested
+    for (const r of idx.releases) {
+      const d = document.createElement('div'); d.className = 'rel';
+      const h = document.createElement('b'); h.textContent = r.version; d.appendChild(h);
+      const tag = r.version === idx.latest ? 'ล่าสุด (แนะนำ)' : (!pastLatest && idx.latest ? 'ใหม่ — กำลังทดสอบ' : '');
+      if (r.version === idx.latest) pastLatest = true;
+      if (tag) { const p = document.createElement('span'); p.className = 'pill'; p.style.marginLeft = '8px'; p.textContent = tag; d.appendChild(p); }
+      const m = document.createElement('div'); m.className = 'meta';
+      m.textContent = [r.protocol, r.added, r.size ? (r.size / 1048576).toFixed(2) + ' MB' : '', r.commit ? 'commit ' + r.commit : ''].filter(Boolean).join(' · ');
+      d.appendChild(m);
+      const n = document.createElement('p'); n.textContent = r.notes || ''; d.appendChild(n);
+      list.appendChild(d);
+    }
     const sel = document.getElementById('fwver'), note = document.getElementById('fwnote');
     for (const r of idx.releases) {
       const o = document.createElement('option');
