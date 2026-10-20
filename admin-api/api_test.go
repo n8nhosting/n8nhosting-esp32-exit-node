@@ -283,3 +283,20 @@ func TestGeoLookupCachesAndDegrades(t *testing.T) {
 		t.Fatal("geo should degrade to empty on error")
 	}
 }
+
+func TestUpdateDistinguishesAbsentFromZero(t *testing.T) {
+	_, mux := newTestServer(t)
+	doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": "bob", "password": "pw", "rate_mbps": 20, "quota_gb": 5})
+	// absent fields: unchanged
+	doJSON(t, mux, "PUT", "/api/users/bob", "admintok", map[string]any{"note": "x"})
+	_, u := doJSON(t, mux, "GET", "/api/users/bob", "admintok", nil)
+	if u["rate_mbps"] != 20.0 || u["quota_gb"] != 5.0 {
+		t.Fatalf("absent must not change: %v", u)
+	}
+	// explicit zero: unlimited
+	doJSON(t, mux, "PUT", "/api/users/bob", "admintok", map[string]any{"rate_mbps": 0, "quota_gb": 0})
+	_, u = doJSON(t, mux, "GET", "/api/users/bob", "admintok", nil)
+	if u["rate_mbps"] != 0.0 || u["quota_gb"] != 0.0 {
+		t.Fatalf("zero must reset: %v", u)
+	}
+}

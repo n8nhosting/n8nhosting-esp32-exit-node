@@ -20,14 +20,14 @@ func (s *server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 // userInput is the create/update payload.
 type userInput struct {
-	Username  string  `json:"username"`
-	Password  string  `json:"password"`
-	Enabled   *bool   `json:"enabled"`
-	ExpiresAt string  `json:"expires_at"`
-	RateMbps  float64 `json:"rate_mbps"`
-	QuotaGB   float64 `json:"quota_gb"`
-	Note      string  `json:"note"`
-	DeviceMAC string  `json:"device_mac"`
+	Username  string   `json:"username"`
+	Password  string   `json:"password"`
+	Enabled   *bool    `json:"enabled"`
+	ExpiresAt string   `json:"expires_at"`
+	RateMbps  *float64 `json:"rate_mbps"` // nil = absent; 0 = unlimited
+	QuotaGB   *float64 `json:"quota_gb"`  // nil = absent; 0 = unlimited
+	Note      string   `json:"note"`
+	DeviceMAC string   `json:"device_mac"`
 	// extend: days to add to expiry (used by /extend)
 	Days int `json:"days"`
 	// quota_gb_add: GB to add to this month's quota headroom (used by /extend)
@@ -57,14 +57,21 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		if in.Enabled != nil {
 			enabled = *in.Enabled
 		}
+		rate, quota := 0.0, 0.0
+		if in.RateMbps != nil {
+			rate = *in.RateMbps
+		}
+		if in.QuotaGB != nil {
+			quota = *in.QuotaGB
+		}
 		u := &User{
 			Username:  in.Username,
 			PassHash:  hashPassword(in.Password),
 			CredEnc:   encryptCred(in.Password),
 			Enabled:   enabled,
 			ExpiresAt: in.ExpiresAt,
-			RateMbps:  in.RateMbps,
-			QuotaGB:   in.QuotaGB,
+			RateMbps:  rate,
+			QuotaGB:   quota,
 			Note:      in.Note,
 		}
 		if err := s.store.Create(u); err != nil {
@@ -124,11 +131,11 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			if in.ExpiresAt != "" {
 				u.ExpiresAt = in.ExpiresAt
 			}
-			if in.RateMbps != 0 {
-				u.RateMbps = in.RateMbps
+			if in.RateMbps != nil {
+				u.RateMbps = *in.RateMbps
 			}
-			if in.QuotaGB != 0 {
-				u.QuotaGB = in.QuotaGB
+			if in.QuotaGB != nil {
+				u.QuotaGB = *in.QuotaGB
 			}
 			if in.Note != "" {
 				u.Note = in.Note
