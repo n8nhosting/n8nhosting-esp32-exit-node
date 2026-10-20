@@ -2,23 +2,21 @@
  * rproxy - Reverse exit-node dialer for ESP32 NAT Router
  *
  * The ESP32 sits behind home NAT and cannot be reached from the Internet.
- * Instead it opens a pool of OUTBOUND connections to a broker running on the
- * VPS and keeps them idle. When a customer connects to the VPS proxy (GOST),
- * the broker hands a pending request to one idle ESP32 connection as a line:
+ * Instead it keeps ONE outbound link to a broker running on the VPS and the
+ * broker multiplexes every customer stream over it ("mux1" protocol):
  *
- *     DIAL <host> <port>\n
+ *     HELLO <token> <mac> <fw> <uptime> <ssid_b64> mux1 <max>\n
+ *         ->   READY mux1\n   then binary frames in both directions
  *
- * The ESP32 resolves <host> (via the home DNS, giving a Thai-exit result),
- * connects out through its STA (home WiFi) uplink, answers:
- *
- *     OK\n            (connected, start relaying)   or
- *     ERR <reason>\n  (refused / blocked / failed)
- *
- * and then relays bytes in both directions until either side closes. When a
- * dial finishes, the ESP32 opens a fresh pool connection to keep the pool full.
- *
- * Handshake on every pool connection, before any DIAL:
- *     HELLO <token>\n   ->   READY\n   (broker accepts)  or connection closed
+ * Frame: type u8 | flags u8 | len u16 BE | stream id u32 BE | payload.
+ * When a customer connects to the VPS proxy (GOST) the broker sends
+ * OPEN "<host> <port>" for a new stream id. The ESP32 resolves <host> (via
+ * the home DNS, giving a Thai-exit result), connects out through its STA
+ * (home WiFi) uplink and answers OPEN_OK or OPEN_ERR "<reason>". Bytes then
+ * flow as DATA frames with per-stream credit (WINDOW frames) so one slow
+ * stream never stalls the others; FIN half-closes and RST aborts a stream.
+ * PING/PONG keep the link alive and OTA "<url>" triggers a firmware update.
+ * The authoritative description lives in broker/mux.go.
  *
  * SECURITY NOTES
  *  - DNS results are checked AFTER resolution: private / loopback / link-local
@@ -36,15 +34,21 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "sdkconfig.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define RPROXY_MAX_POOL        8      /* hard ceiling on concurrent workers   */
+#define RPROXY_MAX_POOL        8      /* legacy setting, kept for NVS compat   */
 #define RPROXY_DEFAULT_POOL    4
 #define RPROXY_DEFAULT_PORT    7000
-#define RPROXY_RELAY_BUF       4096   /* per-direction relay buffer (bytes)    */
+#define RPROXY_RELAY_BUF       4096   /* max DATA frame read from a target     */
+#ifdef CONFIG_RPROXY_MAX_STREAMS
+#define RPROXY_MAX_STREAMS     CONFIG_RPROXY_MAX_STREAMS
+#else
+#define RPROXY_MAX_STREAMS     8
+#endif
 
 typedef struct {
     bool     enabled;                 /* start the pool on boot                */
@@ -58,8 +62,9 @@ typedef struct {
 typedef struct {
     bool      running;                /* task group is up                      */
     uint8_t   configured_pool;
-    uint8_t   connected;              /* workers with a live pool link         */
-    uint8_t   dialing;                /* workers currently relaying a customer */
+    uint8_t   connected;              /* 1 while the mux link is up            */
+    uint8_t   dialing;                /* streams dialing or relaying           */
+    uint8_t   max_streams;            /* stream limit of the mux link          */
     uint32_t  total_dials;            /* successful DIALs since boot           */
     uint32_t  failed_dials;           /* DIALs that ended in ERR               */
     uint32_t  blocked_dials;          /* DIALs refused by the safety filter    */

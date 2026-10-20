@@ -9,8 +9,8 @@ so no port-forwarding at home is needed.
  customer abroad                         VPS (Coolify)                         home
  ───────────────        HTTP CONNECT        ┌───────────────┐    SOCKS5    ┌──────────┐   WiFi STA
   curl -x user:pass  ───────────────────▶   │     gost      │ ───────────▶ │  broker  │ ◀━━━━━━━━━ ESP32-S3
-  @vps:8080                                  │ auth+limit+   │              │  :1080   │   (pool, dials out)
-                                             │ quota (plugin)│              │  :7000 ◀━┼━━━━━━━━━━━ HELLO/DIAL
+  @vps:8080                                  │ auth+limit+   │              │  :1080   │   (1 TLS link, dials out)
+                                             │ quota (plugin)│              │  :7000 ◀━┼━━━━━━━━━━━ mux1 streams
                                              └──────┬────────┘              └──────────┘               │
                                                     │ plugins                                          ▼
                                              ┌──────▼────────┐                                  home router → Thai IP
@@ -25,11 +25,20 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
 
 | Dir | What it is | Tested |
 |-----|-----------|--------|
-| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **TLS (CA pinned)**, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
-| `broker/` | Go broker: **TLS** ESP32 pool (`:7000`) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test` (11 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence) |
+| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **one multiplexed TLS link (CA pinned)** with up to 24 concurrent streams and per-stream flow control, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
+| `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test` (17 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side) |
 | `admin-api/` | Go: **admin dashboard** (users, devices by MAC, OTA push, stats) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, JSON store, no external deps. | `go test` (7 tests) + headless-browser smoke test |
 | `flasher/` | ESP Web Tools static page to flash the board from Chrome/Edge + configure it. | manifest validated |
 | `deploy/` | Full-stack `docker-compose.yml` for Coolify (gost + broker + admin-api + flasher). | YAML validated |
+
+### Upgrading devices to the multiplexed link
+
+Since the mux release each ESP32 keeps **one** TLS link to the broker and every
+customer connection runs as a stream inside it (frame format in
+`broker/mux.go`), instead of one pre-opened TLS connection per customer.
+Deploy the new **broker first**: it serves old (pool) and new (mux) devices at
+the same time. Then OTA the devices. New firmware refuses to talk to an old
+broker (it logs "broker does not support the mux link").
 
 ## Deploy on Coolify (one stack)
 

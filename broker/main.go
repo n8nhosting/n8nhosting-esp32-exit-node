@@ -14,8 +14,12 @@
 //     and on OK relays bytes between GOST and the node (which has already
 //     connected out through the home WiFi, i.e. the Thai exit IP).
 //
-// One node connection serves one DIAL; the node opens a fresh pool connection
-// afterwards to refill the pool.
+// Legacy (v1.2 and older firmware): one node connection serves one DIAL; the
+// node opens a fresh pool connection afterwards to refill the pool.
+//
+// Multiplexed (HELLO ends with "mux1"): the node keeps ONE long-lived
+// connection and the broker runs many customer streams over it as binary
+// frames (see mux.go). Both kinds of node can be connected at the same time.
 //
 // SPDX-License-Identifier: MIT
 package main
@@ -81,6 +85,10 @@ type broker struct {
 	cfg  config
 	idle chan *idleConn
 	reg  *registry
+
+	muxMu sync.Mutex
+	muxes []*muxSession
+	muxRR int
 
 	dialsOK     int64
 	dialsErr    int64
@@ -192,6 +200,13 @@ func (b *broker) handlePoolConn(c net.Conn) {
 		return
 	}
 	// HELLO <token> <mac> <fw> <uptime_s> <ssid_b64>
+	// "mux1" as the 7th field selects the multiplexed link; an optional 8th
+	// field is the node's stream limit.
+	useMux := len(f) >= 7 && f[6] == "mux1"
+	maxStreams := 0
+	if useMux && len(f) >= 8 {
+		maxStreams, _ = strconv.Atoi(f[7])
+	}
 	mac, fw := "unknown", ""
 	var uptime uint64
 	ssid := ""
@@ -211,9 +226,13 @@ func (b *broker) handlePoolConn(c net.Conn) {
 	}
 	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
 	n := b.reg.touch(mac, fw, remoteIP, uptime, ssid)
-	if n.Blocked {
+	if n.isBlocked() {
 		c.Write([]byte("DENY blocked\n"))
 		c.Close()
+		return
+	}
+	if useMux {
+		b.serveMux(c, br, n, maxStreams)
 		return
 	}
 	if _, err := c.Write([]byte("READY\n")); err != nil {
@@ -241,6 +260,97 @@ func (b *broker) handlePoolConn(c net.Conn) {
 	}
 }
 
+// serveMux runs a multiplexed node link until it drops.
+func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int) {
+	if _, err := c.Write([]byte("READY mux1\n")); err != nil {
+		c.Close()
+		return
+	}
+	c.SetReadDeadline(time.Time{})
+	s := newMuxSession(c, br, n, maxStreams)
+	if url := b.reg.takeOTA(n); url != "" {
+		log.Printf("ota: pushing %s to %s (mux)", url, n.MAC)
+		s.writeFrame(frameOTA, 0, []byte(url))
+	}
+	b.muxMu.Lock()
+	b.muxes = append(b.muxes, s)
+	b.muxMu.Unlock()
+	n.addMux(1)
+	log.Printf("mux link up: %s (max %d streams)", n.MAC, s.maxStreams)
+
+	s.run()
+
+	n.addMux(-1)
+	b.muxMu.Lock()
+	for i, m := range b.muxes {
+		if m == s {
+			b.muxes = append(b.muxes[:i], b.muxes[i+1:]...)
+			break
+		}
+	}
+	b.muxMu.Unlock()
+	log.Printf("mux link down: %s", n.MAC)
+}
+
+// pickMux returns the least-loaded usable mux link (round-robin on ties),
+// skipping any in `tried`.
+func (b *broker) pickMux(tried map[*muxSession]bool) *muxSession {
+	b.muxMu.Lock()
+	defer b.muxMu.Unlock()
+	var best *muxSession
+	bestLoad := 0
+	cnt := len(b.muxes)
+	for i := 0; i < cnt; i++ {
+		m := b.muxes[(b.muxRR+i)%cnt]
+		if tried[m] || m.node.isBlocked() || m.isClosed() {
+			continue
+		}
+		load := m.active()
+		if load >= m.maxStreams {
+			continue
+		}
+		if best == nil || load < bestLoad {
+			best, bestLoad = m, load
+		}
+	}
+	if cnt > 0 {
+		b.muxRR = (b.muxRR + 1) % cnt
+	}
+	return best
+}
+
+func (b *broker) muxCount() int {
+	b.muxMu.Lock()
+	defer b.muxMu.Unlock()
+	return len(b.muxes)
+}
+
+// dialViaMux opens a stream on a mux link. ok=false means no mux link could
+// take it (the caller falls back to the legacy pool); otherwise rep is the
+// SOCKS reply code and st is non-nil on success.
+func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (st *muxStream, rep byte, ok bool) {
+	for {
+		m := b.pickMux(tried)
+		if m == nil {
+			return nil, 0, false
+		}
+		tried[m] = true
+		st, reason := m.open(host, port)
+		switch {
+		case st != nil:
+			return st, repSuccess, true
+		case reason == "busy" || reason == "link closed" || reason == "timeout":
+			continue // try another link
+		case reason == "blocked":
+			m.node.addStats(0, 1, 0, 0)
+			return nil, repRefused, true
+		default:
+			m.node.addStats(0, 1, 0, 0)
+			return nil, repHostFail, true
+		}
+	}
+}
+
 func (b *broker) takeIdle(deadline time.Time) *idleConn {
 	for {
 		wait := time.Until(deadline)
@@ -254,7 +364,7 @@ func (b *broker) takeIdle(deadline time.Time) *idleConn {
 				ic.c.Close()
 				continue
 			}
-			if ic.node.Blocked {
+			if ic.node.isBlocked() {
 				ic.c.Close()
 				continue
 			}
@@ -341,7 +451,24 @@ func (b *broker) handleSocks(c net.Conn) {
 	port := int(pb[0])<<8 | int(pb[1])
 	c.SetReadDeadline(time.Time{})
 
-	ic := b.takeIdle(time.Now().Add(b.cfg.dialWait))
+	deadline := time.Now().Add(b.cfg.dialWait)
+	tried := map[*muxSession]bool{}
+	var ic *idleConn
+	for {
+		if st, rep, ok := b.dialViaMux(host, port, tried); ok {
+			b.finishMux(c, st, rep)
+			return
+		}
+		// No mux link can take it: wait briefly for a legacy idle connection,
+		// then look again so a mux link that comes up meanwhile is used too.
+		step := time.Now().Add(250 * time.Millisecond)
+		if step.After(deadline) {
+			step = deadline
+		}
+		if ic = b.takeIdle(step); ic != nil || !time.Now().Before(deadline) {
+			break
+		}
+	}
 	if ic == nil {
 		atomic.AddInt64(&b.dialsNoNode, 1)
 		log.Printf("socks: no idle node for %s:%d", host, port)
@@ -382,6 +509,24 @@ func (b *broker) handleSocks(c net.Conn) {
 	up, down := b.pipe(c, ic.c, ic.br)
 	ic.node.addActive(-1)
 	ic.node.addStats(0, 0, up, down)
+}
+
+func (b *broker) finishMux(c net.Conn, st *muxStream, rep byte) {
+	if st == nil {
+		atomic.AddInt64(&b.dialsErr, 1)
+		socksReply(c, rep)
+		return
+	}
+	n := st.s.node
+	atomic.AddInt64(&b.dialsOK, 1)
+	n.addStats(1, 0, 0, 0)
+	n.addActive(1)
+	socksReply(c, repSuccess)
+	up, down := st.relay(c)
+	n.addActive(-1)
+	n.addStats(0, 0, up, down)
+	atomic.AddInt64(&b.bytesUp, up)
+	atomic.AddInt64(&b.bytesDown, down)
 }
 
 func readSocksAddr(br *bufio.Reader, atyp byte) (string, error) {
@@ -462,6 +607,7 @@ func (b *broker) serveStatus() {
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
 			"idle_nodes":    len(b.idle),
+			"mux_links":     b.muxCount(),
 			"nodes_online":  b.reg.onlineCount(),
 			"nodes_total":   b.reg.count(),
 			"dials_ok":      atomic.LoadInt64(&b.dialsOK),

@@ -29,6 +29,16 @@ config RPROXY_DEFAULT_POOL
     range 1 8
     default 4
 
+config RPROXY_MAX_STREAMS
+    int "Max concurrent customer streams on the mux link"
+    range 1 48
+    default 24 if SPIRAM
+    default 6
+    help
+        Every stream holds a target socket and a 32 KB receive window (in
+        PSRAM when available). Keep CONFIG_LWIP_MAX_SOCKETS at least this
+        plus ~16 for the web UI, console and the broker link itself.
+
 config RPROXY_DEFAULT_TLS
     bool "Use TLS for the broker link by default"
     default y

@@ -24,17 +24,22 @@ type node struct {
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
 
 	// live counters (atomic)
-	Idle      int64 `json:"idle_conns"`   // parked connections right now
+	Idle      int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
+	Mux       int64 `json:"mux_links"`    // live multiplexed links
 	Active    int64 `json:"active_dials"` // relays in progress
 	DialsOK   int64 `json:"dials_ok"`
 	DialsErr  int64 `json:"dials_err"`
 	BytesUp   int64 `json:"bytes_up"`
 	BytesDown int64 `json:"bytes_down"`
 	lastSeenT time.Time
+	blk       atomic.Bool // mirror of Blocked for lock-free readers
 }
+
+func (n *node) isBlocked() bool { return n.blk.Load() }
 
 func (n *node) addIdle(d int64)   { atomic.AddInt64(&n.Idle, d) }
 func (n *node) addActive(d int64) { atomic.AddInt64(&n.Active, d) }
+func (n *node) addMux(d int64)    { atomic.AddInt64(&n.Mux, d) }
 func (n *node) addStats(ok, errs, up, down int64) {
 	atomic.AddInt64(&n.DialsOK, ok)
 	atomic.AddInt64(&n.DialsErr, errs)
@@ -44,8 +49,19 @@ func (n *node) addStats(ok, errs, up, down int64) {
 
 // Online means it has parked/active connections or was seen very recently.
 func (n *node) online() bool {
-	return atomic.LoadInt64(&n.Idle) > 0 || atomic.LoadInt64(&n.Active) > 0 ||
+	return atomic.LoadInt64(&n.Idle) > 0 || atomic.LoadInt64(&n.Active) > 0 || atomic.LoadInt64(&n.Mux) > 0 ||
 		time.Since(n.lastSeenT) < 45*time.Second
+}
+
+// snapshot copies the node with its live counters read atomically, so the
+// JSON encoder never reads fields that relays are updating.
+func (n *node) snapshot() *node {
+	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
+		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note,
+		PendingOTA: n.PendingOTA, lastSeenT: n.lastSeenT,
+		Idle: atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
+		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
+		BytesUp: atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
 }
 
 type nodeView struct {
@@ -96,7 +112,7 @@ func (r *registry) list() []nodeView {
 	defer r.mu.Unlock()
 	out := make([]nodeView, 0, len(r.nodes))
 	for _, n := range r.nodes {
-		out = append(out, nodeView{node: n, Online: n.online()})
+		out = append(out, nodeView{node: n.snapshot(), Online: n.online()})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].MAC < out[j].MAC })
 	return out
@@ -128,6 +144,7 @@ func (r *registry) setBlocked(mac string, blocked bool) bool {
 		return false
 	}
 	n.Blocked = blocked
+	n.blk.Store(blocked)
 	r.saveLocked()
 	return true
 }
@@ -207,5 +224,6 @@ func (r *registry) load() {
 	for _, p := range list {
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
 			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note}
+		r.nodes[p.MAC].blk.Store(p.Blocked)
 	}
 }
