@@ -146,7 +146,7 @@ func TestObserverQuotaEnforcement(t *testing.T) {
 func TestObserverCumulativeMode(t *testing.T) {
 	st, _ := NewStore(filepath.Join(t.TempDir(), "u.json"))
 	s := &server{store: st, adminToken: "a", payToken: "p", usageMode: "cumulative", lastSeen: map[string]int64{}}
-	st.Create(&User{Username: "e", Password: "x", Enabled: true, QuotaGB: 10})
+	st.Create(&User{Username: "e", PassHash: hashPassword("x"), Enabled: true, QuotaGB: 10})
 	ev := func(total int64) observerReq {
 		return observerReq{Events: []observerEvent{{Kind: "handler", Service: "s0", Client: "e", Type: "stats",
 			Stats: &observerStats{InputBytes: uint64(total), OutputBytes: 0}}}}

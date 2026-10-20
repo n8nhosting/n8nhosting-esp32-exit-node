@@ -88,7 +88,7 @@
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
       </esp-web-install-button>
     </div>
-    <p class="muted" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21 + rproxy 1.0 • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+    <p class="muted" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21 + rproxy 1.1 (TLS, auto-provision, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
   </div>
 
   <div class="card">
@@ -103,26 +103,21 @@
   </div>
 
   <div class="card">
-    <h2><span class="step-n">3</span> ตั้งค่าให้ต่อหา VPS broker</h2>
-    <p class="muted">กรอกค่าแล้วคัดลอกคำสั่ง ไปวางใน <b>Console</b> ของบอร์ด (ปุ่ม <i>Logs &amp; Console</i> บน esp-web-tools ด้านบน แล้วกด Enter ทีละบรรทัด) หรือผ่าน Serial/Remote Console</p>
-    <div class="grid">
-      <div><label>Broker host (VPS)</label><input id="host" value="broker.example.com" /></div>
-      <div><label>Broker port</label><input id="port" value="7000" /></div>
-      <div><label>Token (ต้องตรงกับฝั่ง VPS)</label><input id="token" value="" placeholder="วางค่า POOL_TOKEN" /></div>
-      <div><label>Pool (จำนวนการเชื่อมต่อค้างไว้ 1–8)</label><input id="pool" value="4" /></div>
-    </div>
-    <div class="cmds">
-      <button class="ghost copy-btn" onclick="copyCmds()">คัดลอก</button>
-      <pre id="cmds"></pre>
-    </div>
-    <p class="muted" style="font-size:.85rem">พิมพ์ <code>rproxy status</code> เพื่อตรวจสถานะ — ควรเห็น workers connected และ uplink เป็น “STA has IP”</p>
-    <p class="warn" style="font-size:.85rem">⚠️ เวอร์ชันนี้ช่วง ESP32↔VPS เป็น TCP ธรรมดา (ยังไม่เข้ารหัส) — ใช้ token สุ่มยาว ๆ และจำกัด firewall ของ broker ให้รับเฉพาะ IP บ้านช่วงทดสอบ</p>
+    <h2><span class="step-n">3</span> เชื่อมต่อกับ VPS อัตโนมัติ</h2>
+    <p>ไม่ต้องตั้งค่าอะไรเพิ่ม — firmware นี้ฝังข้อมูลเซิร์ฟเวอร์ไว้แล้ว (เข้ารหัส TLS, ยืนยันด้วยใบรับรองที่ฝังในบอร์ด) ทันทีที่ต่อ WiFi บ้านได้ บอร์ดจะต่อไปหา VPS เอง</p>
+    <p>ดูสถานะได้ที่หน้าแรกของบอร์ด (<a href="http://192.168.4.1" target="_blank">192.168.4.1</a> ตอนตั้งค่า หรือ IP ที่ได้จาก WiFi บ้านหลังจากนั้น) บรรทัด <b>Proxy service</b>:</p>
+    <ul>
+      <li><span style="color:var(--accent2)">online</span> — เชื่อมต่อ VPS สำเร็จ พร้อมใช้งาน</li>
+      <li><span class="warn">connecting / waiting for WiFi</span> — กำลังต่อ รอสักครู่</li>
+      <li><span style="color:var(--danger)">error (rejected)</span> — เซิร์ฟเวอร์ปฏิเสธบอร์ดนี้ (ถูกบล็อก) ติดต่อผู้ดูแล</li>
+    </ul>
+    <p class="muted" style="font-size:.85rem">เมื่อ WiFi บ้านใช้งานได้ บอร์ดจะปิด WiFi <code>ESP32_NAT_Router</code> ของตัวเองเพื่อความปลอดภัย และเปิดกลับอัตโนมัติถ้า WiFi บ้านหลุดนานกว่า 90 วินาที บอร์ดจะปรากฏใน Dashboard ของผู้ดูแลตาม MAC address</p>
   </div>
 
   <div class="card">
     <h2><span class="step-n">4</span> จัดการผู้ใช้ / ขาย</h2>
     <p>เพิ่ม/ลบผู้ใช้ ตั้งความเร็ว โควตา และวันหมดอายุ ผ่าน Admin API หรือ GOST UI</p>
-    <p><a id="gostui" href="#" target="_blank">เปิด GOST UI →</a> &nbsp;·&nbsp; <span class="muted">Admin API: ดู README สำหรับ endpoint</span></p>
+    <p><a id="dash" href="#" target="_blank">เปิด Dashboard →</a> &nbsp;·&nbsp; <a id="gostui" href="#" target="_blank">GOST config UI →</a></p>
   </div>
 
   <footer>
@@ -135,9 +130,11 @@
   const params = new URLSearchParams(location.search);
   const gostui = params.get('gostui') || 'https://gost-ui.jbacteam.com';
   document.getElementById('gostui').href = gostui;
+  document.getElementById('dash').href = params.get('dash') || location.origin.replace('//flash.','//admin.');
 
   function esc(s){ return String(s).replace(/[^\w.\-:@]/g,''); }
   function render(){
+    if(!document.getElementById('host')) return;
     const host = esc(document.getElementById('host').value);
     const port = esc(document.getElementById('port').value);
     const token = document.getElementById('token').value.trim();
@@ -152,9 +149,8 @@
   function copyCmds(){
     navigator.clipboard.writeText(document.getElementById('cmds').textContent);
   }
-  ['host','port','token','pool'].forEach(id =>
-    document.getElementById(id).addEventListener('input', render));
-  render();
+  ['host','port','token','pool'].forEach(id => { const el=document.getElementById(id); if(el) el.addEventListener('input', render); });
+  if(document.getElementById('cmds')) render();
 </script>
 </body>
 </html>

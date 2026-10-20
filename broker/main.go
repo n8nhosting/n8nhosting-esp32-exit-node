@@ -2,25 +2,28 @@
 //
 // It bridges two sides:
 //
-//   - POOL side (:7000): ESP32 exit nodes dial IN and park idle connections.
-//     Each connection authenticates with "HELLO <token>\n" and the broker
-//     replies "READY\n", then holds the connection in an idle pool.
+//   - POOL side (:7000, TLS): ESP32 exit nodes dial IN and park idle
+//     connections. Each connection authenticates with
+//     "HELLO <token> <mac> <fw>\n" and the broker replies "READY\n", then
+//     holds the connection in an idle pool. Nodes are tracked by MAC address
+//     and can be blocked/allowed from the admin dashboard.
 //
-//   - SOCKS side (:1080): GOST chains outbound customer traffic here as a
-//     SOCKS5 upstream. For each CONNECT, the broker takes one idle ESP32
-//     connection, sends "DIAL <host> <port>\n", waits for "OK\n" / "ERR …\n",
-//     and on OK relays bytes between GOST and the ESP32 (which has already
+//   - SOCKS side (:1080, internal): GOST chains outbound customer traffic
+//     here as a SOCKS5 upstream. For each CONNECT the broker takes one idle
+//     node connection, sends "DIAL <host> <port>\n", waits for "OK\n"/"ERR …\n",
+//     and on OK relays bytes between GOST and the node (which has already
 //     connected out through the home WiFi, i.e. the Thai exit IP).
 //
-// One ESP32 connection serves one DIAL; the node opens a fresh pool
-// connection afterwards to refill the pool. Concurrency therefore equals the
-// node's configured pool size.
+// One node connection serves one DIAL; the node opens a fresh pool connection
+// afterwards to refill the pool.
 //
 // SPDX-License-Identifier: MIT
 package main
 
 import (
 	"bufio"
+	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -40,7 +43,24 @@ type config struct {
 	socksAddr  string
 	statusAddr string
 	token      string
-	dialWait   time.Duration // how long a SOCKS request waits for an idle node
+	dialWait   time.Duration
+	tlsCert    string // PEM (env TLS_CERT_PEM) or empty for plain TCP (dev only)
+	tlsKey     string
+	nodesFile  string // persisted node policy (block list)
+}
+
+// pemFromEnv reads a PEM from a plain env var or a base64-encoded one
+// (base64 avoids multi-line values in dashboards like Coolify).
+func pemFromEnv(plain, b64 string) string {
+	if v := os.Getenv(plain); v != "" {
+		return v
+	}
+	if v := os.Getenv(b64); v != "" {
+		if d, err := base64.StdEncoding.DecodeString(v); err == nil {
+			return string(d)
+		}
+	}
+	return ""
 }
 
 func envOr(k, def string) string {
@@ -50,23 +70,24 @@ func envOr(k, def string) string {
 	return def
 }
 
-// idleConn is a parked ESP32 pool connection waiting for work.
+// idleConn is a parked node connection waiting for work.
 type idleConn struct {
-	c  net.Conn
-	br *bufio.Reader
+	c    net.Conn
+	br   *bufio.Reader
+	node *node
 }
 
 type broker struct {
 	cfg  config
 	idle chan *idleConn
+	reg  *registry
 
-	// stats
-	nodesConnected int64
-	dialsOK        int64
-	dialsErr       int64
-	dialsNoNode    int64
-	bytesUp        int64
-	bytesDown      int64
+	dialsOK     int64
+	dialsErr    int64
+	dialsNoNode int64
+	bytesUp     int64
+	bytesDown   int64
+	started     time.Time
 }
 
 func main() {
@@ -76,6 +97,9 @@ func main() {
 		socksAddr:  envOr("SOCKS_ADDR", ":1080"),
 		statusAddr: envOr("STATUS_ADDR", ":7001"),
 		token:      os.Getenv("POOL_TOKEN"),
+		tlsCert:    pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
+		tlsKey:     pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
+		nodesFile:  envOr("NODES_FILE", "/data/nodes.json"),
 	}
 	waitS, _ := strconv.Atoi(envOr("DIAL_WAIT_SECONDS", "10"))
 	cfg.dialWait = time.Duration(waitS) * time.Second
@@ -84,22 +108,41 @@ func main() {
 	}
 	depth, _ := strconv.Atoi(envOr("POOL_BACKLOG", "64"))
 
-	b := &broker{cfg: cfg, idle: make(chan *idleConn, depth)}
+	b := newBroker(cfg, depth)
 
-	poolLn, err := net.Listen("tcp", cfg.poolAddr)
-	if err != nil {
-		log.Fatalf("pool listen %s: %v", cfg.poolAddr, err)
+	var poolLn net.Listener
+	var err error
+	if cfg.tlsCert != "" && cfg.tlsKey != "" {
+		cert, err := tls.X509KeyPair([]byte(cfg.tlsCert), []byte(cfg.tlsKey))
+		if err != nil {
+			log.Fatalf("TLS_CERT_PEM/TLS_KEY_PEM: %v", err)
+		}
+		tcfg := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		poolLn, err = tls.Listen("tcp", cfg.poolAddr, tcfg)
+		if err != nil {
+			log.Fatalf("pool tls listen %s: %v", cfg.poolAddr, err)
+		}
+		log.Printf("pool listening on %s (TLS)", cfg.poolAddr)
+	} else {
+		poolLn, err = net.Listen("tcp", cfg.poolAddr)
+		if err != nil {
+			log.Fatalf("pool listen %s: %v", cfg.poolAddr, err)
+		}
+		log.Printf("pool listening on %s (PLAIN TCP - set TLS_CERT_PEM/TLS_KEY_PEM for production)", cfg.poolAddr)
 	}
 	socksLn, err := net.Listen("tcp", cfg.socksAddr)
 	if err != nil {
 		log.Fatalf("socks listen %s: %v", cfg.socksAddr, err)
 	}
-	log.Printf("pool listening on %s", cfg.poolAddr)
 	log.Printf("socks5 listening on %s", cfg.socksAddr)
 
 	go b.servePool(poolLn)
 	go b.serveStatus()
-	b.serveSocks(socksLn) // blocks
+	b.serveSocks(socksLn)
+}
+
+func newBroker(cfg config, depth int) *broker {
+	return &broker{cfg: cfg, idle: make(chan *idleConn, depth), reg: newRegistry(cfg.nodesFile), started: time.Now()}
 }
 
 // ---- POOL side ----------------------------------------------------------
@@ -118,9 +161,7 @@ func (b *broker) servePool(ln net.Listener) {
 	}
 }
 
-func isClosedErr(err error) bool {
-	return errors.Is(err, net.ErrClosed)
-}
+func isClosedErr(err error) bool { return errors.Is(err, net.ErrClosed) }
 
 func (b *broker) handlePoolConn(c net.Conn) {
 	c.SetReadDeadline(time.Now().Add(15 * time.Second))
@@ -130,8 +171,23 @@ func (b *broker) handlePoolConn(c net.Conn) {
 		c.Close()
 		return
 	}
-	fields := strings.Fields(strings.TrimSpace(line))
-	if len(fields) < 2 || fields[0] != "HELLO" || fields[1] != b.cfg.token {
+	f := strings.Fields(strings.TrimSpace(line))
+	// HELLO <token> [mac] [fw]
+	if len(f) < 2 || f[0] != "HELLO" || f[1] != b.cfg.token {
+		c.Close()
+		return
+	}
+	mac, fw := "unknown", ""
+	if len(f) >= 3 {
+		mac = strings.ToLower(f[2])
+	}
+	if len(f) >= 4 {
+		fw = f[3]
+	}
+	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
+	n := b.reg.touch(mac, fw, remoteIP)
+	if n.Blocked {
+		c.Write([]byte("DENY blocked\n"))
 		c.Close()
 		return
 	}
@@ -139,22 +195,27 @@ func (b *broker) handlePoolConn(c net.Conn) {
 		c.Close()
 		return
 	}
-	c.SetReadDeadline(time.Time{}) // idle: no deadline until used
+	c.SetReadDeadline(time.Time{})
 
-	ic := &idleConn{c: c, br: br}
-	atomic.AddInt64(&b.nodesConnected, 1)
+	if url := b.reg.takeOTA(n); url != "" {
+		log.Printf("ota: pushing %s to %s", url, mac)
+		c.SetDeadline(time.Now().Add(10 * time.Second))
+		c.Write([]byte("OTA " + url + "\n"))
+		br.ReadString('\n') // OK
+		c.Close()
+		return
+	}
+	n.addIdle(1)
 
-	// Park it. If the pool buffer is full, drop the oldest-style: just close.
+	ic := &idleConn{c: c, br: br, node: n}
 	select {
 	case b.idle <- ic:
 	default:
-		atomic.AddInt64(&b.nodesConnected, -1)
+		n.addIdle(-1)
 		c.Close()
 	}
 }
 
-// takeIdle returns a usable idle node, discarding any that have died while
-// parked, until the deadline.
 func (b *broker) takeIdle(deadline time.Time) *idleConn {
 	for {
 		wait := time.Until(deadline)
@@ -163,8 +224,12 @@ func (b *broker) takeIdle(deadline time.Time) *idleConn {
 		}
 		select {
 		case ic := <-b.idle:
-			atomic.AddInt64(&b.nodesConnected, -1)
+			ic.node.addIdle(-1)
 			if isDead(ic.c, ic.br) {
+				ic.c.Close()
+				continue
+			}
+			if ic.node.Blocked {
 				ic.c.Close()
 				continue
 			}
@@ -175,20 +240,16 @@ func (b *broker) takeIdle(deadline time.Time) *idleConn {
 	}
 }
 
-// isDead reports whether a parked connection has already been closed by the
-// peer (EOF readable with zero bytes). The node never sends unsolicited data
-// while idle, so any readable byte also means it is unusable.
 func isDead(c net.Conn, br *bufio.Reader) bool {
 	c.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
 	defer c.SetReadDeadline(time.Time{})
 	_, err := br.Peek(1)
 	if err == nil {
-		return true // unexpected data while idle
+		return true
 	}
 	if errors.Is(err, io.EOF) {
 		return true
 	}
-	// timeout => still alive and quiet
 	return false
 }
 
@@ -225,7 +286,6 @@ func (b *broker) handleSocks(c net.Conn) {
 	c.SetReadDeadline(time.Now().Add(30 * time.Second))
 	br := bufio.NewReader(c)
 
-	// greeting: VER NMETHODS METHODS...
 	ver, _ := br.ReadByte()
 	if ver != socksVer5 {
 		return
@@ -234,10 +294,8 @@ func (b *broker) handleSocks(c net.Conn) {
 	if _, err := io.CopyN(io.Discard, br, int64(nm)); err != nil {
 		return
 	}
-	// reply: no auth
 	c.Write([]byte{socksVer5, 0x00})
 
-	// request: VER CMD RSV ATYP ADDR PORT
 	hdr := make([]byte, 4)
 	if _, err := io.ReadFull(br, hdr); err != nil {
 		return
@@ -258,7 +316,6 @@ func (b *broker) handleSocks(c net.Conn) {
 	port := int(pb[0])<<8 | int(pb[1])
 	c.SetReadDeadline(time.Time{})
 
-	// grab an idle ESP32 node
 	ic := b.takeIdle(time.Now().Add(b.cfg.dialWait))
 	if ic == nil {
 		atomic.AddInt64(&b.dialsNoNode, 1)
@@ -267,7 +324,6 @@ func (b *broker) handleSocks(c net.Conn) {
 		return
 	}
 
-	// send DIAL and read result
 	ic.c.SetDeadline(time.Now().Add(20 * time.Second))
 	if _, err := ic.c.Write([]byte("DIAL " + host + " " + strconv.Itoa(port) + "\n")); err != nil {
 		ic.c.Close()
@@ -283,6 +339,7 @@ func (b *broker) handleSocks(c net.Conn) {
 	resp = strings.TrimSpace(resp)
 	if resp != "OK" {
 		atomic.AddInt64(&b.dialsErr, 1)
+		ic.node.addStats(0, 1, 0, 0)
 		ic.c.Close()
 		if strings.HasPrefix(resp, "ERR blocked") {
 			socksReply(c, repRefused)
@@ -293,11 +350,13 @@ func (b *broker) handleSocks(c net.Conn) {
 	}
 	ic.c.SetDeadline(time.Time{})
 	atomic.AddInt64(&b.dialsOK, 1)
+	ic.node.addStats(1, 0, 0, 0)
+	ic.node.addActive(1)
 	socksReply(c, repSuccess)
 
-	// relay GOST (c) <-> ESP32 (ic.c). ic.br may hold buffered bytes; flush none
-	// expected here, but drain it to be safe.
-	b.pipe(c, ic.c, ic.br)
+	up, down := b.pipe(c, ic.c, ic.br)
+	ic.node.addActive(-1)
+	ic.node.addStats(0, 0, up, down)
 }
 
 func readSocksAddr(br *bufio.Reader, atyp byte) (string, error) {
@@ -329,62 +388,116 @@ func readSocksAddr(br *bufio.Reader, atyp byte) (string, error) {
 }
 
 func socksReply(c net.Conn, rep byte) {
-	// VER REP RSV ATYP(ipv4) BND.ADDR(0) BND.PORT(0)
 	c.Write([]byte{socksVer5, rep, 0x00, atypIPv4, 0, 0, 0, 0, 0, 0})
 }
 
-// pipe relays between the GOST connection and the ESP32 connection, counting
-// traffic. espBuffered carries any bytes already read into the node reader.
-func (b *broker) pipe(gost net.Conn, esp net.Conn, espRd *bufio.Reader) {
+// closeWrite half-closes if the connection supports it (TCP or TLS over TCP).
+func closeWrite(c net.Conn) {
+	switch t := c.(type) {
+	case *net.TCPConn:
+		t.CloseWrite()
+	case *tls.Conn:
+		t.CloseWrite()
+	}
+}
+
+func (b *broker) pipe(gost net.Conn, esp net.Conn, espRd *bufio.Reader) (up, down int64) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	// esp -> gost (down)
 	go func() {
 		defer wg.Done()
 		if n := espRd.Buffered(); n > 0 {
 			buf := make([]byte, n)
 			espRd.Read(buf)
 			gost.Write(buf)
-			atomic.AddInt64(&b.bytesDown, int64(n))
+			atomic.AddInt64(&down, int64(n))
 		}
 		n, _ := io.Copy(gost, esp)
-		atomic.AddInt64(&b.bytesDown, n)
-		if t, ok := gost.(*net.TCPConn); ok {
-			t.CloseWrite()
-		}
+		atomic.AddInt64(&down, n)
+		closeWrite(gost)
 	}()
-	// gost -> esp (up)
 	go func() {
 		defer wg.Done()
 		n, _ := io.Copy(esp, gost)
-		atomic.AddInt64(&b.bytesUp, n)
-		if t, ok := esp.(*net.TCPConn); ok {
-			t.CloseWrite()
-		}
+		atomic.AddInt64(&up, n)
+		closeWrite(esp)
 	}()
 	wg.Wait()
 	esp.Close()
 	gost.Close()
+	atomic.AddInt64(&b.bytesUp, up)
+	atomic.AddInt64(&b.bytesDown, down)
+	return up, down
 }
 
-// ---- status ------------------------------------------------------------
+// ---- status / nodes API (internal network only) -------------------------
 
 func (b *broker) serveStatus() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, map[string]any{
 			"idle_nodes":    len(b.idle),
+			"nodes_online":  b.reg.onlineCount(),
+			"nodes_total":   b.reg.count(),
 			"dials_ok":      atomic.LoadInt64(&b.dialsOK),
 			"dials_err":     atomic.LoadInt64(&b.dialsErr),
 			"dials_no_node": atomic.LoadInt64(&b.dialsNoNode),
 			"bytes_up":      atomic.LoadInt64(&b.bytesUp),
 			"bytes_down":    atomic.LoadInt64(&b.bytesDown),
+			"uptime_sec":    int64(time.Since(b.started).Seconds()),
+			"tls":           b.cfg.tlsCert != "",
 		})
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
+	mux.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, b.reg.list())
 	})
+	// POST /nodes/{mac}/block | /allow | /forget
+	mux.HandleFunc("/nodes/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		rest := strings.TrimPrefix(r.URL.Path, "/nodes/")
+		parts := strings.Split(rest, "/")
+		if len(parts) != 2 {
+			http.Error(w, "bad path", http.StatusBadRequest)
+			return
+		}
+		mac, action := strings.ToLower(parts[0]), parts[1]
+		var ok bool
+		switch action {
+		case "ota":
+			var body struct {
+				URL string `json:"url"`
+			}
+			json.NewDecoder(r.Body).Decode(&body)
+			if !strings.HasPrefix(body.URL, "http://") && !strings.HasPrefix(body.URL, "https://") {
+				http.Error(w, "url required", http.StatusBadRequest)
+				return
+			}
+			ok = b.reg.setOTA(mac, body.URL)
+		case "block":
+			ok = b.reg.setBlocked(mac, true)
+		case "allow":
+			ok = b.reg.setBlocked(mac, false)
+		case "forget":
+			ok = b.reg.forget(mac)
+		default:
+			http.Error(w, "unknown action", http.StatusBadRequest)
+			return
+		}
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	log.Printf("status listening on %s", b.cfg.statusAddr)
 	http.ListenAndServe(b.cfg.statusAddr, mux)
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
 }

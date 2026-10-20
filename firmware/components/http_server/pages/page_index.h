@@ -181,6 +181,11 @@ font-size: 0.8rem;\
 </table>\
 </div>"
 
+#if CONFIG_RPROXY_MINIMAL_UI
+#define INDEX_NAV_EXTRA ""
+#else
+#define INDEX_NAV_EXTRA "<a href='/firewall' class='nav-button'>🛡️ Firewall</a><a href='/vpn' class='nav-button'>🔒 VPN</a>"
+#endif
 #if !CONFIG_ETH_UPLINK
 #define INDEX_CHUNK_BUTTONS "\
 <div class='button-container'>\
@@ -188,16 +193,14 @@ font-size: 0.8rem;\
 <a href='/scan' class='nav-button'>📡 WiFi Scan</a>\
 <a href='/config' class='nav-button'>⚙️ Configuration</a>\
 <a href='/mappings' class='nav-button'>🔀 Mappings</a>\
-<a href='/firewall' class='nav-button'>🛡️ Firewall</a>\
-<a href='/vpn' class='nav-button'>🔒 VPN</a>\
+" INDEX_NAV_EXTRA "\
 </div>"
 #else
 #define INDEX_CHUNK_BUTTONS "\
 <div class='button-container'>\
 <a href='/config' class='nav-button'>⚙️ Configuration</a>\
 <a href='/mappings' class='nav-button'>🔀 Mappings</a>\
-<a href='/firewall' class='nav-button'>🛡️ Firewall</a>\
-<a href='/vpn' class='nav-button'>🔒 VPN</a>\
+" INDEX_NAV_EXTRA "\
 </div>"
 #endif
 /* Auth UI streamed here */

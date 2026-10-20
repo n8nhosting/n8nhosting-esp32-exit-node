@@ -1,6 +1,6 @@
 # GOST v3 config for the exit-node platform (full-stack compose).
 #
-# Customer traffic:  client --HTTP CONNECT (user:pass)--> :8080
+# Customer traffic:  client --HTTP CONNECT or SOCKS5 (user:pass)--> :8080
 #   -> auther plugin   (admin-api /gost/auth)      authenticate + quota/expiry
 #   -> limiter plugin  (admin-api /gost/limiter)   per-user rate cap
 #   -> observer plugin (admin-api /gost/observer)  traffic accounting
@@ -25,7 +25,7 @@ services:
   - name: service-0
     addr: ":8080"
     handler:
-      type: http
+      type: auto          # HTTP CONNECT + SOCKS4/5 on the same port
       auther: auther-0
       limiter: limiter-0
       chain: chain-0
@@ -52,19 +52,19 @@ authers:
   - name: auther-0
     plugin:
       type: http
-      addr: http://admin-api:8088/gost/auth
+      addr: http://admin-api:8088/gost/${PLUGIN_SECRET}/auth
       timeout: 5s
 
 limiters:
   - name: limiter-0
     plugin:
       type: http
-      addr: http://admin-api:8088/gost/limiter
+      addr: http://admin-api:8088/gost/${PLUGIN_SECRET}/limiter
       timeout: 5s
 
 observers:
   - name: observer-0
     plugin:
       type: http
-      addr: http://admin-api:8088/gost/observer
+      addr: http://admin-api:8088/gost/${PLUGIN_SECRET}/observer
       timeout: 5s

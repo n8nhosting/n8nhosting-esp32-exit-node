@@ -35,15 +35,22 @@ type userInput struct {
 func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, s.store.List())
+		list := s.store.List()
+		out := make([]PublicUser, 0, len(list))
+		for _, u := range list {
+			out = append(out, u.Public())
+		}
+		writeJSON(w, http.StatusOK, out)
 	case http.MethodPost:
 		var in userInput
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Username == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username required"})
 			return
 		}
+		generated := ""
 		if in.Password == "" {
 			in.Password = randToken(8)
+			generated = in.Password
 		}
 		enabled := true
 		if in.Enabled != nil {
@@ -51,7 +58,7 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		u := &User{
 			Username:  in.Username,
-			Password:  in.Password,
+			PassHash:  hashPassword(in.Password),
 			Enabled:   enabled,
 			ExpiresAt: in.ExpiresAt,
 			RateMbps:  in.RateMbps,
@@ -62,7 +69,11 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusCreated, u)
+		resp := map[string]any{"user": u.Public()}
+		if generated != "" {
+			resp["generated_password"] = generated // shown once; not stored in clear
+		}
+		writeJSON(w, http.StatusCreated, resp)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method"})
 	}
@@ -93,7 +104,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 			return
 		}
-		writeJSON(w, http.StatusOK, u)
+		writeJSON(w, http.StatusOK, u.Public())
 	case http.MethodPut:
 		var in userInput
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -102,7 +113,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 		}
 		err := s.store.Update(name, func(u *User) error {
 			if in.Password != "" {
-				u.Password = in.Password
+				u.PassHash = hashPassword(in.Password)
 			}
 			if in.Enabled != nil {
 				u.Enabled = *in.Enabled
@@ -126,7 +137,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u, _ := s.store.Get(name)
-		writeJSON(w, http.StatusOK, u)
+		writeJSON(w, http.StatusOK, u.Public())
 	case http.MethodDelete:
 		if err := s.store.Delete(name); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
@@ -178,5 +189,5 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		return
 	}
 	u, _ := s.store.Get(name)
-	writeJSON(w, http.StatusOK, u)
+	writeJSON(w, http.StatusOK, u.Public())
 }

@@ -1,17 +1,27 @@
 # Security notes
 
-## The ESP32 ⇄ VPS hop is plain TCP in this release
-Customer **HTTPS** traffic stays end-to-end encrypted regardless. But the
-control link and any **plain-HTTP** customer traffic between the VPS broker and
-the ESP32 are **not encrypted** yet. Until TLS is added:
+## The ESP32 ⇄ VPS hop is TLS with a pinned private CA
+The pool link is TLS 1.2+. The firmware embeds **our own CA**
+(`firmware/components/rproxy/broker_ca.pem`) and accepts only a broker
+certificate signed by it (hostname check skipped on purpose — the CA issues
+exactly one server cert, so CA trust alone authenticates the broker). The
+broker gets its cert/key via `TLS_CERT_B64`/`TLS_KEY_B64`.
 
-- Use a long, random `POOL_TOKEN` (alphanumeric, 32+ chars).
-- Firewall the broker pool port (`7000`) to your home IP range while testing.
-- Treat the platform as experimental; do not carry sensitive plaintext.
+Key handling:
+- `ca.key` (CA private key) is **not** in the repo and must be kept offline —
+  it is only needed to issue a new broker cert (valid 5 years).
+- `broker.key` lives only in Coolify's environment variables.
+- Rotating the CA requires a firmware rebuild + OTA to every device.
 
-Planned upgrade: wrap the pool link in TLS (esp-tls / mbedTLS on the ESP32,
-standard TLS on the broker). The firmware already has a `tls` config flag
-(currently a no-op that warns).
+Each device also presents its **MAC** in the handshake; the broker registry lets
+you block a device even though all devices share the baked-in `POOL_TOKEN`.
+
+## Dashboard exposure
+`admin-api` serves the dashboard and can be exposed on a domain. The GOST plugin
+callbacks live under `/gost/<GOST_PLUGIN_SECRET>/…` so they are not callable by
+anyone who finds the host. Admin REST needs `ADMIN_TOKEN`. Passwords are stored
+as PBKDF2-SHA256 (100k iterations) and never returned by the API; a generated
+password is shown exactly once at creation.
 
 ## SSRF / LAN protection (implemented)
 The firmware (and broker tests) refuse, **after DNS resolution**, any target in

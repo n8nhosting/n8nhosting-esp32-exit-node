@@ -1700,7 +1700,9 @@ void app_main(void)
     free(web_disabled);
 
     // Initialize PCAP capture (TCP server on port 19000)
+#if !CONFIG_RPROXY_MINIMAL_UI
     pcap_init();
+#endif
 
     // Initialize remote console (TCP server on port 2323, disabled by default)
     remote_console_init();

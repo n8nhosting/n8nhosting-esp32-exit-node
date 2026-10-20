@@ -3,19 +3,57 @@
 package main
 
 import (
+	"crypto/pbkdf2"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
+const pbkdf2Iter = 100_000
+
+// hashPassword returns "pbkdf2$<iter>$<salt_b64>$<hash_b64>".
+func hashPassword(pw string) string {
+	salt := make([]byte, 16)
+	rand.Read(salt)
+	dk, _ := pbkdf2.Key(sha256.New, pw, salt, pbkdf2Iter, 32)
+	return "pbkdf2$" + strconv.Itoa(pbkdf2Iter) + "$" +
+		base64.RawStdEncoding.EncodeToString(salt) + "$" +
+		base64.RawStdEncoding.EncodeToString(dk)
+}
+
+// verifyPassword accepts a stored hash (or, for legacy records, a plaintext
+// password) and reports whether pw matches.
+func verifyPassword(stored, pw string) bool {
+	if !strings.HasPrefix(stored, "pbkdf2$") {
+		return subtle.ConstantTimeCompare([]byte(stored), []byte(pw)) == 1 // legacy plaintext
+	}
+	parts := strings.Split(stored, "$")
+	if len(parts) != 4 {
+		return false
+	}
+	iter, _ := strconv.Atoi(parts[1])
+	salt, _ := base64.RawStdEncoding.DecodeString(parts[2])
+	want, _ := base64.RawStdEncoding.DecodeString(parts[3])
+	got, err := pbkdf2.Key(sha256.New, pw, salt, iter, len(want))
+	if err != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare(got, want) == 1
+}
+
 type User struct {
 	Username  string  `json:"username"`
-	Password  string  `json:"password"` // phase 1: plain; see note in README
+	PassHash  string  `json:"pass_hash"` // pbkdf2 hash (never returned by the API)
 	Enabled   bool    `json:"enabled"`
 	ExpiresAt string  `json:"expires_at,omitempty"` // RFC3339; empty = never
 	RateMbps  float64 `json:"rate_mbps"`            // 0 = unlimited
@@ -25,6 +63,29 @@ type User struct {
 	UsageMonth string `json:"usage_month"` // "2026-10"
 	CreatedAt  string `json:"created_at"`
 	Note       string `json:"note,omitempty"`
+}
+
+// PublicUser is what the API returns — never the password hash.
+type PublicUser struct {
+	Username   string  `json:"username"`
+	Enabled    bool    `json:"enabled"`
+	ExpiresAt  string  `json:"expires_at,omitempty"`
+	RateMbps   float64 `json:"rate_mbps"`
+	QuotaGB    float64 `json:"quota_gb"`
+	UsageBytes int64   `json:"usage_bytes"`
+	UsageGB    float64 `json:"usage_gb"`
+	UsageMonth string  `json:"usage_month"`
+	CreatedAt  string  `json:"created_at"`
+	Note       string  `json:"note,omitempty"`
+}
+
+func (u *User) Public() PublicUser {
+	return PublicUser{
+		Username: u.Username, Enabled: u.Enabled, ExpiresAt: u.ExpiresAt,
+		RateMbps: u.RateMbps, QuotaGB: u.QuotaGB, UsageBytes: u.UsageBytes,
+		UsageGB:    float64(u.UsageBytes) / (1024 * 1024 * 1024),
+		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note,
+	}
 }
 
 type Store struct {
@@ -164,7 +225,7 @@ func (s *Store) Authorize(username, password string, now time.Time) (bool, strin
 	if !ok {
 		return false, "unknown user"
 	}
-	if u.Password != password {
+	if !verifyPassword(u.PassHash, password) {
 		return false, "bad password"
 	}
 	if !u.Enabled {

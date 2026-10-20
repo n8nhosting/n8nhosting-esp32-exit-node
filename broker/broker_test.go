@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,19 +40,30 @@ func blockedPortTest(p int) bool { return p == 0 || p == 25 || p == 465 || p == 
 // runNode dials the broker pool, does the handshake, serves one DIAL, then
 // loops to refill — exactly like the firmware worker.
 func runNode(t *testing.T, poolAddr, token string, allowLocal bool, stop <-chan struct{}) {
+	runNodeMAC(t, poolAddr, token, "aa:bb:cc:dd:ee:01", allowLocal, false, stop)
+}
+
+// runNodeMAC lets tests pick the MAC and optionally speak TLS (pinned to the test CA).
+func runNodeMAC(t *testing.T, poolAddr, token, mac string, allowLocal, useTLS bool, stop <-chan struct{}) {
 	for {
 		select {
 		case <-stop:
 			return
 		default:
 		}
-		c, err := net.DialTimeout("tcp", poolAddr, 2*time.Second)
+		var c net.Conn
+		var err error
+		if useTLS {
+			c, err = tls.Dial("tcp", poolAddr, &tls.Config{RootCAs: testCAPool, ServerName: "node.jbacteam.com"})
+		} else {
+			c, err = net.DialTimeout("tcp", poolAddr, 2*time.Second)
+		}
 		if err != nil {
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
 		br := bufio.NewReader(c)
-		fmt.Fprintf(c, "HELLO %s\n", token)
+		fmt.Fprintf(c, "HELLO %s %s test-fw\n", token, mac)
 		line, err := br.ReadString('\n')
 		if err != nil || strings.TrimSpace(line) != "READY" {
 			c.Close()
@@ -94,7 +108,7 @@ func runNode(t *testing.T, poolAddr, token string, allowLocal bool, stop <-chan 
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() { defer wg.Done(); io.Copy(tc, br); tc.(*net.TCPConn).CloseWrite() }()
-		go func() { defer wg.Done(); io.Copy(c, tc); c.(*net.TCPConn).CloseWrite() }()
+		go func() { defer wg.Done(); io.Copy(c, tc); closeWrite(c) }()
 		wg.Wait()
 		tc.Close()
 		c.Close()
@@ -103,7 +117,7 @@ func runNode(t *testing.T, poolAddr, token string, allowLocal bool, stop <-chan 
 
 // spinBroker starts a broker with ephemeral listeners and `n` nodes.
 func spinBroker(t *testing.T, nodes int, allowLocal bool) (socksAddr string, stop func()) {
-	b := &broker{cfg: config{token: "tok", dialWait: 3 * time.Second}, idle: make(chan *idleConn, 64)}
+	b := newBroker(config{token: "tok", dialWait: 3 * time.Second, nodesFile: ""}, 64)
 	poolLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -264,5 +278,139 @@ func TestBlockedIPRanges(t *testing.T) {
 		if blockedIPtest(net.ParseIP(s)) {
 			t.Errorf("%s should be allowed", s)
 		}
+	}
+}
+
+// ---- TLS + node registry tests -----------------------------------------
+
+var testCAPool *x509.CertPool
+
+func mustLoadTestPKI(t *testing.T) tls.Certificate {
+	ca, err := os.ReadFile("testdata/ca.crt")
+	if err != nil {
+		t.Skip("testdata/ca.crt missing")
+	}
+	testCAPool = x509.NewCertPool()
+	testCAPool.AppendCertsFromPEM(ca)
+	cert, err := tls.LoadX509KeyPair("testdata/broker.crt", "testdata/broker.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert
+}
+
+func TestTLSPoolWithPinnedCA(t *testing.T) {
+	cert := mustLoadTestPKI(t)
+	oh, op, oclose := originServer(t)
+	defer oclose()
+
+	b := newBroker(config{token: "tok", dialWait: 3 * time.Second}, 64)
+	poolLn, _ := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
+	socksLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	go b.serveSocks(socksLn)
+	stop := make(chan struct{})
+	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
+	for i := 0; i < 2; i++ {
+		go runNodeMAC(t, poolLn.Addr().String(), "tok", "aa:bb:cc:dd:ee:10", true, true, stop)
+	}
+	time.Sleep(400 * time.Millisecond)
+
+	body, err := fetchVia(socksLn.Addr().String(), oh, op, "/hello")
+	if err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
+		t.Fatalf("TLS chain fetch failed: err=%v", err)
+	}
+	time.Sleep(300 * time.Millisecond) // let the relay goroutines finish accounting
+	// node registered with MAC + firmware
+	nodes := b.reg.list()
+	if len(nodes) != 1 || nodes[0].MAC != "aa:bb:cc:dd:ee:10" || nodes[0].Firmware != "test-fw" || !nodes[0].Online {
+		t.Fatalf("registry wrong: %+v", nodes)
+	}
+	if nodes[0].DialsOK < 1 || nodes[0].BytesDown == 0 {
+		t.Fatalf("per-node stats not attributed: %+v", nodes[0])
+	}
+}
+
+func TestTLSRejectsUntrustedClientCA(t *testing.T) {
+	cert := mustLoadTestPKI(t)
+	b := newBroker(config{token: "tok", dialWait: time.Second}, 8)
+	poolLn, _ := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
+	go b.servePool(poolLn)
+	defer poolLn.Close()
+	// A client that does NOT trust our CA must fail the handshake (what a
+	// tampered/other server would look like from the firmware's side).
+	_, err := tls.Dial("tcp", poolLn.Addr().String(), &tls.Config{RootCAs: x509.NewCertPool()})
+	if err == nil {
+		t.Fatal("expected handshake failure with empty trust store")
+	}
+}
+
+func TestBlockedNodeIsRefused(t *testing.T) {
+	oh, op, oclose := originServer(t)
+	defer oclose()
+	b := newBroker(config{token: "tok", dialWait: 1500 * time.Millisecond}, 64)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	socksLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	go b.serveSocks(socksLn)
+	stop := make(chan struct{})
+	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
+
+	// pre-block the MAC, then let it try to join
+	b.reg.touch("de:ad:be:ef:00:01", "", "")
+	b.reg.setBlocked("de:ad:be:ef:00:01", true)
+	go runNodeMAC(t, poolLn.Addr().String(), "tok", "de:ad:be:ef:00:01", true, false, stop)
+	time.Sleep(400 * time.Millisecond)
+
+	if _, err := socks5Connect(socksLn.Addr().String(), oh, op); err == nil {
+		t.Fatal("blocked node must not serve dials")
+	}
+	// allow it -> dials work
+	b.reg.setBlocked("de:ad:be:ef:00:01", false)
+	time.Sleep(400 * time.Millisecond)
+	if body, err := fetchVia(socksLn.Addr().String(), oh, op, "/hello"); err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
+		t.Fatalf("allowed node should serve: %v", err)
+	}
+}
+
+func TestRegistryPersistence(t *testing.T) {
+	f := t.TempDir() + "/nodes.json"
+	r := newRegistry(f)
+	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4")
+	r.setBlocked("11:22:33:44:55:66", true)
+	r2 := newRegistry(f)
+	l := r2.list()
+	if len(l) != 1 || !l[0].Blocked || l[0].Firmware != "fw1" {
+		t.Fatalf("persistence failed: %+v", l)
+	}
+}
+
+func TestOTACommandDelivered(t *testing.T) {
+	b := newBroker(config{token: "tok", dialWait: time.Second}, 8)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	defer poolLn.Close()
+
+	mac := "0a:0b:0c:0d:0e:0f"
+	b.reg.touch(mac, "", "")
+	b.reg.setOTA(mac, "https://flash.example/fw.bin")
+
+	c, _ := net.Dial("tcp", poolLn.Addr().String())
+	fmt.Fprintf(c, "HELLO tok %s fw1\n", mac)
+	br := bufio.NewReader(c)
+	l1, _ := br.ReadString('\n')
+	l2, _ := br.ReadString('\n')
+	if strings.TrimSpace(l1) != "READY" || strings.TrimSpace(l2) != "OTA https://flash.example/fw.bin" {
+		t.Fatalf("expected READY then OTA, got %q %q", l1, l2)
+	}
+	c.Write([]byte("OK\n"))
+	// second connection must NOT get OTA again (one-shot)
+	c2, _ := net.Dial("tcp", poolLn.Addr().String())
+	fmt.Fprintf(c2, "HELLO tok %s fw1\n", mac)
+	br2 := bufio.NewReader(c2)
+	br2.ReadString('\n')
+	c2.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	if _, err := br2.ReadString('\n'); err == nil {
+		t.Fatal("OTA should be one-shot")
 	}
 }

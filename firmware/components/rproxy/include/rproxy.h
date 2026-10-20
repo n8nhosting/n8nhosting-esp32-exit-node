@@ -67,6 +67,19 @@ typedef struct {
     uint64_t  bytes_down;             /* target -> customer                    */
 } rproxy_status_t;
 
+/* Coarse link state for the web UI status row. */
+typedef enum {
+    RPROXY_LINK_DISABLED = 0,   /* feature off                                */
+    RPROXY_LINK_NO_UPLINK,      /* enabled but STA has no IP yet              */
+    RPROXY_LINK_CONNECTING,     /* trying to reach the broker                 */
+    RPROXY_LINK_ONLINE,         /* at least one worker connected to broker    */
+    RPROXY_LINK_REJECTED        /* broker refused us (bad token / blocked)    */
+} rproxy_link_state_t;
+
+/* One-line state for the web UI: "gost online" / "connecting" / "error". */
+rproxy_link_state_t rproxy_link_state(void);
+const char *rproxy_link_state_str(rproxy_link_state_t s);
+
 /* Load config from NVS and, if enabled, start the worker pool. Call once from
  * app_main after the network stack and STA are initialised. */
 esp_err_t rproxy_init(void);

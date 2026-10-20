@@ -68,17 +68,33 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	// GOST plugin endpoints (no admin auth; reachable only on the internal network)
-	mux.HandleFunc("/gost/auth", s.handleAuth)
-	mux.HandleFunc("/gost/limiter", s.handleLimiter)
-	mux.HandleFunc("/gost/observer", s.handleObserver)
-	// admin REST
+
+	// GOST plugin endpoints. When GOST_PLUGIN_SECRET is set they live under
+	// /gost/<secret>/… so admin-api can be exposed (for the dashboard) without
+	// opening the plugin callbacks to the public. gost.yaml must use the same
+	// prefix. Empty secret keeps the plain /gost/… paths (internal-only deploys).
+	gp := "/gost/"
+	if sec := os.Getenv("GOST_PLUGIN_SECRET"); sec != "" {
+		gp = "/gost/" + sec + "/"
+	}
+	mux.HandleFunc(gp+"auth", s.handleAuth)
+	mux.HandleFunc(gp+"limiter", s.handleLimiter)
+	mux.HandleFunc(gp+"observer", s.handleObserver)
+
+	// admin REST (Bearer ADMIN_TOKEN)
+	mux.HandleFunc("/api/overview", s.requireAdmin(s.handleOverview))
 	mux.HandleFunc("/api/users", s.requireAdmin(s.handleUsers))
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
+	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
+	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
+
 	// payment webhook
 	mux.HandleFunc("/webhook/payment", s.handlePayment)
 	// health
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
+
+	// Dashboard SPA (static, embedded). Auth happens in-browser with ADMIN_TOKEN.
+	mux.Handle("/", dashboardHandler())
 
 	addr := envOr("LISTEN_ADDR", ":8088")
 

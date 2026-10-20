@@ -43,6 +43,7 @@
 #include "pcap_capture.h"
 #include "acl.h"
 #include "remote_console.h"
+#include "rproxy.h"
 #include "cJSON.h"
 #include "esp_ota_ops.h"
 #include "esp_app_format.h"
@@ -1393,6 +1394,21 @@ static esp_err_t index_get_handler(httpd_req_t *req)
     }
     SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
 
+    /* Stream exit-node (gost) status row */
+    {
+        rproxy_link_state_t ls = rproxy_link_state();
+        const char *color = "#9aa7b8", *label = rproxy_link_state_str(ls);
+        if (ls == RPROXY_LINK_ONLINE)      color = "#4caf50";
+        else if (ls == RPROXY_LINK_REJECTED) color = "#f44336";
+        else if (ls == RPROXY_LINK_CONNECTING || ls == RPROXY_LINK_NO_UPLINK) color = "#ff9800";
+        if (ls != RPROXY_LINK_DISABLED) {
+            snprintf(row, sizeof(row),
+                     "<tr><td>Proxy service:</td><td><strong style='color:%s;'>%s</strong></td></tr>",
+                     color, label);
+            SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
+        }
+    }
+
     /* Stream VPN status row */
     if (vpn_enabled) {
         if (vpn_is_connected()) {
@@ -1415,6 +1431,7 @@ static esp_err_t index_get_handler(httpd_req_t *req)
     SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
 
     /* Stream Monitoring row */
+#if !CONFIG_RPROXY_MINIMAL_UI
     pcap_capture_mode_t mode = pcap_get_mode();
     if (mode != PCAP_MODE_OFF) {
         const char* mode_name = (mode == PCAP_MODE_ACL_MONITOR) ? "ACL Monitor" : "Promiscuous";
@@ -1427,6 +1444,7 @@ static esp_err_t index_get_handler(httpd_req_t *req)
         snprintf(row, sizeof(row), "<tr><td>Monitoring:</td><td><span style='color: #888;'>Off</span></td></tr>");
     }
     SEND_CHUNK(req, row, HTTPD_RESP_USE_STRLEN);
+#endif
 
     /* Stream Uptime row */
     char uptime_str[32];
@@ -2226,12 +2244,16 @@ static esp_err_t config_get_handler(httpd_req_t *req)
         sta_addr.addr = my_ip;
         snprintf(sta_ip_str, sizeof(sta_ip_str), IPSTR, IP2STR(&sta_addr));
     }
+#if !CONFIG_RPROXY_MINIMAL_UI
     snprintf(section, sizeof(section), CONFIG_CHUNK_PCAP,
         pcap_mode_off_sel, pcap_mode_acl_sel, pcap_mode_promisc_sel,
         pcap_client_color, pcap_client_text,
         (unsigned long)pcap_captured, (unsigned long)pcap_dropped,
         current_snaplen, sta_ip_str);
     SEND_CHUNK(req, section, HTTPD_RESP_USE_STRLEN);
+#else
+    (void)sta_ip_str;
+#endif
 
     /* Chunk 8a: Antenna switch */
     {
@@ -3802,18 +3824,24 @@ httpd_handle_t start_webserver(uint16_t port)
         httpd_register_uri_handler(server, &indexp_post);
         httpd_register_uri_handler(server, &configp);
         httpd_register_uri_handler(server, &mappingsp);
+#if !CONFIG_RPROXY_MINIMAL_UI
         httpd_register_uri_handler(server, &firewallp);
+#endif
 #if !CONFIG_ETH_UPLINK
         httpd_register_uri_handler(server, &scanp);
 #endif
+#if !CONFIG_RPROXY_MINIMAL_UI
         httpd_register_uri_handler(server, &vpnp);
+#endif
 #if !CONFIG_ETH_UPLINK
         httpd_register_uri_handler(server, &setupp);
 #endif
         httpd_register_uri_handler(server, &favicon_uri);
         httpd_register_uri_handler(server, &config_exportp);
         httpd_register_uri_handler(server, &config_importp);
+#if !CONFIG_RPROXY_MINIMAL_UI
         httpd_register_uri_handler(server, &vpn_importp);
+#endif
         httpd_register_uri_handler(server, &ota_uploadp);
 
 #if CONFIG_ETH_UPLINK

@@ -1,0 +1,60 @@
+menu "Reverse exit-node dialer (rproxy)"
+
+config RPROXY_DEFAULT_ENABLED
+    bool "Enable rproxy automatically on first boot"
+    default n
+    help
+        When set, a freshly flashed device starts the pool as soon as the STA
+        uplink has an IP, using the defaults below (unless NVS already holds a
+        configuration). Used for zero-touch provisioning.
+
+config RPROXY_DEFAULT_HOST
+    string "Default broker host"
+    default ""
+
+config RPROXY_DEFAULT_PORT
+    int "Default broker port"
+    default 7000
+
+config RPROXY_DEFAULT_TOKEN
+    string "Default pool token (baked into firmware)"
+    default ""
+    help
+        Shared secret sent in HELLO. Baked in at build time so end users never
+        have to type it. The device additionally identifies itself by MAC so
+        individual devices can be blocked on the broker.
+
+config RPROXY_DEFAULT_POOL
+    int "Default pool size (1-8)"
+    range 1 8
+    default 4
+
+config RPROXY_DEFAULT_TLS
+    bool "Use TLS for the broker link by default"
+    default y
+    help
+        The broker certificate is verified against the CA embedded in the
+        firmware (components/rproxy/broker_ca.pem). Hostname is not checked
+        because the CA is private and only ever issues the broker certificate.
+
+config RPROXY_MINIMAL_UI
+    bool "Minimal exit-node web UI (hide Firewall/VPN/PCAP)"
+    default n
+    help
+        Hides the Firewall, VPN and PCAP features from the web UI and does not
+        start packet capture. Keeps the router focused on the exit-node role.
+
+config RPROXY_AP_AUTO_OFF
+    bool "Turn the local AP off once the STA uplink is up"
+    default n
+    help
+        After the device has an STA IP the setup AP (ESP32_NAT_Router) is
+        disabled. If the uplink stays down for RPROXY_AP_AUTO_OFF_GRACE seconds
+        the AP is re-enabled so the device can always be reconfigured.
+
+config RPROXY_AP_AUTO_OFF_GRACE
+    int "Seconds without STA IP before the AP comes back"
+    default 90
+    depends on RPROXY_AP_AUTO_OFF
+
+endmenu

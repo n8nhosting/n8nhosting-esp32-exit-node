@@ -25,8 +25,9 @@ services:
     environment:
       - API_USER=${API_USER}
       - API_PASS=${API_PASS}
+      - GOST_PLUGIN_SECRET=${GOST_PLUGIN_SECRET}
     ports:
-      - "${PROXY_PORT:-8080}:8080"   # customer HTTP proxy (public)
+      - "${PROXY_PORT:-8080}:8080"   # customer HTTP/SOCKS5 proxy (public)
     expose:
       - "18080"                       # Web API -> Coolify domain (GOST UI)
     depends_on: [broker, admin-api]
@@ -40,11 +41,16 @@ services:
       - SOCKS_ADDR=:1080
       - STATUS_ADDR=:7001
       - DIAL_WAIT_SECONDS=10
+      - TLS_CERT_B64=${TLS_CERT_B64}  # broker server cert (PEM, base64)
+      - TLS_KEY_B64=${TLS_KEY_B64}    # broker server key  (PEM, base64)
+      - NODES_FILE=/data/nodes.json
     ports:
-      - "${POOL_PORT:-7000}:7000"    # ESP32 nodes connect here (public)
+      - "${POOL_PORT:-7000}:7000"    # ESP32 nodes connect here (public, TLS)
     expose:
       - "1080"                        # SOCKS5 upstream for gost (internal)
-      - "7001"                        # status (internal)
+      - "7001"                        # status/nodes API (internal)
+    volumes:
+      - broker_data:/data
 
   admin-api:
     build: ../admin-api
@@ -55,8 +61,10 @@ services:
       - DATA_FILE=/data/users.json
       - USAGE_MODE=${USAGE_MODE:-delta}
       - LISTEN_ADDR=:8088
+      - GOST_PLUGIN_SECRET=${GOST_PLUGIN_SECRET}
+      - BROKER_STATUS_URL=http://broker:7001
     expose:
-      - "8088"                        # plugins (internal) + REST (via domain)
+      - "8088"                        # dashboard + REST (map to admin.<domain>)
     volumes:
       - admin_data:/data
 
@@ -68,3 +76,4 @@ services:
 
 volumes:
   admin_data:
+  broker_data:

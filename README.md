@@ -25,9 +25,9 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
 
 | Dir | What it is | Tested |
 |-----|-----------|--------|
-| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component (reverse dialer). Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; protocol covered by broker tests |
-| `broker/` | Go broker: ESP32 pool (`:7000`) ⇄ GOST SOCKS5 upstream (`:1080`) + `/status`. | `go test` (6 tests: relay, 1 MB integrity, concurrency, safety filter) |
-| `admin-api/` | Go: user/billing CRUD + GOST **auth/limiter/observer** plugins + payment webhook. JSON store, no external deps. | `go test` (7 tests) |
+| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **TLS (CA pinned)**, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
+| `broker/` | Go broker: **TLS** ESP32 pool (`:7000`) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test` (11 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence) |
+| `admin-api/` | Go: **admin dashboard** (users, devices by MAC, OTA push, stats) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, JSON store, no external deps. | `go test` (7 tests) + headless-browser smoke test |
 | `flasher/` | ESP Web Tools static page to flash the board from Chrome/Edge + configure it. | manifest validated |
 | `deploy/` | Full-stack `docker-compose.yml` for Coolify (gost + broker + admin-api + flasher). | YAML validated |
 
@@ -37,13 +37,13 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
    Repository** → this repo → **Build Pack: Docker Compose**, compose path
    `deploy/docker-compose.yml`, branch `main`.
 2. Set Environment Variables (see `deploy/.env.example`): `API_USER`, `API_PASS`,
-   `POOL_TOKEN`, `ADMIN_TOKEN`, `PAYMENT_WEBHOOK_SECRET` (use **alphanumeric**
-   secrets). Optionally `PROXY_PORT` (customer proxy, default 8080) and
-   `POOL_PORT` (ESP32 uplink, default 7000).
-3. Deploy. Then in **Domains**, map the `gost` service port **18080** to e.g.
-   `gost-api.<domain>` and the `flasher` service port **80** to `flash.<domain>`.
-   Keep `admin-api` internal (or map 8088 to `admin.<domain>` — it is bearer-token
-   gated).
+   `POOL_TOKEN`, `ADMIN_TOKEN`, `PAYMENT_WEBHOOK_SECRET`, `GOST_PLUGIN_SECRET`
+   (alphanumeric), and the broker TLS pair `TLS_CERT_B64` / `TLS_KEY_B64`
+   (`base64 -w0 broker.crt`, signed by the CA baked into the firmware — see
+   `docs/SECURITY.md`). Optionally `PROXY_PORT` (default 8080) and `POOL_PORT`.
+3. Deploy. Then in **Domains**, map `gost` **18080** → `gost-api.<domain>`,
+   `flasher` **80** → `flash.<domain>`, and `admin-api` **8088** →
+   `admin.<domain>` (the dashboard; sign in with `ADMIN_TOKEN`).
 4. Point your existing **GOST UI** at the new `gost-api.<domain>` with
    `API_USER`/`API_PASS`. (The standalone `gost-proxy` you had can be removed —
    this stack replaces it and adds auth/limit/quota + the ESP32 chain.)
@@ -52,15 +52,21 @@ Ports to open on the VPS firewall: **8080** (customers) and **7000** (your ESP32
 
 ## Flash & configure the ESP32-S3 (N16R8)
 
-Open `flash.<domain>` in Chrome/Edge and follow the 4 steps: flash → join home
-WiFi (STA) → paste the generated `rproxy` console commands (broker host, port,
-`POOL_TOKEN`, pool size) → `rproxy enable`. `rproxy status` should show workers
-connected and `uplink: STA has IP`. Prebuilt bins are also in
-`firmware/prebuilt_s3n16r8/`; rebuild with `firmware/build_s3n16r8.sh`.
+Open `flash.<domain>` in Chrome/Edge: flash → join home WiFi (STA). That's it —
+the firmware carries the broker address, token and CA, so the device connects
+on its own (TLS), shows **Proxy service: online** on its status page, turns its
+setup AP off, and appears in the dashboard under **Devices** by MAC. Admins can
+block/allow a device or push a firmware update (**Update FW**) from there.
 
-## Manage users / billing
+Rebuild with your own secrets: copy `firmware/sdkconfig.prov.example` →
+`sdkconfig.prov`, fill in broker host + `POOL_TOKEN`, put your CA at
+`firmware/components/rproxy/broker_ca.pem`, run `firmware/build_s3n16r8.sh`,
+then copy the 4 bins to `flasher/firmware/`. Never commit `sdkconfig.prov`.
 
-Admin REST (Bearer `ADMIN_TOKEN`) on the admin-api:
+## Manage users / devices / billing
+
+Use the **dashboard** at `admin.<domain>` (Overview, Users, Devices, Settings).
+The same operations are available as REST (Bearer `ADMIN_TOKEN`):
 
 ```
 POST   /api/users                 {username,password,rate_mbps,quota_gb,expires_at}
@@ -69,8 +75,14 @@ GET    /api/users/{name}          one (incl. usage_bytes, usage_month)
 PUT    /api/users/{name}          update any field
 DELETE /api/users/{name}
 POST   /api/users/{name}/enable | /disable | /reset-quota | /extend {days}
+GET    /api/devices               ESP32 nodes: mac, online, exit IP, traffic, firmware
+POST   /api/devices/{mac}/block | /allow | /forget | /ota {url}
+GET    /api/overview              dashboard summary (users + broker)
 POST   /webhook/payment           PSP -> activate/extend (X-Webhook-Token or HMAC)
 ```
+
+Customers connect with **HTTP CONNECT or SOCKS5** on the same port
+(`gost` handler `auto`), e.g. `curl -x socks5h://user:pass@VPS:3128 https://…`.
 
 GOST calls `/gost/auth`, `/gost/limiter`, `/gost/observer` itself (wired by
 `deploy/gost/gost.yaml`). Auth denies disabled/expired/over-quota users; the

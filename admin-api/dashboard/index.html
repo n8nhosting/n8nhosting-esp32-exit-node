@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Proxy Server Dashboard</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141924; --panel2:#1b2230; --line:#283040;
+    --fg:#e8edf3; --muted:#8c99ad; --accent:#4b9fff; --ok:#35d6a4; --warn:#ffb020; --bad:#ff5c6c;
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px}
+  a{color:var(--accent);text-decoration:none}
+  /* login */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+  #login .card{width:340px}
+  h1{font-size:1.25rem;margin:0 0 4px} .sub{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+  input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:10px 12px;font-size:.95rem;margin-top:4px}
+  label{font-size:.8rem;color:var(--muted)}
+  button{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:600;cursor:pointer;font-size:.92rem}
+  button.sec{background:var(--panel2);border:1px solid var(--line);color:var(--fg)}
+  button.danger{background:var(--bad)}
+  button:hover{filter:brightness(1.08)}
+  /* app layout */
+  #app{display:none;grid-template-columns:220px 1fr;min-height:100vh}
+  aside{background:var(--panel);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px}
+  .brand{font-weight:700;font-size:1.05rem;padding:6px 10px 16px}
+  .brand small{display:block;color:var(--muted);font-weight:400;font-size:.72rem;margin-top:2px}
+  nav a{display:block;padding:9px 12px;border-radius:8px;color:var(--muted);cursor:pointer}
+  nav a.active,nav a:hover{background:var(--panel2);color:var(--fg)}
+  .spacer{flex:1}
+  main{padding:26px 30px;overflow:auto}
+  .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .head h2{margin:0;font-size:1.3rem}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .stat .k{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  .stat .v{font-size:1.7rem;font-weight:700;margin-top:6px}
+  .stat .v small{font-size:.9rem;color:var(--muted);font-weight:400}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);font-size:.88rem}
+  th{color:var(--muted);font-weight:600;font-size:.76rem;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.74rem;font-weight:600}
+  .pill.ok{background:rgba(53,214,164,.15);color:var(--ok)} .pill.bad{background:rgba(255,92,108,.15);color:var(--bad)}
+  .pill.warn{background:rgba(255,176,32,.15);color:var(--warn)} .pill.off{background:var(--panel2);color:var(--muted)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem}
+  .row-actions button{padding:5px 10px;font-size:.78rem;margin-left:6px}
+  .toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:10}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px;width:380px}
+  .modal h3{margin:0 0 14px}
+  .field{margin-bottom:12px}
+  .err{color:var(--bad);font-size:.85rem;margin-top:8px;min-height:1em}
+  .muted{color:var(--muted)} .right{text-align:right}
+  .banner{background:rgba(75,159,255,.12);border:1px solid rgba(75,159,255,.35);border-radius:9px;padding:10px 14px;margin-bottom:16px;font-size:.88rem}
+  @media(max-width:720px){#app{grid-template-columns:1fr}aside{flex-direction:row;overflow:auto}main{padding:18px}}
+</style>
+</head>
+<body>
+<!-- LOGIN -->
+<div id="login">
+  <div class="card">
+    <h1>Proxy Server</h1>
+    <div class="sub">Admin dashboard</div>
+    <label>Admin token
+      <input id="tok" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" />
+    </label>
+    <div style="margin-top:14px"><button id="loginBtn" style="width:100%">Sign in</button></div>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <aside>
+    <div class="brand">⚡ Proxy Server<small id="gostuiHost"></small></div>
+    <nav>
+      <a data-view="overview" class="active">Overview</a>
+      <a data-view="users">Users</a>
+      <a data-view="devices">Devices</a>
+      <a data-view="settings">Settings</a>
+    </nav>
+    <div class="spacer"></div>
+    <a id="gostuiLink" target="_blank" class="muted" style="padding:9px 12px">GOST config UI ↗</a>
+    <a id="logout" class="muted" style="padding:9px 12px">Sign out</a>
+  </aside>
+  <main>
+    <div id="view"></div>
+  </main>
+</div>
+
+<!-- user modal -->
+<div class="modal-bg" id="umodal">
+  <div class="modal">
+    <h3 id="umTitle">New user</h3>
+    <div class="field"><label>Username</label><input id="umUser" /></div>
+    <div class="field"><label>Password <span class="muted">(blank = auto-generate)</span></label><input id="umPass" type="text" /></div>
+    <div class="field"><label>Rate limit (Mbps, 0 = unlimited)</label><input id="umRate" type="number" value="0" /></div>
+    <div class="field"><label>Monthly quota (GB, 0 = unlimited)</label><input id="umQuota" type="number" value="0" /></div>
+    <div class="field"><label>Expires in (days, blank = never)</label><input id="umDays" type="number" placeholder="30" /></div>
+    <div class="err" id="umErr"></div>
+    <div class="right"><button class="sec" onclick="closeModal()">Cancel</button> <button id="umSave">Save</button></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let TOKEN = localStorage.getItem('adm_tok') || '';
+
+async function api(path, opts={}){
+  const r = await fetch(path, {...opts, headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json',...(opts.headers||{})}});
+  if(r.status===401){ logout(); throw new Error('unauthorized'); }
+  const ct=r.headers.get('content-type')||'';
+  const body = ct.includes('json') ? await r.json() : await r.text();
+  if(!r.ok) throw new Error((body&&body.error)||('HTTP '+r.status));
+  return body;
+}
+function fmtBytes(n){ n=+n||0; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return n.toFixed(i?1:0)+' '+u[i]; }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---- auth ---- */
+$('#loginBtn').onclick = async ()=>{
+  TOKEN = $('#tok').value.trim();
+  try{ await api('/api/overview'); localStorage.setItem('adm_tok',TOKEN); showApp(); }
+  catch(e){ $('#loginErr').textContent='Invalid token'; }
+};
+$('#tok').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#loginBtn').click(); });
+$('#logout').onclick = logout;
+function logout(){ localStorage.removeItem('adm_tok'); TOKEN=''; $('#app').style.display='none'; $('#login').style.display='flex'; }
+
+function showApp(){
+  $('#login').style.display='none';
+  $('#app').style.display='grid';
+  const gostui = new URLSearchParams(location.search).get('gostui') || localStorage.getItem('gostui') || 'https://gost-ui.jbacteam.com';
+  $('#gostuiLink').href = gostui; $('#gostuiHost').textContent = location.hostname;
+  route('overview');
+}
+
+/* ---- navigation ---- */
+document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('nav a').forEach(x=>x.classList.remove('active'));
+  a.classList.add('active'); route(a.dataset.view);
+});
+function route(v){ ({overview:viewOverview,users:viewUsers,devices:viewDevices,settings:viewSettings}[v])(); }
+
+/* ---- Overview ---- */
+async function viewOverview(){
+  $('#view').innerHTML = `<div class="head"><h2>Overview</h2><button class="sec" onclick="route('overview')">Refresh</button></div><div id="ov">Loading…</div>`;
+  try{
+    const o = await api('/api/overview');
+    const b = o.broker||{};
+    const online = b.tls ? 'TLS' : 'plain';
+    $('#ov').innerHTML = `
+      <div class="cards">
+        <div class="stat"><div class="k">Users</div><div class="v">${o.users.total} <small>(${o.users.active} active)</small></div></div>
+        <div class="stat"><div class="k">Exit devices online</div><div class="v">${b.nodes_online??0} <small>/ ${b.nodes_total??0}</small></div></div>
+        <div class="stat"><div class="k">Idle connections</div><div class="v">${b.idle_nodes??0}</div></div>
+        <div class="stat"><div class="k">Traffic this month</div><div class="v">${(o.month_gb||0).toFixed(2)} <small>GB</small></div></div>
+        <div class="stat"><div class="k">Dials (ok / fail)</div><div class="v">${b.dials_ok??0} <small>/ ${(b.dials_err??0)+(b.dials_no_node??0)}</small></div></div>
+        <div class="stat"><div class="k">Over quota / expired</div><div class="v">${o.users.over_quota} <small>/ ${o.users.expired}</small></div></div>
+      </div>
+      <div class="banner">Broker link: <b>${online}</b> · uptime ${Math.floor((b.uptime_sec||0)/3600)}h · relayed ↑${fmtBytes(b.bytes_up)} ↓${fmtBytes(b.bytes_down)}</div>`;
+  }catch(e){ $('#ov').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+
+/* ---- Users ---- */
+async function viewUsers(){
+  $('#view').innerHTML = `<div class="head"><h2>Users</h2><button onclick="openUser()">+ New user</button></div>
+    <div id="utbl">Loading…</div>`;
+  try{
+    const users = await api('/api/users');
+    if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
+    const rows = users.map(u=>{
+      const quota = u.quota_gb>0 ? `${u.usage_gb.toFixed(2)} / ${u.quota_gb} GB` : `${u.usage_gb.toFixed(2)} GB`;
+      const over = u.quota_gb>0 && u.usage_gb>=u.quota_gb;
+      const exp = u.expires_at ? new Date(u.expires_at) : null;
+      const expired = exp && exp < new Date();
+      let st = u.enabled ? '<span class="pill ok">active</span>' : '<span class="pill off">disabled</span>';
+      if(expired) st='<span class="pill bad">expired</span>';
+      else if(over) st='<span class="pill warn">over quota</span>';
+      return `<tr>
+        <td class="mono">${esc(u.username)}</td>
+        <td>${st}</td>
+        <td>${u.rate_mbps>0?u.rate_mbps+' Mbps':'—'}</td>
+        <td>${quota}${over?' ⚠':''}</td>
+        <td>${exp?exp.toISOString().slice(0,10):'never'}</td>
+        <td class="right row-actions">
+          <button class="sec" onclick='openUser(${JSON.stringify(u)})'>Edit</button>
+          <button class="sec" onclick="userAction('${esc(u.username)}','${u.enabled?'disable':'enable'}')">${u.enabled?'Disable':'Enable'}</button>
+          <button class="sec" onclick="userAction('${esc(u.username)}','extend')">+30d</button>
+          <button class="danger" onclick="delUser('${esc(u.username)}')">Delete</button>
+        </td></tr>`;
+    }).join('');
+    $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+let editUser=null;
+function openUser(u){
+  editUser = u||null;
+  $('#umTitle').textContent = u? 'Edit '+u.username : 'New user';
+  $('#umUser').value = u?u.username:''; $('#umUser').disabled = !!u;
+  $('#umPass').value=''; $('#umPass').placeholder = u?'(unchanged)':'(auto-generate)';
+  $('#umRate').value = u?u.rate_mbps:0; $('#umQuota').value = u?u.quota_gb:0; $('#umDays').value='';
+  $('#umErr').textContent=''; $('#umodal').style.display='flex';
+}
+function closeModal(){ $('#umodal').style.display='none'; }
+$('#umSave').onclick = async ()=>{
+  const body={ rate_mbps:+$('#umRate').value||0, quota_gb:+$('#umQuota').value||0 };
+  if($('#umPass').value) body.password=$('#umPass').value;
+  const days=$('#umDays').value;
+  if(days!=='' ) body.expires_at = new Date(Date.now()+(+days)*864e5).toISOString();
+  try{
+    if(editUser){ await api('/api/users/'+encodeURIComponent(editUser.username),{method:'PUT',body:JSON.stringify(body)}); }
+    else {
+      body.username=$('#umUser').value.trim();
+      if(!body.username){ $('#umErr').textContent='Username required'; return; }
+      const r = await api('/api/users',{method:'POST',body:JSON.stringify(body)});
+      if(r.generated_password) alert('User created.\nPassword (shown once): '+r.generated_password);
+    }
+    closeModal(); viewUsers();
+  }catch(e){ $('#umErr').textContent=e.message; }
+};
+async function userAction(u,a){ const b=a==='extend'?JSON.stringify({days:30}):null;
+  await api('/api/users/'+encodeURIComponent(u)+'/'+a,{method:'POST',body:b}); viewUsers(); }
+async function delUser(u){ if(!confirm('Delete user '+u+'?'))return; await api('/api/users/'+encodeURIComponent(u),{method:'DELETE'}); viewUsers(); }
+
+/* ---- Devices ---- */
+async function viewDevices(){
+  $('#view').innerHTML = `<div class="head"><h2>Exit devices (ESP32-S3)</h2><button class="sec" onclick="route('devices')">Refresh</button></div><div id="dtbl">Loading…</div>`;
+  try{
+    const nodes = await api('/api/devices') || [];
+    if(!nodes.length){ $('#dtbl').innerHTML='<p class="muted">No devices have connected yet.</p>'; return; }
+    const rows = nodes.map(n=>{
+      let st = n.blocked?'<span class="pill bad">blocked</span>':(n.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>');
+      return `<tr>
+        <td class="mono">${esc(n.mac)}</td>
+        <td>${st}</td>
+        <td class="mono">${esc(n.remote_ip||'—')}</td>
+        <td>${n.idle_conns||0} idle / ${n.active_dials||0} active</td>
+        <td>↑${fmtBytes(n.bytes_up)} ↓${fmtBytes(n.bytes_down)}</td>
+        <td class="mono muted">${esc(n.firmware||'')}${n.pending_ota?' <span class="pill warn">OTA queued</span>':''}</td>
+        <td>${n.last_seen?new Date(n.last_seen).toLocaleString():'—'}</td>
+        <td class="right row-actions">
+          <button class="sec" onclick="otaDevice('${esc(n.mac)}')">Update FW</button>
+          <button class="sec" onclick="devAction('${esc(n.mac)}','${n.blocked?'allow':'block'}')">${n.blocked?'Allow':'Block'}</button>
+          <button class="danger" onclick="devAction('${esc(n.mac)}','forget')">Forget</button>
+        </td></tr>`;
+    }).join('');
+    $('#dtbl').innerHTML = `<table><thead><tr><th>MAC</th><th>Status</th><th>Exit IP</th><th>Connections</th><th>Traffic</th><th>Firmware</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+async function otaDevice(mac){
+  const def = localStorage.getItem('ota_url') || (location.protocol+'//'+location.hostname.replace(/^admin\./,'flash.')+'/firmware/esp32_nat_router.bin');
+  const url = prompt('Firmware URL to push to '+mac+'\n(the device downloads it over HTTPS and reboots):', def);
+  if(!url) return;
+  localStorage.setItem('ota_url', url);
+  await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url})});
+  alert('Queued. The device will update on its next connection (within seconds while online).');
+  viewDevices();
+}
+async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))return;
+  await api('/api/devices/'+encodeURIComponent(mac)+'/'+a,{method:'POST'}); viewDevices(); }
+
+/* ---- Settings ---- */
+function viewSettings(){
+  const gostui = $('#gostuiLink').href;
+  $('#view').innerHTML = `<div class="head"><h2>Settings</h2></div>
+    <div class="card" style="max-width:520px">
+      <div class="field"><label>GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
+      <button onclick="saveGost()">Save</button>
+      <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3128</span> (HTTP &amp; SOCKS5, username/password).<br>
+      Flash new devices at the <b>flasher</b> page. Each device self-provisions (token baked in) and appears under <b>Devices</b> by MAC.</p>
+    </div>`;
+}
+function saveGost(){ localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim(); alert('Saved'); }
+
+/* ---- boot ---- */
+if(TOKEN){ api('/api/overview').then(showApp).catch(()=>{ $('#login').style.display='flex'; }); }
+else $('#login').style.display='flex';
+</script>
+</body>
+</html>
