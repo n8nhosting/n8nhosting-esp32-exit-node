@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -217,10 +219,14 @@ func TestLimiterCappedByDeviceCapacity(t *testing.T) {
 		mac  string
 	}{
 		{"big", 100, dev}, {"zero", 0, dev}, {"slow", 5, dev},
-		{"free", 20, ""}, {"unm", 20, unmeasured}, {"_measure-ab12cd", 0, dev},
+		{"free", 20, ""}, {"unm", 20, unmeasured},
 	} {
 		createUser(t, mux, map[string]any{"username": u.name, "password": "pw", "rate_mbps": u.rate})
 		bindUser(t, s, u.name, u.mac)
+	}
+	// a measurement user is made through the store, as the measurement flow does
+	if err := s.store.Create(&User{Username: "_measure-ab12cd", PassHash: hashPassword("pw"), Enabled: true, RateMbps: 5, DeviceMAC: dev}); err != nil {
+		t.Fatal(err)
 	}
 	for _, c := range []struct {
 		client string
@@ -240,6 +246,48 @@ func TestLimiterCappedByDeviceCapacity(t *testing.T) {
 		if int64(in) != c.want || int64(o) != c.want {
 			t.Errorf("limiter %s: %v, want in=out=%d", c.client, out, c.want)
 		}
+	}
+}
+
+// The "_measure-" prefix buys no rate cap and no seat, so no HTTP boundary may
+// create such a user: not the admin API, not a payment.
+func TestReservedUsernameRefusedOverHTTP(t *testing.T) {
+	s, mux := newTestServer(t)
+	rr, out := doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": "_measure-x", "password": "pw", "rate_mbps": 10})
+	if rr.Code != http.StatusBadRequest || out["error"] != "reserved username" {
+		t.Fatalf("POST /api/users _measure-x: %d %v", rr.Code, out)
+	}
+	pay := func(body string) (int, map[string]any) {
+		req := httptest.NewRequest("POST", "/webhook/payment", strings.NewReader(body))
+		req.Header.Set("X-Webhook-Token", "paytok")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		var out map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
+	if code, out := pay(`{"username":"_measure-y","days":30,"rate_mbps":20}`); code != http.StatusBadRequest || out["error"] != "reserved username" {
+		t.Fatalf("payment for _measure-y: %d %v", code, out)
+	}
+	for _, name := range []string{"_measure-x", "_measure-y"} {
+		if _, err := s.store.Get(name); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%s was created: %v", name, err)
+		}
+	}
+	// nor may a payment extend a live measurement user
+	if err := s.store.Create(&User{Username: "_measure-z", PassHash: hashPassword("pw"), Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := pay(`{"username":"_measure-z","days":30}`); code != http.StatusBadRequest {
+		t.Fatalf("payment for an existing _measure-z: %d %v", code, out)
+	}
+	if u, err := s.store.Get("_measure-z"); err != nil || u.ExpiresAt != "" {
+		t.Fatalf("_measure-z changed: %+v %v", u, err)
+	}
+	// ordinary names still work on both paths
+	createUser(t, mux, map[string]any{"username": "measure-ok", "password": "pw"})
+	if code, out := pay(`{"username":"buyer","days":30}`); code != http.StatusOK || out["username"] != "buyer" {
+		t.Fatalf("payment for buyer: %d %v", code, out)
 	}
 }
 

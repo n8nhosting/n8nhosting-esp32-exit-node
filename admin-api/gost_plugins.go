@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -101,7 +100,7 @@ func (s *server) handleLimiter(w http.ResponseWriter, r *http.Request) {
 	// user's cap too when a client id is present; otherwise unlimited.
 	// A measurement user is never capped, or a board could never measure
 	// faster than its last result.
-	if req.Client == "" || strings.HasPrefix(req.Client, measurePrefix) {
+	if req.Client == "" || isReservedUsername(req.Client) {
 		writeJSON(w, http.StatusOK, limiterResp{In: 0, Out: 0})
 		return
 	}

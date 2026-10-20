@@ -15,10 +15,15 @@ import (
 // they are never rate-capped and never take a seat.
 const measurePrefix = "_measure-"
 
+// isReservedUsername reports whether name is a measurement user's. Such a
+// user is uncapped and seatless, so only the store may create one: the HTTP
+// endpoints that create users (admin API, payment webhook) refuse the prefix.
+func isReservedUsername(name string) bool { return strings.HasPrefix(name, measurePrefix) }
+
 // takesSeat reports whether u counts against its board's capacity: enabled,
 // unexpired and not a measurement user.
 func takesSeat(u *User, now time.Time) bool {
-	if !u.Enabled || strings.HasPrefix(u.Username, measurePrefix) {
+	if !u.Enabled || isReservedUsername(u.Username) {
 		return false
 	}
 	if u.ExpiresAt != "" {

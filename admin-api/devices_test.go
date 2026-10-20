@@ -155,8 +155,12 @@ func TestDeviceIPGroupAndMaxUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	past := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	// measurement users exist only through the store (the HTTP API refuses the prefix)
+	if err := s.store.Create(&User{Username: "_measure-x", PassHash: hashPassword("pw"), Enabled: true, DeviceMAC: a}); err != nil {
+		t.Fatal(err)
+	}
 	for _, u := range []struct{ name, mac, exp string }{
-		{"u1", a, ""}, {"u2", b, ""}, {"u3", b, past}, {"_measure-x", a, ""}, {"u4", c, ""},
+		{"u1", a, ""}, {"u2", b, ""}, {"u3", b, past}, {"u4", c, ""},
 	} {
 		if rr, _ := doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": u.name, "password": "pw", "expires_at": u.exp}); rr.Code != 201 {
 			t.Fatalf("create %s: %d", u.name, rr.Code)

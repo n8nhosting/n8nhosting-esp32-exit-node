@@ -49,6 +49,10 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username required"})
 			return
 		}
+		if isReservedUsername(in.Username) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reserved username"})
+			return
+		}
 		generated := ""
 		if in.Password == "" {
 			in.Password = randToken(8)

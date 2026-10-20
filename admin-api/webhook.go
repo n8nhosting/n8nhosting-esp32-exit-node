@@ -53,6 +53,11 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username required"})
 		return
 	}
+	// a paid plan must never land on an uncapped, seatless measurement user
+	if isReservedUsername(req.Username) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "reserved username"})
+		return
+	}
 	days := req.Days
 	if days == 0 {
 		days = 30
