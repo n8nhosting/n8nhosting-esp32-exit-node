@@ -29,6 +29,7 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`const T = k => i18n[k] ?? k;`,
 		`<th>Device</th>`,
 		`reveal-wifi`,
+		`id="dmCoordHint"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

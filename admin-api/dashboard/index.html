@@ -122,6 +122,7 @@
       <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select></div>
     <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
     <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
+    <div class="muted" id="dmCoordHint" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="field"><label for="dmWifi">WiFi password <span class="muted" id="dmWifiHint"></span></label><input id="dmWifi" type="password" autocomplete="new-password" /></div>
     <div class="field inline"><label for="dmWifiClear"><input id="dmWifiClear" type="checkbox" /> <span id="dmWifiClearLbl"></span></label></div>
     <div class="field"><label for="dmNotes">Notes</label><textarea id="dmNotes" rows="3"></textarea></div>
@@ -136,6 +137,7 @@ const i18n = {
   edit:'Edit', reveal:'Reveal', unmeasured:'\u2014 unmeasured', assign:'assign\u2026', change:'change',
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
+  coordHint:'Coordinates cannot be cleared yet; a blank field keeps the current value.',
   mbps:'Mbps', openMap:'Open in OpenStreetMap'
 };
 const T = k => i18n[k] ?? k;
@@ -382,27 +384,40 @@ function openDevice(mac, opener){
   $('#dmWifiClearLbl').textContent=T('wifiClear');
   $('#dmNotes').value = d.notes||'';
   $('#dmCancel').textContent=T('cancel'); $('#dmSave').textContent=T('save');
+  $('#dmCoordHint').textContent=T('coordHint');
   $('#dmErr').textContent=''; $('#dmodal').style.display='flex';
+  $('#app').inert = true;
   $('#dmName').focus();
 }
-function closeDevice(){
+function closeDevice(keepFocus){
   $('#dmodal').style.display='none'; editDev=null;
-  if(dmOpener && dmOpener.isConnected) dmOpener.focus();
+  $('#app').inert = false;
+  if(!keepFocus && dmOpener && dmOpener.isConnected) dmOpener.focus();
   dmOpener=null;
 }
 $('#dmCancel').addEventListener('click',closeDevice);
 $('#dmSave').addEventListener('click', async ()=>{
   if(!editDev) return;
-  const body = { name:$('#dmName').value.trim(), kind:$('#dmKind').value, notes:$('#dmNotes').value };
+  // Send only fields that differ from what the modal was opened with.
+  const d = editDev, body = {};
+  const name=$('#dmName').value.trim(), kind=$('#dmKind').value, notes=$('#dmNotes').value;
+  if(name!==(d.name||'')) body.name = name;
+  if(kind!==(d.kind==='dedicated'?'dedicated':'shared')) body.kind = kind;
+  if(notes!==(d.notes||'')) body.notes = notes;
   const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
-  if(lat!=='') body.lat = +lat;
-  if(lon!=='') body.lon = +lon;
+  if(lat!=='' && +lat!==d.lat) body.lat = +lat;
+  if(lon!=='' && +lon!==d.lon) body.lon = +lon;
   if($('#dmWifiClear').checked) body.wifi_password = '';
   else if($('#dmWifi').value) body.wifi_password = $('#dmWifi').value;
   $('#dmErr').textContent=''; $('#dmSave').disabled=true;
   try{
     await api('/api/devices/'+encodeURIComponent(editDev.mac),{method:'PUT',body:JSON.stringify(body)});
-    closeDevice(); viewDevices();
+    const mac = editDev.mac;
+    closeDevice(true);
+    await viewDevices();
+    // The table was re-rendered, so the original opener is gone: focus its replacement.
+    const nb = [...document.querySelectorAll('#dtbl button[data-act="edit"]')].find(x=>x.dataset.mac===mac);
+    if(nb) nb.focus();
   }catch(e){ $('#dmErr').textContent=e.message; }
   finally{ $('#dmSave').disabled=false; }
 });
@@ -426,6 +441,13 @@ async function revealWifi(mac, btn){
   }catch(e){ alert(T('revealFailed')+e.message); }
 }
 document.addEventListener('keydown',e=>{
+  if(e.key==='Tab' && $('#dmodal').style.display==='flex'){
+    const f=[...$('#dmodal').querySelectorAll('input,select,textarea,button')].filter(x=>!x.disabled);
+    const first=f[0], last=f[f.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+    return;
+  }
   if(e.key!=='Escape') return;
   if($('#dmodal').style.display==='flex') closeDevice();
   else if($('#umodal').style.display==='flex') closeModal();
