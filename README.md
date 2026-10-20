@@ -53,7 +53,8 @@ How many customers a board takes is set by its measured capacity:
 
 - **Shared** device: `max_shared_users = min(3, floor(capacity_mbps / 5))`.
 - **Dedicated** device: 1 customer, who owns the whole exit IP (every board
-  behind the same `remote_ip`).
+  behind the same `remote_ip`). The board itself never carries `3128` pool
+  traffic (admin-api tells the broker on every slot or kind change).
 - **Unmeasured** shared device: no new bindings until it has been measured.
 - The limiter is capped at the device's capacity.
 

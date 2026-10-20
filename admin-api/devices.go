@@ -167,10 +167,22 @@ func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.buildDeviceViews(nodes))
 }
 
-// brokerSetSlot tells the broker to route slot to mac (0 clears). Clearing a
-// MAC the broker does not know succeeds: the broker holds no slot for it.
-func (s *server) brokerSetSlot(mac string, slot int) error {
-	body, _ := json.Marshal(map[string]int{"slot": slot})
+// errBrokerNoNode is the broker answering that it has no node for the MAC.
+var errBrokerNoNode = errors.New("broker: not found")
+
+// poolFlag is whether a board of kind serves the shared pool: a dedicated
+// board never does (spec §6.2.14).
+func poolFlag(kind string) bool { return kind != "dedicated" }
+
+// brokerSetSlot tells the broker to route slot to mac (0 clears) and whether
+// the board also serves the shared pool. Clearing a MAC the broker does not
+// know succeeds: the broker holds no slot for it; setting one is
+// errBrokerNoNode.
+func (s *server) brokerSetSlot(mac string, slot int, pool bool) error {
+	body, _ := json.Marshal(struct {
+		Slot int  `json:"slot"`
+		Pool bool `json:"pool"`
+	}{slot, pool})
 	cl := &http.Client{Timeout: 5 * time.Second}
 	resp, err := cl.Post(s.brokerURL()+"/nodes/"+url.PathEscape(mac)+"/slot", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -179,6 +191,9 @@ func (s *server) brokerSetSlot(mac string, slot int) error {
 	defer resp.Body.Close()
 	if resp.StatusCode/100 == 2 || (slot == 0 && resp.StatusCode == http.StatusNotFound) {
 		return nil
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return errBrokerNoNode
 	}
 	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 	if m := strings.TrimSpace(string(msg)); m != "" {
@@ -189,8 +204,10 @@ func (s *server) brokerSetSlot(mac string, slot int) error {
 
 // PUT /api/devices/{mac} — create/update the operator record. Absent fields
 // are left unchanged; wifi_password "" clears the stored password. slot N
-// (1..SLOT_COUNT, 0 clears) is set on the broker first; if the broker refuses
-// or is down, nothing in the request is saved.
+// (1..SLOT_COUNT, 0 clears) is set on the broker first, with the pool flag of
+// the resulting kind; a kind change alone pushes the current slot with the new
+// flag (a board the broker does not know yet is skipped). If the broker
+// refuses or is down, nothing in the request is saved.
 func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac string) {
 	var in struct {
 		Name         *string  `json:"name"`
@@ -221,27 +238,40 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("slot must be between 1 and %d (0 clears)", n)})
 		return
 	}
-	prevSlot := 0
-	if in.Slot != nil {
-		if *in.Slot > 0 {
-			holder, err := s.devices.BySlot(*in.Slot)
-			if err == nil && holder.MAC != mac {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "slot taken"})
-				return
-			}
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
-				return
-			}
+	if in.Slot != nil && *in.Slot > 0 {
+		holder, err := s.devices.BySlot(*in.Slot)
+		if err == nil && holder.MAC != mac {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "slot taken"})
+			return
 		}
-		cur, err := s.devices.Get(mac)
-		if err == nil {
-			prevSlot = cur.Slot
-		} else if !errors.Is(err, ErrNotFound) {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
 			return
 		}
-		if err := s.brokerSetSlot(mac, *in.Slot); err != nil {
+	}
+	prevSlot, prevKind := 0, "shared" // what a new record starts with
+	if cur, err := s.devices.Get(mac); err == nil {
+		prevSlot, prevKind = cur.Slot, cur.Kind
+	} else if !errors.Is(err, ErrNotFound) {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
+		return
+	}
+	newSlot, newKind := prevSlot, prevKind
+	if in.Slot != nil {
+		newSlot = *in.Slot
+	}
+	if in.Kind != nil {
+		newKind = *in.Kind
+	}
+	pushed := false
+	if in.Slot != nil || newKind != prevKind {
+		err := s.brokerSetSlot(mac, newSlot, poolFlag(newKind))
+		switch {
+		case err == nil:
+			pushed = true
+		case in.Slot == nil && errors.Is(err, errBrokerNoNode):
+			// a kind change for a board the broker has not seen: nothing routes to it yet
+		default:
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 			return
 		}
@@ -275,10 +305,10 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		return nil
 	})
 	if err != nil {
-		if in.Slot != nil && *in.Slot != prevSlot {
-			// keep the broker on the slot the record still holds
-			if rerr := s.brokerSetSlot(mac, prevSlot); rerr != nil {
-				log.Printf("device %s: slot %d not saved (%v), and the broker still has it: %v", mac, *in.Slot, err, rerr)
+		if pushed && (newSlot != prevSlot || newKind != prevKind) {
+			// keep the broker on the slot and pool flag the record still holds
+			if rerr := s.brokerSetSlot(mac, prevSlot, poolFlag(prevKind)); rerr != nil {
+				log.Printf("device %s: slot %d/kind %s not saved (%v), and the broker still has them: %v", mac, newSlot, newKind, err, rerr)
 			}
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})

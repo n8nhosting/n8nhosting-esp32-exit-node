@@ -311,8 +311,18 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int)
 	log.Printf("mux link down: %s", n.MAC)
 }
 
+// usableFor reports whether m may carry a stream for pin: only pin's own links
+// when pin is non-nil, else any link of a node that serves the shared pool.
+func usableFor(m *muxSession, pin *node) bool {
+	if pin != nil {
+		return m.node == pin
+	}
+	return m.node.inPool()
+}
+
 // pickMux returns the least-loaded usable mux link (round-robin on ties),
-// skipping any in `tried`. A non-nil pin limits the choice to that node's links.
+// skipping any in `tried`. A non-nil pin limits the choice to that node's links;
+// a nil pin (pool customer) skips nodes taken out of the pool (dedicated).
 func (b *broker) pickMux(tried map[*muxSession]bool, pin *node) *muxSession {
 	b.muxMu.Lock()
 	defer b.muxMu.Unlock()
@@ -321,7 +331,7 @@ func (b *broker) pickMux(tried map[*muxSession]bool, pin *node) *muxSession {
 	cnt := len(b.muxes)
 	for i := 0; i < cnt; i++ {
 		m := b.muxes[(b.muxRR+i)%cnt]
-		if tried[m] || (pin != nil && m.node != pin) || m.node.isBlocked() || m.isClosed() {
+		if tried[m] || !usableFor(m, pin) || m.node.isBlocked() || m.isClosed() {
 			continue
 		}
 		load := m.active()
@@ -386,7 +396,8 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool, p
 
 // evictIdleStream makes room on a full link by resetting the stream that has
 // been idle longest (at least muxEvictMinIdle), across links not in `tried`
-// (and only the pinned node's links when pin is non-nil).
+// (only the pinned node's links when pin is non-nil, else only pool nodes'
+// links, so a dedicated board's streams never make room for pool traffic).
 // Browsers reopen a parked keep-alive connection transparently, so this beats
 // refusing the new customer. Returns false if nothing qualifies.
 func (b *broker) evictIdleStream(tried map[*muxSession]bool, pin *node) bool {
@@ -397,7 +408,7 @@ func (b *broker) evictIdleStream(tried map[*muxSession]bool, pin *node) bool {
 	var victim *muxStream
 	var on *muxSession
 	for _, m := range muxes {
-		if tried[m] || (pin != nil && m.node != pin) || m.isClosed() || m.node.isBlocked() {
+		if tried[m] || !usableFor(m, pin) || m.isClosed() || m.node.isBlocked() {
 			continue
 		}
 		if st := m.oldestIdle(since); st != nil && (victim == nil || st.lastActive.Load() < victim.lastActive.Load()) {
@@ -426,8 +437,8 @@ func (b *broker) takeIdle(deadline time.Time) *idleConn {
 				ic.c.Close()
 				continue
 			}
-			if ic.node.isBlocked() {
-				ic.c.Close()
+			if ic.node.isBlocked() || !ic.node.inPool() {
+				ic.c.Close() // a dedicated board never carries pool traffic
 				continue
 			}
 			return ic
@@ -797,7 +808,8 @@ func (b *broker) statusMux() *http.ServeMux {
 	mux.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, b.reg.list())
 	})
-	// POST /nodes/{mac}/ota | /block | /allow | /forget | /slot {"slot": N} (0 clears)
+	// POST /nodes/{mac}/ota | /block | /allow | /forget
+	//      /slot {"slot": N, "pool": bool} (slot 0 clears; pool absent = unchanged)
 	mux.HandleFunc("/nodes/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
@@ -830,13 +842,14 @@ func (b *broker) statusMux() *http.ServeMux {
 			ok = b.reg.forget(mac)
 		case "slot":
 			var body struct {
-				Slot *int `json:"slot"`
+				Slot *int  `json:"slot"`
+				Pool *bool `json:"pool"`
 			}
 			if json.NewDecoder(r.Body).Decode(&body) != nil || body.Slot == nil || *body.Slot < 0 {
 				http.Error(w, "slot must be a number >= 0 (0 clears)", http.StatusBadRequest)
 				return
 			}
-			err := b.reg.setSlot(mac, *body.Slot)
+			err := b.reg.setSlotPool(mac, *body.Slot, body.Pool)
 			if errors.Is(err, errSlotTaken) {
 				http.Error(w, "slot taken", http.StatusConflict)
 				return

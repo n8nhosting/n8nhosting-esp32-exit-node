@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -316,6 +317,145 @@ func TestNoSecretPoolWorksSlotsRefused(t *testing.T) {
 	}
 	if n := nodeRow(t, b, mac); n.DialsOK != 2 {
 		t.Fatalf("dials_ok = %d, want the 2 pool dials only", n.DialsOK)
+	}
+}
+
+// postSlot sends POST /nodes/{mac}/slot with body to the broker's status API.
+func postSlot(b *broker, mac, body string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	b.statusMux().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/nodes/"+mac+"/slot", strings.NewReader(body)))
+	return rec
+}
+
+// A dedicated board (pool false) carries only its slot: unpinned dials never
+// land on it, not even while the only pool board is full, and its idle slot
+// streams are never evicted to make room for pool traffic.
+func TestPoolFalseNodeNeverServesPool(t *testing.T) {
+	withMuxTimers(t, time.Hour, time.Hour, 50*time.Millisecond, time.Hour)
+	oh, op, oclose := originServer(t)
+	defer oclose()
+	const macA, macB = "aa:bb:cc:dd:ee:77", "aa:bb:cc:dd:ee:78"
+	b := newBroker(config{token: "tok", dialWait: time.Second, slotSecret: "ss"}, 8)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	socksLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	go b.serveSocks(socksLn)
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop); poolLn.Close(); socksLn.Close() })
+	go runMuxNode(t, poolLn.Addr().String(), "tok", macA, true, 1, nil, stop)  // pool board, one stream
+	go runMuxNode(t, poolLn.Addr().String(), "tok", macB, true, 24, nil, stop) // dedicated board
+	waitFor(t, func() bool { return b.muxCount() == 2 })
+	socks := socksLn.Addr().String()
+	if r := postSlot(b, macB, `{"slot":2,"pool":false}`); r.Code != http.StatusOK {
+		t.Fatalf("set B slot 2, pool false: %d %s", r.Code, r.Body.String())
+	}
+
+	// unpinned dials only ever use A (least-loaded would pick the idle B half the time)
+	for i := 0; i < 4; i++ {
+		if body, err := fetchVia(socks, oh, op, "/hello"); err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
+			t.Fatalf("pool dial %d: err=%v body=%q", i, err, body)
+		}
+		waitFor(t, func() bool { return muxActive(b) == 0 })
+	}
+	if a, d := nodeRow(t, b, macA), nodeRow(t, b, macB); a.DialsOK != 4 || d.DialsOK != 0 {
+		t.Fatalf("pool dials: A=%d B=%d, want 4, 0", a.DialsOK, d.DialsOK)
+	}
+
+	// B's slot customer parks an idle stream, then a pool customer fills A
+	slotC, err := socks5ConnectAuth(socks, "slot-2", "ss", oh, op)
+	if err != nil {
+		t.Fatalf("slot-2 dial: %v", err)
+	}
+	defer slotC.Close()
+	time.Sleep(20 * time.Millisecond)
+	poolC, err := socks5Connect(socks, oh, op)
+	if err != nil {
+		t.Fatalf("pool dial filling A: %v", err)
+	}
+	defer poolC.Close()
+	time.Sleep(150 * time.Millisecond) // both idle past muxEvictMinIdle; B's is older
+
+	// a new pool customer makes room on A by evicting A's idle stream, not B's
+	if body, err := fetchVia(socks, oh, op, "/hello"); err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
+		t.Fatalf("pool dial on a full A: err=%v body=%q", err, body)
+	}
+	if !closedWithin(poolC, 2*time.Second) {
+		t.Fatal("A's idle pool stream should have been evicted")
+	}
+	if got := httpOver(t, slotC, "/hello"); !strings.Contains(got, "HELLO-ORIGIN") {
+		t.Fatalf("B's slot stream must never be evicted for pool traffic, got %q", got)
+	}
+	slotC.Close()
+
+	// A full with nothing evictable: the pool customer is refused, B stays untouched
+	muxEvictMinIdle.Set(time.Hour)
+	waitFor(t, func() bool { return muxActive(b) == 0 })
+	held, err := socks5Connect(socks, oh, op)
+	if err != nil {
+		t.Fatalf("pool dial filling A again: %v", err)
+	}
+	defer held.Close()
+	if body, err := fetchVia(socks, oh, op, "/hello"); err == nil {
+		t.Fatalf("pool dial with A full must be refused, not served by B: %q", body)
+	}
+	if d := nodeRow(t, b, macB); d.DialsOK != 1 {
+		t.Fatalf("B dials_ok = %d, want only the slot dial", d.DialsOK)
+	}
+}
+
+// The pool flag rides on POST /nodes/{mac}/slot (absent = unchanged), shows in
+// /nodes, survives a restart, and nodes stored before it existed default to true.
+func TestPoolFlagEndpointAndPersistence(t *testing.T) {
+	file := t.TempDir() + "/nodes.json"
+	const macA, macB = "aa:bb:cc:dd:ee:79", "aa:bb:cc:dd:ee:7a"
+	if err := os.WriteFile(file, []byte(`[{"mac":"`+macA+`","first_seen":"x","last_seen":"x","uptime_sec":0,"blocked":false,"slot":3}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := newBroker(config{token: "tok", nodesFile: file}, 8)
+	b.reg.touch(macB, "fw", "", 0, "")
+	pools := func() map[string]any {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		b.statusMux().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nodes", nil))
+		var rows []map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &rows)
+		out := map[string]any{}
+		for _, row := range rows {
+			out[row["mac"].(string)] = row["pool"]
+		}
+		return out
+	}
+	if p := pools(); p[macA] != true || p[macB] != true {
+		t.Fatalf("default pool flags = %v, want true for a stored node without one and for a new node", p)
+	}
+	expect := func(r *httptest.ResponseRecorder, code int, what string) {
+		t.Helper()
+		if r.Code != code {
+			t.Fatalf("%s: status %d (%s), want %d", what, r.Code, strings.TrimSpace(r.Body.String()), code)
+		}
+	}
+	expect(postSlot(b, macB, `{"slot":4,"pool":false}`), http.StatusOK, "B slot 4, pool false")
+	expect(postSlot(b, macA, `{"slot":4,"pool":false}`), http.StatusConflict, "A takes B's slot")
+	if p := pools(); p[macA] != true || p[macB] != false {
+		t.Fatalf("pool flags = %v; a refused request must not change A", p)
+	}
+	expect(postSlot(b, macB, `{"slot":5}`), http.StatusOK, "B slot 5, pool absent")
+	expect(postSlot(b, macA, `{"slot":0,"pool":false}`), http.StatusOK, "A clears its slot, pool false")
+	if p := pools(); p[macA] != false || p[macB] != false {
+		t.Fatalf("pool flags = %v, want false, false", p)
+	}
+	r2 := newRegistry(file) // restart
+	for _, mac := range []string{macA, macB} {
+		if n := r2.nodes[mac]; n == nil || n.Pool || n.inPool() {
+			t.Fatalf("pool false not persisted for %s: %+v", mac, n)
+		}
+	}
+	if n := r2.bySlot(5); n == nil || n.MAC != macB {
+		t.Fatalf("slot 5 not persisted: %+v", n)
+	}
+	expect(postSlot(b, macA, `{"slot":0,"pool":true}`), http.StatusOK, "A back in the pool")
+	if p := pools(); p[macA] != true {
+		t.Fatalf("pool flags = %v, want A true", p)
 	}
 }
 

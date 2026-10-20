@@ -25,6 +25,7 @@ type node struct {
 	Note       string `json:"note,omitempty"`
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
 	Slot       int    `json:"slot"`                  // gost slot pinned to this board (SOCKS user "slot-N"), 0 = none
+	Pool       bool   `json:"pool"`                  // also serves the shared pool; false for a dedicated board
 
 	// live counters (atomic)
 	Idle      int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
@@ -36,9 +37,13 @@ type node struct {
 	BytesDown int64 `json:"bytes_down"`
 	lastSeenT time.Time
 	blk       atomic.Bool // mirror of Blocked for lock-free readers
+	noPool    atomic.Bool // mirror of !Pool for lock-free readers
 }
 
 func (n *node) isBlocked() bool { return n.blk.Load() }
+
+// inPool reports whether the node may carry unpinned (shared pool) streams.
+func (n *node) inPool() bool { return !n.noPool.Load() }
 
 func (n *node) addIdle(d int64)   { atomic.AddInt64(&n.Idle, d) }
 func (n *node) addActive(d int64) { atomic.AddInt64(&n.Active, d) }
@@ -61,7 +66,7 @@ func (n *node) online() bool {
 func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
 		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note,
-		PendingOTA: n.PendingOTA, Slot: n.Slot, lastSeenT: n.lastSeenT,
+		PendingOTA: n.PendingOTA, Slot: n.Slot, Pool: n.Pool, lastSeenT: n.lastSeenT,
 		Idle: atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
 		BytesUp: atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
@@ -91,7 +96,7 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid string) *node {
 	now := time.Now().UTC()
 	n, ok := r.nodes[mac]
 	if !ok {
-		n = &node{MAC: mac, FirstSeen: now.Format(time.RFC3339)}
+		n = &node{MAC: mac, FirstSeen: now.Format(time.RFC3339), Pool: true}
 		r.nodes[mac] = n
 		r.saveLocked()
 	}
@@ -180,7 +185,11 @@ var (
 
 // setSlot pins slot N (> 0) to the node, moving it off any slot it held, or
 // clears its slot (0). A slot another node holds is refused (errSlotTaken).
-func (r *registry) setSlot(mac string, slot int) error {
+func (r *registry) setSlot(mac string, slot int) error { return r.setSlotPool(mac, slot, nil) }
+
+// setSlotPool is setSlot that also sets whether the node serves the shared
+// pool, unless pool is nil. A refused slot changes neither.
+func (r *registry) setSlotPool(mac string, slot int, pool *bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n, ok := r.nodes[mac]
@@ -191,6 +200,10 @@ func (r *registry) setSlot(mac string, slot int) error {
 		return errSlotTaken
 	}
 	n.Slot = slot
+	if pool != nil {
+		n.Pool = *pool
+		n.noPool.Store(!*pool)
+	}
 	r.saveLocked()
 	return nil
 }
@@ -249,6 +262,7 @@ type persistedNode struct {
 	Blocked   bool   `json:"blocked"`
 	Note      string `json:"note,omitempty"`
 	Slot      int    `json:"slot,omitempty"`
+	Pool      *bool  `json:"pool,omitempty"` // nil (stored before the flag existed) = true
 }
 
 func (r *registry) saveLocked() {
@@ -257,7 +271,8 @@ func (r *registry) saveLocked() {
 	}
 	list := make([]persistedNode, 0, len(r.nodes))
 	for _, n := range r.nodes {
-		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note, n.Slot})
+		pool := n.Pool
+		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note, n.Slot, &pool})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.MkdirAll(filepath.Dir(r.file), 0o755)
@@ -284,8 +299,10 @@ func (r *registry) load() {
 			log.Printf("nodes: slot %d listed twice, cleared on %s", p.Slot, p.MAC)
 			p.Slot = 0 // first holder wins, so routing never depends on map order
 		}
+		pool := p.Pool == nil || *p.Pool
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
-			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot}
+			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot, Pool: pool}
 		r.nodes[p.MAC].blk.Store(p.Blocked)
+		r.nodes[p.MAC].noPool.Store(!pool)
 	}
 }

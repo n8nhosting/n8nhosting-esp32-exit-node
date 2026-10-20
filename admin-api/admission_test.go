@@ -310,12 +310,13 @@ func TestDeviceSlotAssignmentForwardsToBroker(t *testing.T) {
 		}
 	}
 
-	// slot 3 goes to the broker first, then the record; other fields ride along
+	// slot 3 goes to the broker first, then the record; other fields ride along,
+	// and the push carries the pool flag of the resulting kind
 	code, d := put(a, map[string]any{"slot": 3, "name": "Home A", "kind": "dedicated"})
 	if code != http.StatusOK || d["slot"] != float64(3) || d["port"] != float64(3133) || d["name"] != "Home A" || d["kind"] != "dedicated" {
 		t.Fatalf("PUT slot 3: %d %v", code, d)
 	}
-	lastCall("/nodes/"+a+"/slot {\"slot\":3}", 1)
+	lastCall("/nodes/"+a+"/slot {\"slot\":3,\"pool\":false}", 1)
 
 	// another board cannot take a held slot; the broker is not asked
 	if code, out := put(b, map[string]any{"slot": 3}); code != http.StatusConflict || out["error"] != "slot taken" {
@@ -347,7 +348,7 @@ func TestDeviceSlotAssignmentForwardsToBroker(t *testing.T) {
 	if code, out := put(b, map[string]any{"slot": 31}); code != http.StatusOK || out["port"] != float64(3161) {
 		t.Fatalf("slot 31 with SLOT_COUNT=40: %d %v", code, out)
 	}
-	lastCall("/nodes/"+b+"/slot {\"slot\":31}", 3)
+	lastCall("/nodes/"+b+"/slot {\"slot\":31,\"pool\":true}", 3)
 
 	// a user bound to the slotted board connects on its slot port
 	createUser(t, mux, map[string]any{"username": "gina", "password": "Pw1"})
@@ -364,7 +365,7 @@ func TestDeviceSlotAssignmentForwardsToBroker(t *testing.T) {
 	if code != http.StatusOK || d["slot"] != float64(0) || d["port"] != float64(0) || d["name"] != "Home A" {
 		t.Fatalf("PUT slot 0: %d %v", code, d)
 	}
-	lastCall("/nodes/"+a+"/slot {\"slot\":0}", 4)
+	lastCall("/nodes/"+a+"/slot {\"slot\":0,\"pool\":false}", 4)
 	_, cr = doJSON(t, mux, "POST", "/api/users/gina/credentials", "admintok", nil)
 	if cr["port"] != "3128" || cr["connection"] != "gina:Pw1@203.0.113.9:3128" {
 		t.Fatalf("credentials without a slot: %v", cr)
@@ -374,8 +375,68 @@ func TestDeviceSlotAssignmentForwardsToBroker(t *testing.T) {
 	if rr, out := doJSON(t, mux, "POST", "/api/devices/"+a+"/slot", "admintok", map[string]any{"slot": 5}); rr.Code != http.StatusOK || out["port"] != float64(3135) {
 		t.Fatalf("POST slot: %d %v", rr.Code, out)
 	}
-	lastCall("/nodes/"+a+"/slot {\"slot\":5}", 5)
+	lastCall("/nodes/"+a+"/slot {\"slot\":5,\"pool\":false}", 5)
 	if dev, err := s.devices.Get(a); err != nil || dev.Slot != 5 {
 		t.Fatalf("POST slot not recorded: %+v %v", dev, err)
+	}
+}
+
+// A dedicated board never serves the shared pool (spec §6.2.14): changing a
+// device's kind pushes its current slot with the new pool flag to the broker,
+// even when it has no slot; a board the broker does not know yet is fine.
+func TestDeviceKindChangePushesPoolFlag(t *testing.T) {
+	s, mux, fb := newTestServerWithBroker(t)
+	a, b, c := "aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03"
+	fb.nodes = []brokerNode{{MAC: a, RemoteIP: "27.1.1.1"}, {MAC: b, RemoteIP: "8.8.8.8"}}
+	for mac, slot := range map[string]int{a: 4, c: 6} {
+		if err := s.devices.Upsert(mac, func(d *Device) error { d.Slot = slot; return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put := func(mac string, body map[string]any) (int, map[string]any) {
+		rr, out := doJSON(t, mux, "PUT", "/api/devices/"+mac, "admintok", body)
+		return rr.Code, out
+	}
+	calls := func(want ...string) {
+		t.Helper()
+		if got := fb.callLog(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("broker calls %q, want %q", got, want)
+		}
+	}
+
+	if code, d := put(a, map[string]any{"kind": "dedicated"}); code != http.StatusOK || d["kind"] != "dedicated" || d["slot"] != float64(4) {
+		t.Fatalf("kind -> dedicated: %d %v", code, d)
+	}
+	want := []string{"/nodes/" + a + "/slot {\"slot\":4,\"pool\":false}"}
+	calls(want...)
+	// no kind change, no push
+	put(a, map[string]any{"name": "Home A"})
+	put(a, map[string]any{"kind": "dedicated"})
+	calls(want...)
+	if code, _ := put(a, map[string]any{"kind": "shared"}); code != http.StatusOK {
+		t.Fatalf("kind -> shared: %d", code)
+	}
+	want = append(want, "/nodes/"+a+"/slot {\"slot\":4,\"pool\":true}")
+	calls(want...)
+
+	// a board without a slot (and without a record yet) still gets its pool flag
+	if code, d := put(b, map[string]any{"kind": "dedicated"}); code != http.StatusOK || d["kind"] != "dedicated" || d["slot"] != float64(0) {
+		t.Fatalf("slotless kind -> dedicated: %d %v", code, d)
+	}
+	want = append(want, "/nodes/"+b+"/slot {\"slot\":0,\"pool\":false}")
+	calls(want...)
+
+	// the broker has no node for c yet: the 404 is ignored and the kind saved
+	fb.setSlotStatus(http.StatusNotFound)
+	if code, d := put(c, map[string]any{"kind": "dedicated"}); code != http.StatusOK || d["kind"] != "dedicated" {
+		t.Fatalf("kind change on a board the broker does not know: %d %v", code, d)
+	}
+	// any other broker failure saves nothing
+	fb.setSlotStatus(http.StatusInternalServerError)
+	if code, out := put(c, map[string]any{"kind": "shared"}); code != http.StatusBadGateway {
+		t.Fatalf("kind change with the broker failing: %d %v", code, out)
+	}
+	if dev, err := s.devices.Get(c); err != nil || dev.Kind != "dedicated" {
+		t.Fatalf("a refused kind change was saved: %+v %v", dev, err)
 	}
 }
