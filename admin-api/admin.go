@@ -27,6 +27,7 @@ type userInput struct {
 	RateMbps  float64 `json:"rate_mbps"`
 	QuotaGB   float64 `json:"quota_gb"`
 	Note      string  `json:"note"`
+	DeviceMAC string  `json:"device_mac"`
 	// extend: days to add to expiry (used by /extend)
 	Days int `json:"days"`
 	// quota_gb_add: GB to add to this month's quota headroom (used by /extend)
@@ -59,6 +60,7 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 		u := &User{
 			Username:  in.Username,
 			PassHash:  hashPassword(in.Password),
+			CredEnc:   encryptCred(in.Password),
 			Enabled:   enabled,
 			ExpiresAt: in.ExpiresAt,
 			RateMbps:  in.RateMbps,
@@ -114,6 +116,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 		err := s.store.Update(name, func(u *User) error {
 			if in.Password != "" {
 				u.PassHash = hashPassword(in.Password)
+				u.CredEnc = encryptCred(in.Password)
 			}
 			if in.Enabled != nil {
 				u.Enabled = *in.Enabled
@@ -129,6 +132,9 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			}
 			if in.Note != "" {
 				u.Note = in.Note
+			}
+			if in.DeviceMAC != "" {
+				u.DeviceMAC = in.DeviceMAC
 			}
 			return nil
 		})
@@ -162,6 +168,15 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 			u.UsageMonth = monthKey(time.Now())
 			return nil
 		})
+	case "credentials":
+		s.handleCredentials(w, r, name)
+		return
+	case "assign":
+		var in userInput
+		json.NewDecoder(r.Body).Decode(&in)
+		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = in.DeviceMAC; return nil })
+	case "unassign":
+		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = ""; return nil })
 	case "extend":
 		var in userInput
 		json.NewDecoder(r.Body).Decode(&in)
@@ -190,4 +205,43 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 	}
 	u, _ := s.store.Get(name)
 	writeJSON(w, http.StatusOK, u.Public())
+}
+
+// handleCredentials returns the connection string for handing to a customer.
+// Admin-only (bearer). Decrypts the stored credential; falls back to a reset if
+// the record predates reversible storage.
+func (s *server) handleCredentials(w http.ResponseWriter, r *http.Request, name string) {
+	u, err := s.store.Get(name)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	host := envOr("PROXY_PUBLIC_HOST", "")
+	port := envOr("PROXY_PUBLIC_PORT", "3128")
+	pw := ""
+	if u.CredEnc != "" {
+		pw = decryptCred(u.CredEnc)
+	}
+	reset := r.URL.Query().Get("reset") == "1"
+	if pw == "" || reset {
+		pw = randToken(8)
+		s.store.Update(name, func(x *User) error { x.PassHash = hashPassword(pw); x.CredEnc = encryptCred(pw); return nil })
+	}
+	conn := ""
+	if host != "" {
+		conn = u.Username + ":" + pw + "@" + host + ":" + port
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username":   u.Username,
+		"password":   pw,
+		"host":       host,
+		"port":       port,
+		"connection": conn,
+		"http_url":   "http://" + conn,
+		"socks5_url": "socks5h://" + conn,
+		"expires_at": u.ExpiresAt,
+		"rate_mbps":  u.RateMbps,
+		"quota_gb":   u.QuotaGB,
+		"usage_gb":   float64(u.UsageBytes) / (1024 * 1024 * 1024),
+	})
 }

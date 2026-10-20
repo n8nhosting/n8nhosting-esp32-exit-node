@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -357,7 +358,7 @@ func TestBlockedNodeIsRefused(t *testing.T) {
 	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
 
 	// pre-block the MAC, then let it try to join
-	b.reg.touch("de:ad:be:ef:00:01", "", "")
+	b.reg.touch("de:ad:be:ef:00:01", "", "", 0, "")
 	b.reg.setBlocked("de:ad:be:ef:00:01", true)
 	go runNodeMAC(t, poolLn.Addr().String(), "tok", "de:ad:be:ef:00:01", true, false, stop)
 	time.Sleep(400 * time.Millisecond)
@@ -376,7 +377,7 @@ func TestBlockedNodeIsRefused(t *testing.T) {
 func TestRegistryPersistence(t *testing.T) {
 	f := t.TempDir() + "/nodes.json"
 	r := newRegistry(f)
-	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4")
+	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4", 0, "")
 	r.setBlocked("11:22:33:44:55:66", true)
 	r2 := newRegistry(f)
 	l := r2.list()
@@ -392,7 +393,7 @@ func TestOTACommandDelivered(t *testing.T) {
 	defer poolLn.Close()
 
 	mac := "0a:0b:0c:0d:0e:0f"
-	b.reg.touch(mac, "", "")
+	b.reg.touch(mac, "", "", 0, "")
 	b.reg.setOTA(mac, "https://flash.example/fw.bin")
 
 	c, _ := net.Dial("tcp", poolLn.Addr().String())
@@ -412,5 +413,25 @@ func TestOTACommandDelivered(t *testing.T) {
 	c2.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
 	if _, err := br2.ReadString('\n'); err == nil {
 		t.Fatal("OTA should be one-shot")
+	}
+}
+
+func TestNodeReportsUptimeAndSSID(t *testing.T) {
+	b := newBroker(config{token: "tok", dialWait: time.Second}, 8)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	go b.servePool(poolLn)
+	defer poolLn.Close()
+	c, _ := net.Dial("tcp", poolLn.Addr().String())
+	// SSID "My Home 2.4G" base64
+	ssidB64 := base64.StdEncoding.EncodeToString([]byte("My Home 2.4G"))
+	fmt.Fprintf(c, "HELLO tok aa:bb:cc:00:11:22 2.4.21 3600 %s\n", ssidB64)
+	br := bufio.NewReader(c)
+	if l, _ := br.ReadString('\n'); strings.TrimSpace(l) != "READY" {
+		t.Fatalf("no READY")
+	}
+	time.Sleep(100 * time.Millisecond)
+	nodes := b.reg.list()
+	if len(nodes) != 1 || nodes[0].UptimeSec != 3600 || nodes[0].SSID != "My Home 2.4G" {
+		t.Fatalf("uptime/ssid not captured: %+v", nodes[0].node)
 	}
 }

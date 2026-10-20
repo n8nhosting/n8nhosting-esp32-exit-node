@@ -64,7 +64,7 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 		if pw == "" {
 			pw = randToken(8)
 		}
-		_ = s.store.Create(&User{Username: req.Username, PassHash: hashPassword(pw), Enabled: true,
+		_ = s.store.Create(&User{Username: req.Username, PassHash: hashPassword(pw), CredEnc: encryptCred(pw), Enabled: true,
 			QuotaGB: req.QuotaGB, RateMbps: req.RateMbps})
 	}
 	err := s.store.Update(req.Username, func(u *User) error {

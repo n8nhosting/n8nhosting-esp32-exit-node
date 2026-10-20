@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -23,17 +24,57 @@ func (s *server) brokerGET(path string, v any) error {
 	return json.NewDecoder(resp.Body).Decode(v)
 }
 
-// GET /api/devices — list ESP32 exit nodes (MAC, online, exit IP, traffic).
+// brokerNode mirrors the broker's /nodes JSON.
+type brokerNode struct {
+	MAC        string `json:"mac"`
+	Online     bool   `json:"online"`
+	Blocked    bool   `json:"blocked"`
+	RemoteIP   string `json:"remote_ip"`
+	Firmware   string `json:"firmware"`
+	SSID       string `json:"ssid"`
+	UptimeSec  uint64 `json:"uptime_sec"`
+	FirstSeen  string `json:"first_seen"`
+	LastSeen   string `json:"last_seen"`
+	IdleConns  int64  `json:"idle_conns"`
+	Active     int64  `json:"active_dials"`
+	DialsOK    int64  `json:"dials_ok"`
+	DialsErr   int64  `json:"dials_err"`
+	BytesUp    int64  `json:"bytes_up"`
+	BytesDown  int64  `json:"bytes_down"`
+	PendingOTA string `json:"pending_ota,omitempty"`
+}
+
+type deviceView struct {
+	brokerNode
+	Geo   geoInfo  `json:"geo"`
+	Users []string `json:"users"` // usernames bound to this device
+}
+
+// GET /api/devices — list ESP32 exit nodes enriched with geo/ISP and the users
+// bound to each device.
 func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
-	var nodes any
+	var nodes []brokerNode
 	if err := s.brokerGET("/nodes", &nodes); err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "broker unreachable"})
 		return
 	}
-	writeJSON(w, http.StatusOK, nodes)
+	// users bound per MAC
+	byMAC := map[string][]string{}
+	for _, u := range s.store.List() {
+		if u.DeviceMAC != "" {
+			byMAC[u.DeviceMAC] = append(byMAC[u.DeviceMAC], u.Username)
+		}
+	}
+	out := make([]deviceView, 0, len(nodes))
+	for _, n := range nodes {
+		users := byMAC[n.MAC]
+		sort.Strings(users)
+		out = append(out, deviceView{brokerNode: n, Geo: s.geo.lookup(n.RemoteIP), Users: users})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
-// POST /api/devices/{mac}/block|allow|forget — proxy to the broker.
+// POST /api/devices/{mac}/block|allow|forget|ota — proxy to the broker.
 func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method"})
@@ -41,7 +82,7 @@ func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	}
 	rest := r.URL.Path[len("/api/devices/"):]
 	cl := &http.Client{Timeout: 5 * time.Second}
-	resp, err := cl.Post(s.brokerURL()+"/nodes/"+rest, "application/json", r.Body) // body passes through (OTA url)
+	resp, err := cl.Post(s.brokerURL()+"/nodes/"+rest, "application/json", r.Body)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "broker unreachable"})
 		return

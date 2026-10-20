@@ -39,6 +39,7 @@ type server struct {
 	usageMode  string // "delta" (default) or "cumulative"
 	// usage accounting state for cumulative mode: last seen totals per client
 	lastSeen map[string]int64
+	geo      *geoCache
 }
 
 func envOr(k, def string) string {
@@ -62,10 +63,12 @@ func main() {
 		payToken:   os.Getenv("PAYMENT_WEBHOOK_SECRET"),
 		usageMode:  envOr("USAGE_MODE", "delta"),
 		lastSeen:   map[string]int64{},
+		geo:        newGeoCache(),
 	}
 	if s.adminToken == "" {
 		log.Fatal("ADMIN_TOKEN is required")
 	}
+	initCredKey(os.Getenv("CRED_KEY"), s.adminToken)
 
 	mux := http.NewServeMux()
 

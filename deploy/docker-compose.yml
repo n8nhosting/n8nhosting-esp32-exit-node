@@ -63,6 +63,9 @@ services:
       - LISTEN_ADDR=:8088
       - GOST_PLUGIN_SECRET=${GOST_PLUGIN_SECRET}
       - BROKER_STATUS_URL=http://broker:7001
+      - PROXY_PUBLIC_HOST=${PROXY_PUBLIC_HOST}
+      - PROXY_PUBLIC_PORT=${PROXY_PUBLIC_PORT:-3128}
+      - CRED_KEY=${CRED_KEY}
     expose:
       - "8088"                        # dashboard + REST (map to admin.<domain>)
     volumes:

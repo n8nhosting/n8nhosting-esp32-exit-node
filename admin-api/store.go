@@ -3,6 +3,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -20,6 +22,54 @@ import (
 )
 
 const pbkdf2Iter = 100_000
+
+// credKey is the AES-256 key for reversible credential storage. From CRED_KEY
+// (base64, 32 bytes) if set, else derived from ADMIN_TOKEN. Credentials are
+// stored encrypted so the dashboard can show "user:pass@host:port" to hand to
+// customers, without keeping plaintext at rest.
+var credKey [32]byte
+
+func initCredKey(credKeyB64, adminToken string) {
+	if credKeyB64 != "" {
+		if b, err := base64.StdEncoding.DecodeString(credKeyB64); err == nil && len(b) == 32 {
+			copy(credKey[:], b)
+			return
+		}
+	}
+	credKey = sha256.Sum256([]byte("cred:" + adminToken))
+}
+
+func encryptCred(pw string) string {
+	block, err := aes.NewCipher(credKey[:])
+	if err != nil {
+		return ""
+	}
+	gcm, _ := cipher.NewGCM(block)
+	nonce := make([]byte, gcm.NonceSize())
+	rand.Read(nonce)
+	ct := gcm.Seal(nonce, nonce, []byte(pw), nil)
+	return base64.StdEncoding.EncodeToString(ct)
+}
+
+func decryptCred(enc string) string {
+	raw, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		return ""
+	}
+	block, err := aes.NewCipher(credKey[:])
+	if err != nil {
+		return ""
+	}
+	gcm, _ := cipher.NewGCM(block)
+	if len(raw) < gcm.NonceSize() {
+		return ""
+	}
+	pt, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
+	if err != nil {
+		return ""
+	}
+	return string(pt)
+}
 
 // hashPassword returns "pbkdf2$<iter>$<salt_b64>$<hash_b64>".
 func hashPassword(pw string) string {
@@ -66,6 +116,8 @@ type User struct {
 	UsageMonth string `json:"usage_month"` // "2026-10"
 	CreatedAt  string `json:"created_at"`
 	Note       string `json:"note,omitempty"`
+	DeviceMAC  string `json:"device_mac,omitempty"` // bound exit device (informational)
+	CredEnc    string `json:"cred_enc,omitempty"`   // AES-GCM(password) for display; never returned by the API
 }
 
 // PublicUser is what the API returns — never the password hash.
@@ -80,6 +132,7 @@ type PublicUser struct {
 	UsageMonth string  `json:"usage_month"`
 	CreatedAt  string  `json:"created_at"`
 	Note       string  `json:"note,omitempty"`
+	DeviceMAC  string  `json:"device_mac,omitempty"`
 }
 
 func (u *User) Public() PublicUser {
@@ -87,7 +140,7 @@ func (u *User) Public() PublicUser {
 		Username: u.Username, Enabled: u.Enabled, ExpiresAt: u.ExpiresAt,
 		RateMbps: u.RateMbps, QuotaGB: u.QuotaGB, UsageBytes: u.UsageBytes,
 		UsageGB:    float64(u.UsageBytes) / (1024 * 1024 * 1024),
-		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note,
+		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note, DeviceMAC: u.DeviceMAC,
 	}
 }
 

@@ -85,6 +85,7 @@
       <a data-view="settings">Settings</a>
     </nav>
     <div class="spacer"></div>
+    <a id="flashLink" target="_blank" class="muted" style="padding:9px 12px">⚡ Flash firmware ↗</a>
     <a id="gostuiLink" target="_blank" class="muted" style="padding:9px 12px">GOST config UI ↗</a>
     <a id="logout" class="muted" style="padding:9px 12px">Sign out</a>
   </aside>
@@ -137,6 +138,8 @@ function showApp(){
   $('#app').style.display='grid';
   const gostui = new URLSearchParams(location.search).get('gostui') || localStorage.getItem('gostui') || 'https://gost-ui.jbacteam.com';
   $('#gostuiLink').href = gostui; $('#gostuiHost').textContent = location.hostname;
+  const flash = new URLSearchParams(location.search).get('flash') || localStorage.getItem('flash') || (location.protocol+'//'+location.hostname.replace(/^admin\./,'flash.'));
+  $('#flashLink').href = flash;
   route('overview');
 }
 
@@ -172,7 +175,8 @@ async function viewUsers(){
   $('#view').innerHTML = `<div class="head"><h2>Users</h2><button onclick="openUser()">+ New user</button></div>
     <div id="utbl">Loading…</div>`;
   try{
-    const users = await api('/api/users');
+    const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices').catch(()=>[])]);
+    window._deviceMacs = (devices||[]).map(d=>d.mac);
     if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
     const rows = users.map(u=>{
       const quota = u.quota_gb>0 ? `${u.usage_gb.toFixed(2)} / ${u.quota_gb} GB` : `${u.usage_gb.toFixed(2)} GB`;
@@ -182,21 +186,55 @@ async function viewUsers(){
       let st = u.enabled ? '<span class="pill ok">active</span>' : '<span class="pill off">disabled</span>';
       if(expired) st='<span class="pill bad">expired</span>';
       else if(over) st='<span class="pill warn">over quota</span>';
+      const dev = u.device_mac
+        ? `<span class="mono">${esc(u.device_mac)}</span> <a class="muted" style="cursor:pointer" onclick="assignDevice('${esc(u.username)}')">change</a>`
+        : `<a class="muted" style="cursor:pointer" onclick="assignDevice('${esc(u.username)}')">assign…</a>`;
       return `<tr>
         <td class="mono">${esc(u.username)}</td>
         <td>${st}</td>
         <td>${u.rate_mbps>0?u.rate_mbps+' Mbps':'—'}</td>
         <td>${quota}${over?' ⚠':''}</td>
         <td>${exp?exp.toISOString().slice(0,10):'never'}</td>
+        <td>${dev}</td>
         <td class="right row-actions">
+          <button onclick="copyCreds('${esc(u.username)}')">Copy conn</button>
           <button class="sec" onclick='openUser(${JSON.stringify(u)})'>Edit</button>
           <button class="sec" onclick="userAction('${esc(u.username)}','${u.enabled?'disable':'enable'}')">${u.enabled?'Disable':'Enable'}</button>
           <button class="sec" onclick="userAction('${esc(u.username)}','extend')">+30d</button>
           <button class="danger" onclick="delUser('${esc(u.username)}')">Delete</button>
         </td></tr>`;
     }).join('');
-    $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+
+// Copy a ready-to-send connection string (user:pass@host:port) to the clipboard.
+async function copyCreds(username){
+  try{
+    const c = await api('/api/users/'+encodeURIComponent(username)+'/credentials',{method:'POST'});
+    const lines = [
+      'Proxy (HTTP/SOCKS5):',
+      '  host: '+c.host, '  port: '+c.port,
+      '  user: '+c.username, '  pass: '+c.password,
+      '  '+(c.connection||('<set PROXY_PUBLIC_HOST>')),
+      '  HTTP:   '+c.http_url, '  SOCKS5: '+c.socks5_url,
+      'Rate: '+(c.rate_mbps>0?c.rate_mbps+' Mbps':'unlimited'),
+      'Quota: '+(c.quota_gb>0?c.quota_gb+' GB/mo':'unlimited')+'  (used '+(c.usage_gb||0).toFixed(2)+' GB)',
+      'Expires: '+(c.expires_at?new Date(c.expires_at).toLocaleDateString():'never'),
+    ].join('\n');
+    try{ await navigator.clipboard.writeText(c.connection||lines); }catch(_){}
+    alert('Copied connection to clipboard.\n\n'+lines);
+  }catch(e){ alert('Error: '+e.message); }
+}
+
+async function assignDevice(username){
+  const macs = window._deviceMacs||[];
+  const hint = macs.length? '\nKnown devices:\n'+macs.join('\n') : '\n(no devices seen yet)';
+  const mac = prompt('Assign user "'+username+'" to device MAC (blank = unassign):'+hint, '');
+  if(mac===null) return;
+  const action = mac.trim()? 'assign' : 'unassign';
+  await api('/api/users/'+encodeURIComponent(username)+'/'+action,{method:'POST',body:JSON.stringify({device_mac:mac.trim()})});
+  viewUsers();
 }
 let editUser=null;
 function openUser(u){
@@ -236,23 +274,30 @@ async function viewDevices(){
     if(!nodes.length){ $('#dtbl').innerHTML='<p class="muted">No devices have connected yet.</p>'; return; }
     const rows = nodes.map(n=>{
       let st = n.blocked?'<span class="pill bad">blocked</span>':(n.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>');
+      const g = n.geo||{};
+      const loc = [g.city,g.country].filter(Boolean).join(', ') || '—';
+      const users = (n.users&&n.users.length)? n.users.map(esc).join(', ') : '<span class="muted">—</span>';
       return `<tr>
         <td class="mono">${esc(n.mac)}</td>
         <td>${st}</td>
+        <td>${users}</td>
+        <td>${esc(n.ssid||'—')}</td>
         <td class="mono">${esc(n.remote_ip||'—')}</td>
-        <td>${n.idle_conns||0} idle / ${n.active_dials||0} active</td>
+        <td>${esc(loc)}</td>
+        <td class="muted">${esc(g.isp||'—')}</td>
+        <td>${fmtUptime(n.uptime_sec)}</td>
         <td>↑${fmtBytes(n.bytes_up)} ↓${fmtBytes(n.bytes_down)}</td>
-        <td class="mono muted">${esc(n.firmware||'')}${n.pending_ota?' <span class="pill warn">OTA queued</span>':''}</td>
-        <td>${n.last_seen?new Date(n.last_seen).toLocaleString():'—'}</td>
+        <td class="mono muted">${esc(n.firmware||'')}${n.pending_ota?' <span class="pill warn">OTA</span>':''}</td>
         <td class="right row-actions">
           <button class="sec" onclick="otaDevice('${esc(n.mac)}')">Update FW</button>
           <button class="sec" onclick="devAction('${esc(n.mac)}','${n.blocked?'allow':'block'}')">${n.blocked?'Allow':'Block'}</button>
           <button class="danger" onclick="devAction('${esc(n.mac)}','forget')">Forget</button>
         </td></tr>`;
     }).join('');
-    $('#dtbl').innerHTML = `<table><thead><tr><th>MAC</th><th>Status</th><th>Exit IP</th><th>Connections</th><th>Traffic</th><th>Firmware</th><th>Last seen</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#dtbl').innerHTML = `<table><thead><tr><th>MAC</th><th>Status</th><th>Users</th><th>SSID</th><th>Exit IP</th><th>Location</th><th>ISP</th><th>Uptime</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
+function fmtUptime(s){ s=+s||0; if(!s) return '—'; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
 async function otaDevice(mac){
   const def = localStorage.getItem('ota_url') || (location.protocol+'//'+location.hostname.replace(/^admin\./,'flash.')+'/firmware/esp32_nat_router.bin');
   const url = prompt('Firmware URL to push to '+mac+'\n(the device downloads it over HTTPS and reboots):', def);
@@ -267,16 +312,25 @@ async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))re
 
 /* ---- Settings ---- */
 function viewSettings(){
-  const gostui = $('#gostuiLink').href;
+  const gostui = $('#gostuiLink').href, flash = $('#flashLink').href;
+  const otaUrl = localStorage.getItem('ota_url') || (flash.replace(/\/$/,'')+'/firmware/esp32_nat_router.bin');
   $('#view').innerHTML = `<div class="head"><h2>Settings</h2></div>
-    <div class="card" style="max-width:520px">
+    <div class="card" style="max-width:560px">
+      <div class="field"><label>Flash firmware page URL</label><input id="setFlash" value="${esc(flash)}" /></div>
       <div class="field"><label>GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
-      <button onclick="saveGost()">Save</button>
+      <div class="field"><label>Default OTA firmware URL (used by "Update FW")</label><input id="setOta" value="${esc(otaUrl)}" /></div>
+      <button onclick="saveSettings()">Save</button>
       <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3128</span> (HTTP &amp; SOCKS5, username/password).<br>
-      Flash new devices at the <b>flasher</b> page. Each device self-provisions (token baked in) and appears under <b>Devices</b> by MAC.</p>
+      Flash new devices at the Flash page — each self-provisions (TLS, token baked in) and appears under <b>Devices</b> by MAC.<br>
+      <b>OTA:</b> on the Devices tab, "Update FW" pushes the firmware URL above; the device downloads over HTTPS and reboots.</p>
     </div>`;
 }
-function saveGost(){ localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim(); alert('Saved'); }
+function saveSettings(){
+  localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim();
+  localStorage.setItem('flash',$('#setFlash').value.trim()); $('#flashLink').href=$('#setFlash').value.trim();
+  localStorage.setItem('ota_url',$('#setOta').value.trim());
+  alert('Saved');
+}
 
 /* ---- boot ---- */
 if(TOKEN){ api('/api/overview').then(showApp).catch(()=>{ $('#login').style.display='flex'; }); }

@@ -17,6 +17,8 @@ type node struct {
 	RemoteIP   string `json:"remote_ip,omitempty"` // public IP the node dials from (= exit IP)
 	FirstSeen  string `json:"first_seen"`
 	LastSeen   string `json:"last_seen"`
+	UptimeSec  uint64 `json:"uptime_sec"`
+	SSID       string `json:"ssid,omitempty"`
 	Blocked    bool   `json:"blocked"`
 	Note       string `json:"note,omitempty"`
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
@@ -64,7 +66,7 @@ func newRegistry(file string) *registry {
 }
 
 // touch records a HELLO from mac and returns its node record.
-func (r *registry) touch(mac, fw, ip string) *node {
+func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid string) *node {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
@@ -81,6 +83,10 @@ func (r *registry) touch(mac, fw, ip string) *node {
 	}
 	if ip != "" {
 		n.RemoteIP = ip
+	}
+	n.UptimeSec = uptime
+	if ssid != "" {
+		n.SSID = ssid
 	}
 	return n
 }
@@ -164,6 +170,8 @@ type persistedNode struct {
 	Firmware  string `json:"firmware,omitempty"`
 	FirstSeen string `json:"first_seen"`
 	LastSeen  string `json:"last_seen"`
+	UptimeSec uint64 `json:"uptime_sec"`
+	SSID      string `json:"ssid,omitempty"`
 	Blocked   bool   `json:"blocked"`
 	Note      string `json:"note,omitempty"`
 }
@@ -174,7 +182,7 @@ func (r *registry) saveLocked() {
 	}
 	list := make([]persistedNode, 0, len(r.nodes))
 	for _, n := range r.nodes {
-		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.Blocked, n.Note})
+		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.MkdirAll(filepath.Dir(r.file), 0o755)
@@ -198,6 +206,6 @@ func (r *registry) load() {
 	}
 	for _, p := range list {
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
-			LastSeen: p.LastSeen, Blocked: p.Blocked, Note: p.Note}
+			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note}
 	}
 }

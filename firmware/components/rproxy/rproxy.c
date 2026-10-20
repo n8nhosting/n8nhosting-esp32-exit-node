@@ -32,6 +32,8 @@
 #include "esp_netif.h"
 #include "esp_heap_caps.h"
 #include "esp_mac.h"
+#include "esp_wifi.h"
+#include "esp_timer.h"
 #include "esp_app_desc.h"
 #include "esp_tls.h"
 #include "esp_https_ota.h"
@@ -50,6 +52,24 @@
 #include "argtable3/argtable3.h"
 
 static const char *TAG = "rproxy";
+
+/* minimal base64 (no padding issues: standard with padding) */
+static void b64encode(const uint8_t *in, int len, char *out, int outcap)
+{
+    static const char tbl[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int o = 0;
+    for (int i = 0; i < len; i += 3) {
+        int n = in[i] << 16;
+        if (i + 1 < len) n |= in[i+1] << 8;
+        if (i + 2 < len) n |= in[i+2];
+        if (o + 4 >= outcap) break;
+        out[o++] = tbl[(n >> 18) & 63];
+        out[o++] = tbl[(n >> 12) & 63];
+        out[o++] = (i + 1 < len) ? tbl[(n >> 6) & 63] : '=';
+        out[o++] = (i + 2 < len) ? tbl[n & 63] : '=';
+    }
+    out[o] = 0;
+}
 
 /* Embedded broker CA (PEM). */
 extern const uint8_t broker_ca_pem_start[] asm("_binary_broker_ca_pem_start");
@@ -433,7 +453,18 @@ static void worker_task(void *arg)
 
         /* HELLO <token> <mac> <fw> */
         char line[320];
-        int hlen = snprintf(line, sizeof(line), "HELLO %s %s %s\n", token, s_mac, s_fw);
+        uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+        char ssid_b64[48] = "";
+        {
+            wifi_config_t sta_cfg;
+            if (esp_wifi_get_config(WIFI_IF_STA, &sta_cfg) == ESP_OK) {
+                int sl = strnlen((char *)sta_cfg.sta.ssid, sizeof(sta_cfg.sta.ssid));
+                b64encode(sta_cfg.sta.ssid, sl, ssid_b64, sizeof(ssid_b64));
+            }
+        }
+        /* HELLO <token> <mac> <fw> <uptime_s> <ssid_b64>  (password is never sent) */
+        int hlen = snprintf(line, sizeof(line), "HELLO %s %s %s %lu %s\n",
+                            token, s_mac, s_fw, (unsigned long)uptime, ssid_b64);
         if (!link_write_all(&link, line, hlen)) { link_close(&link); backoff_delay(&backoff); continue; }
         if (link_read_line(&link, line, sizeof(line)) < 0 || strncmp(line, "READY", 5) != 0) {
             if (strncmp(line, "DENY", 4) == 0) {

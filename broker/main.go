@@ -163,6 +163,20 @@ func (b *broker) servePool(ln net.Listener) {
 
 func isClosedErr(err error) bool { return errors.Is(err, net.ErrClosed) }
 
+// sanitizeSSID strips control chars and caps length for safe display/storage.
+func sanitizeSSID(s string) string {
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= 0x20 && r != 0x7f {
+			out = append(out, r)
+		}
+		if len(out) >= 32 {
+			break
+		}
+	}
+	return string(out)
+}
+
 func (b *broker) handlePoolConn(c net.Conn) {
 	c.SetReadDeadline(time.Now().Add(15 * time.Second))
 	br := bufio.NewReader(c)
@@ -177,15 +191,26 @@ func (b *broker) handlePoolConn(c net.Conn) {
 		c.Close()
 		return
 	}
+	// HELLO <token> <mac> <fw> <uptime_s> <ssid_b64>
 	mac, fw := "unknown", ""
+	var uptime uint64
+	ssid := ""
 	if len(f) >= 3 {
 		mac = strings.ToLower(f[2])
 	}
 	if len(f) >= 4 {
 		fw = f[3]
 	}
+	if len(f) >= 5 {
+		uptime, _ = strconv.ParseUint(f[4], 10, 64)
+	}
+	if len(f) >= 6 {
+		if dec, err := base64.StdEncoding.DecodeString(f[5]); err == nil {
+			ssid = sanitizeSSID(string(dec))
+		}
+	}
 	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
-	n := b.reg.touch(mac, fw, remoteIP)
+	n := b.reg.touch(mac, fw, remoteIP, uptime, ssid)
 	if n.Blocked {
 		c.Write([]byte("DENY blocked\n"))
 		c.Close()

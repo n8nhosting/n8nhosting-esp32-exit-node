@@ -212,3 +212,74 @@ func TestLegacyPlaintextMigration(t *testing.T) {
 		t.Fatal("plaintext password still on disk after migration")
 	}
 }
+
+func TestCredentialsAndAssign(t *testing.T) {
+	initCredKey("", "admintok")
+	os.Setenv("PROXY_PUBLIC_HOST", "203.0.113.9")
+	os.Setenv("PROXY_PUBLIC_PORT", "3128")
+	defer os.Unsetenv("PROXY_PUBLIC_HOST")
+	_, mux := newTestServer(t)
+	doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": "gina", "password": "Pw1", "rate_mbps": 5, "quota_gb": 2})
+
+	// credentials returns the connection string with the real password
+	_, out := doJSON(t, mux, "POST", "/api/users/gina/credentials", "admintok", nil)
+	if out["password"] != "Pw1" {
+		t.Fatalf("expected decrypted password, got %v", out["password"])
+	}
+	if out["connection"] != "gina:Pw1@203.0.113.9:3128" {
+		t.Fatalf("connection string wrong: %v", out["connection"])
+	}
+	if out["socks5_url"] != "socks5h://gina:Pw1@203.0.113.9:3128" {
+		t.Fatalf("socks url wrong: %v", out["socks5_url"])
+	}
+
+	// assign to a device, visible on the user
+	doJSON(t, mux, "POST", "/api/users/gina/assign", "admintok", map[string]any{"device_mac": "aa:bb:cc:dd:ee:ff"})
+	_, u := doJSON(t, mux, "GET", "/api/users/gina", "admintok", nil)
+	if u["device_mac"] != "aa:bb:cc:dd:ee:ff" {
+		t.Fatalf("assign failed: %v", u["device_mac"])
+	}
+	doJSON(t, mux, "POST", "/api/users/gina/unassign", "admintok", nil)
+	_, u2 := doJSON(t, mux, "GET", "/api/users/gina", "admintok", nil)
+	if u2["device_mac"] != nil && u2["device_mac"] != "" {
+		t.Fatalf("unassign failed: %v", u2["device_mac"])
+	}
+}
+
+func TestCredEncRoundTrip(t *testing.T) {
+	initCredKey("", "k")
+	enc := encryptCred("s3cr3t!")
+	if enc == "" || enc == "s3cr3t!" {
+		t.Fatal("not encrypted")
+	}
+	if decryptCred(enc) != "s3cr3t!" {
+		t.Fatal("roundtrip failed")
+	}
+	// wrong key cannot decrypt
+	initCredKey("", "other")
+	if decryptCred(enc) == "s3cr3t!" {
+		t.Fatal("decrypted with wrong key")
+	}
+}
+
+func TestGeoLookupCachesAndDegrades(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Write([]byte(`{"status":"success","country":"Thailand","regionName":"Bangkok","city":"Bangkok","isp":"TRUE","lat":13.7,"lon":100.5}`))
+	}))
+	defer srv.Close()
+	g := &geoCache{data: map[string]geoEntry{}, url: srv.URL + "/"}
+	a := g.lookup("1.2.3.4")
+	b := g.lookup("1.2.3.4")
+	if a.ISP != "TRUE" || a.City != "Bangkok" || b.Country != "Thailand" {
+		t.Fatalf("geo parse wrong: %+v", a)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 upstream call (cached), got %d", calls)
+	}
+	bad := &geoCache{data: map[string]geoEntry{}, url: "http://127.0.0.1:1/"}
+	if bad.lookup("9.9.9.9").ISP != "" {
+		t.Fatal("geo should degrade to empty on error")
+	}
+}
