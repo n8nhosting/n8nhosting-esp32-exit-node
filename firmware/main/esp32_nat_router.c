@@ -1288,15 +1288,8 @@ void app_main(void)
         free(tz);
     }
 
-    /* OTA rollback support: confirm the running firmware is valid */
-    const esp_partition_t *running = esp_ota_get_running_partition();
-    esp_ota_img_states_t ota_state;
-    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
-        if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
-            ESP_LOGI(TAG, "OTA: confirming new firmware on partition '%s'", running->label);
-            esp_ota_mark_app_valid_cancel_rollback();
-        }
-    }
+    /* OTA rollback: a new image is confirmed by rproxy_init() once it reaches
+     * the broker (see components/rproxy, "OTA self-test"), not here at boot. */
 
 #if CONFIG_STORE_HISTORY
     initialize_filesystem();

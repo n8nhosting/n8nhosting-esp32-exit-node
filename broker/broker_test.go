@@ -394,7 +394,7 @@ func TestOTACommandDelivered(t *testing.T) {
 
 	mac := "0a:0b:0c:0d:0e:0f"
 	b.reg.touch(mac, "", "", 0, "")
-	b.reg.setOTA(mac, "https://flash.example/fw.bin")
+	b.reg.setOTA(mac, "https://flash.example/fw.bin", "")
 
 	c, _ := net.Dial("tcp", poolLn.Addr().String())
 	fmt.Fprintf(c, "HELLO tok %s fw1\n", mac)
@@ -433,5 +433,47 @@ func TestNodeReportsUptimeAndSSID(t *testing.T) {
 	nodes := b.reg.list()
 	if len(nodes) != 1 || nodes[0].UptimeSec != 3600 || nodes[0].SSID != "My Home 2.4G" {
 		t.Fatalf("uptime/ssid not captured: %+v", nodes[0].node)
+	}
+}
+
+func TestOTAStatusTracking(t *testing.T) {
+	r := newRegistry("")
+	mac := "aa:bb:cc:00:00:01"
+	r.touch(mac, "1.0", "1.2.3.4", 500, "")
+	if !r.setOTA(mac, "https://flash.example/2.0.bin", "2.0") {
+		t.Fatal("setOTA")
+	}
+	n := r.nodes[mac]
+	if n.OTAStatus != "queued" {
+		t.Fatalf("status %q, want queued", n.OTAStatus)
+	}
+	if u := r.takeOTA(n); u != "https://flash.example/2.0.bin" || n.OTAStatus != "sent" {
+		t.Fatalf("take: %q %q", u, n.OTAStatus)
+	}
+	// still downloading on the old firmware, no reboot yet: stays "sent"
+	r.touch(mac, "1.0", "1.2.3.4", 520, "")
+	if n.OTAStatus != "sent" {
+		t.Fatalf("status %q, want sent", n.OTAStatus)
+	}
+	// came back after a reboot on the new firmware
+	r.touch(mac, "2.0", "1.2.3.4", 8, "")
+	if n.OTAStatus != "ok" {
+		t.Fatalf("status %q, want ok", n.OTAStatus)
+	}
+
+	// next update: the board reboots but is back on 2.0 (image rolled back)
+	r.setOTA(mac, "https://flash.example/3.0.bin", "3.0")
+	r.takeOTA(n)
+	r.touch(mac, "2.0", "1.2.3.4", 60, "")
+	r.touch(mac, "2.0", "1.2.3.4", 5, "")
+	if n.OTAStatus != "failed" {
+		t.Fatalf("status %q, want failed", n.OTAStatus)
+	}
+
+	// cancel only clears a queued update
+	r.setOTA(mac, "https://flash.example/3.0.bin", "3.0")
+	r.setOTA(mac, "", "")
+	if n.PendingOTA != "" || n.OTAStatus != "" {
+		t.Fatalf("cancel: %q %q", n.PendingOTA, n.OTAStatus)
 	}
 }
