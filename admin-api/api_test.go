@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -187,5 +189,26 @@ func TestPaymentWebhook(t *testing.T) {
 	_, u := doJSON(t, mux, "GET", "/api/users/frank", "admintok", nil)
 	if u["username"] != "frank" || u["enabled"] != true || u["quota_gb"].(float64) != 50 {
 		t.Fatalf("payment did not activate user correctly: %v", u)
+	}
+}
+
+func TestLegacyPlaintextMigration(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "users.json")
+	// v1.0 record shape
+	os.WriteFile(f, []byte(`[{"username":"old","password":"Secret1","enabled":true,"usage_month":"2026-10"}]`), 0o600)
+	st, err := NewStore(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, why := st.Authorize("old", "Secret1", time.Now()); !ok {
+		t.Fatalf("legacy user should authenticate after migration: %s", why)
+	}
+	u, _ := st.Get("old")
+	if u.LegacyPassword != "" || !strings.HasPrefix(u.PassHash, "pbkdf2$") {
+		t.Fatalf("not migrated to hash: %+v", u)
+	}
+	data, _ := os.ReadFile(f)
+	if strings.Contains(string(data), "Secret1") {
+		t.Fatal("plaintext password still on disk after migration")
 	}
 }

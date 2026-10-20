@@ -52,12 +52,15 @@ func verifyPassword(stored, pw string) bool {
 }
 
 type User struct {
-	Username  string  `json:"username"`
-	PassHash  string  `json:"pass_hash"` // pbkdf2 hash (never returned by the API)
-	Enabled   bool    `json:"enabled"`
-	ExpiresAt string  `json:"expires_at,omitempty"` // RFC3339; empty = never
-	RateMbps  float64 `json:"rate_mbps"`            // 0 = unlimited
-	QuotaGB   float64 `json:"quota_gb"`             // 0 = unlimited (per calendar month)
+	Username string `json:"username"`
+	PassHash string `json:"pass_hash"` // pbkdf2 hash (never returned by the API)
+	// LegacyPassword reads v1.0 records that stored a plaintext "password";
+	// it is migrated into PassHash on load and never written back.
+	LegacyPassword string  `json:"password,omitempty"`
+	Enabled        bool    `json:"enabled"`
+	ExpiresAt      string  `json:"expires_at,omitempty"` // RFC3339; empty = never
+	RateMbps       float64 `json:"rate_mbps"`            // 0 = unlimited
+	QuotaGB        float64 `json:"quota_gb"`             // 0 = unlimited (per calendar month)
 	// usage (reset each calendar month)
 	UsageBytes int64  `json:"usage_bytes"`
 	UsageMonth string `json:"usage_month"` // "2026-10"
@@ -108,8 +111,17 @@ func NewStore(path string) (*Store, error) {
 		if err := json.Unmarshal(data, &list); err != nil {
 			return nil, err
 		}
+		migrated := false
 		for _, u := range list {
+			if u.PassHash == "" && u.LegacyPassword != "" {
+				u.PassHash = hashPassword(u.LegacyPassword) // upgrade v1.0 plaintext
+				u.LegacyPassword = ""
+				migrated = true
+			}
 			s.users[u.Username] = u
+		}
+		if migrated {
+			_ = s.flush()
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
