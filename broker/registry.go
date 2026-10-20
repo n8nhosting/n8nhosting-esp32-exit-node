@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,6 +24,7 @@ type node struct {
 	Blocked    bool   `json:"blocked"`
 	Note       string `json:"note,omitempty"`
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
+	Slot       int    `json:"slot"`                  // gost slot pinned to this board (SOCKS user "slot-N"), 0 = none
 
 	// live counters (atomic)
 	Idle      int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
@@ -58,7 +61,7 @@ func (n *node) online() bool {
 func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
 		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note,
-		PendingOTA: n.PendingOTA, lastSeenT: n.lastSeenT,
+		PendingOTA: n.PendingOTA, Slot: n.Slot, lastSeenT: n.lastSeenT,
 		Idle: atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
 		BytesUp: atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
@@ -170,6 +173,60 @@ func (r *registry) takeOTA(n *node) string {
 	return u
 }
 
+var (
+	errNoNode    = errors.New("no such node")
+	errSlotTaken = errors.New("slot taken")
+)
+
+// setSlot pins slot N (> 0) to the node, moving it off any slot it held, or
+// clears its slot (0). A slot another node holds is refused (errSlotTaken).
+func (r *registry) setSlot(mac string, slot int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n, ok := r.nodes[mac]
+	if !ok {
+		return errNoNode
+	}
+	if o := r.bySlotLocked(slot); o != nil && o != n {
+		return errSlotTaken
+	}
+	n.Slot = slot
+	r.saveLocked()
+	return nil
+}
+
+// bySlot returns the node holding slot N, or nil.
+func (r *registry) bySlot(slot int) *node {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.bySlotLocked(slot)
+}
+
+func (r *registry) bySlotLocked(slot int) *node {
+	if slot <= 0 {
+		return nil
+	}
+	for _, n := range r.nodes {
+		if n.Slot == slot {
+			return n
+		}
+	}
+	return nil
+}
+
+// slotCount is the number of nodes holding a slot.
+func (r *registry) slotCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := 0
+	for _, n := range r.nodes {
+		if n.Slot > 0 {
+			c++
+		}
+	}
+	return c
+}
+
 func (r *registry) forget(mac string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -191,6 +248,7 @@ type persistedNode struct {
 	SSID      string `json:"ssid,omitempty"`
 	Blocked   bool   `json:"blocked"`
 	Note      string `json:"note,omitempty"`
+	Slot      int    `json:"slot,omitempty"`
 }
 
 func (r *registry) saveLocked() {
@@ -199,7 +257,7 @@ func (r *registry) saveLocked() {
 	}
 	list := make([]persistedNode, 0, len(r.nodes))
 	for _, n := range r.nodes {
-		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note})
+		list = append(list, persistedNode{n.MAC, n.Firmware, n.FirstSeen, n.LastSeen, n.UptimeSec, n.SSID, n.Blocked, n.Note, n.Slot})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.MkdirAll(filepath.Dir(r.file), 0o755)
@@ -222,8 +280,12 @@ func (r *registry) load() {
 		return
 	}
 	for _, p := range list {
+		if p.Slot > 0 && r.bySlotLocked(p.Slot) != nil {
+			log.Printf("nodes: slot %d listed twice, cleared on %s", p.Slot, p.MAC)
+			p.Slot = 0 // first holder wins, so routing never depends on map order
+		}
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
-			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note}
+			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot}
 		r.nodes[p.MAC].blk.Store(p.Blocked)
 	}
 }

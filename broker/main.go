@@ -14,6 +14,11 @@
 //     and on OK relays bytes between GOST and the node (which has already
 //     connected out through the home WiFi, i.e. the Thai exit IP).
 //
+// Per-device slots: gost's slot services log in as "slot-N" (SOCKS5
+// user/pass, password SLOT_SECRET). Those streams go only to the board that
+// holds slot N (POST /nodes/{mac}/slot); if it is offline the customer is
+// refused, never moved to another board. No-auth clients use the shared pool.
+//
 // Legacy (v1.2 and older firmware): one node connection serves one DIAL; the
 // node opens a fresh pool connection afterwards to refill the pool.
 //
@@ -26,6 +31,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -51,6 +58,7 @@ type config struct {
 	tlsCert    string // PEM (env TLS_CERT_PEM) or empty for plain TCP (dev only)
 	tlsKey     string
 	nodesFile  string // persisted node policy (block list)
+	slotSecret string // SOCKS user/pass password for gost's per-slot chains ("" = no-auth only)
 }
 
 // pemFromEnv reads a PEM from a plain env var or a base64-encoded one
@@ -99,6 +107,8 @@ type broker struct {
 
 	streamsEvicted    int64 // mux streams reset to make room on a full link
 	streamsIdleClosed int64 // mux streams closed by the idle / half-close reaper
+
+	dialsPinnedOffline int64 // slot dials refused because the slot's board had no usable link
 }
 
 func main() {
@@ -111,11 +121,15 @@ func main() {
 		tlsCert:    pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
 		tlsKey:     pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
 		nodesFile:  envOr("NODES_FILE", "/data/nodes.json"),
+		slotSecret: os.Getenv("SLOT_SECRET"),
 	}
 	waitS, _ := strconv.Atoi(envOr("DIAL_WAIT_SECONDS", "10"))
 	cfg.dialWait = time.Duration(waitS) * time.Second
 	if cfg.token == "" {
 		log.Fatal("POOL_TOKEN is required")
+	}
+	if cfg.slotSecret == "" {
+		log.Printf("SLOT_SECRET unset: slot routing off, every SOCKS client uses the shared pool")
 	}
 	depth, _ := strconv.Atoi(envOr("POOL_BACKLOG", "64"))
 
@@ -298,8 +312,8 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int)
 }
 
 // pickMux returns the least-loaded usable mux link (round-robin on ties),
-// skipping any in `tried`.
-func (b *broker) pickMux(tried map[*muxSession]bool) *muxSession {
+// skipping any in `tried`. A non-nil pin limits the choice to that node's links.
+func (b *broker) pickMux(tried map[*muxSession]bool, pin *node) *muxSession {
 	b.muxMu.Lock()
 	defer b.muxMu.Unlock()
 	var best *muxSession
@@ -307,7 +321,7 @@ func (b *broker) pickMux(tried map[*muxSession]bool) *muxSession {
 	cnt := len(b.muxes)
 	for i := 0; i < cnt; i++ {
 		m := b.muxes[(b.muxRR+i)%cnt]
-		if tried[m] || m.node.isBlocked() || m.isClosed() {
+		if tried[m] || (pin != nil && m.node != pin) || m.node.isBlocked() || m.isClosed() {
 			continue
 		}
 		load := m.active()
@@ -333,12 +347,21 @@ func (b *broker) muxCount() int {
 // dialViaMux opens a stream on a mux link. ok=false means no mux link could
 // take it (the caller falls back to the legacy pool); otherwise rep is the
 // SOCKS reply code and st is non-nil on success.
-func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (st *muxStream, rep byte, ok bool) {
+//
+// A non-nil pin (slot customer) only ever uses that node's links and never
+// reports ok=false: with no usable link it answers repHostFail itself, so the
+// customer is not handed to the pool or another board.
+func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool, pin *node) (st *muxStream, rep byte, ok bool) {
 	for {
-		m := b.pickMux(tried)
+		m := b.pickMux(tried, pin)
 		if m == nil {
-			if b.evictIdleStream(tried) {
+			if b.evictIdleStream(tried, pin) {
 				continue // a slot was just freed
+			}
+			if pin != nil {
+				atomic.AddInt64(&b.dialsPinnedOffline, 1)
+				log.Printf("socks: slot device %s has no usable link for %s:%d", pin.MAC, host, port)
+				return nil, repHostFail, true
 			}
 			return nil, 0, false
 		}
@@ -350,9 +373,11 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (
 		case reason == "busy" || reason == "link closed" || reason == "timeout":
 			continue // try another link
 		case reason == "blocked":
+			atomic.AddInt64(&b.dialsErr, 1)
 			m.node.addStats(0, 1, 0, 0)
 			return nil, repRefused, true
 		default:
+			atomic.AddInt64(&b.dialsErr, 1)
 			m.node.addStats(0, 1, 0, 0)
 			return nil, repHostFail, true
 		}
@@ -360,10 +385,11 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool) (
 }
 
 // evictIdleStream makes room on a full link by resetting the stream that has
-// been idle longest (at least muxEvictMinIdle), across links not in `tried`.
+// been idle longest (at least muxEvictMinIdle), across links not in `tried`
+// (and only the pinned node's links when pin is non-nil).
 // Browsers reopen a parked keep-alive connection transparently, so this beats
 // refusing the new customer. Returns false if nothing qualifies.
-func (b *broker) evictIdleStream(tried map[*muxSession]bool) bool {
+func (b *broker) evictIdleStream(tried map[*muxSession]bool, pin *node) bool {
 	b.muxMu.Lock()
 	muxes := append([]*muxSession(nil), b.muxes...)
 	b.muxMu.Unlock()
@@ -371,7 +397,7 @@ func (b *broker) evictIdleStream(tried map[*muxSession]bool) bool {
 	var victim *muxStream
 	var on *muxSession
 	for _, m := range muxes {
-		if tried[m] || m.isClosed() || m.node.isBlocked() {
+		if tried[m] || (pin != nil && m.node != pin) || m.isClosed() || m.node.isBlocked() {
 			continue
 		}
 		if st := m.oldestIdle(since); st != nil && (victim == nil || st.lastActive.Load() < victim.lastActive.Load()) {
@@ -450,22 +476,103 @@ const (
 	repGenFail  = 0x01
 	repHostFail = 0x04
 	repRefused  = 0x05
+
+	methodNoAuth   = 0x00
+	methodUserPass = 0x02
+	userPassVer    = 0x01 // RFC 1929 sub-negotiation version
+	userPassOK     = 0x00
+	userPassFail   = 0x01
 )
+
+// socksGreeting reads the client's method list and authenticates it. It
+// returns the username ("" = shared pool) and false if the client must be
+// dropped.
+//
+// With a slot secret set, user/pass (RFC 1929) is selected whenever the client
+// offers it: gost's per-slot chains log in as "slot-N" with that secret. gost's
+// socks5 connector offers user/pass even when it has no credentials (the pool
+// chain), so an empty username and password is the pool, like no-auth.
+// Without a secret the broker answers no-auth as it always has.
+func (b *broker) socksGreeting(c net.Conn, br *bufio.Reader) (user string, ok bool) {
+	ver, _ := br.ReadByte()
+	if ver != socksVer5 {
+		return "", false
+	}
+	nm, err := br.ReadByte()
+	if err != nil {
+		return "", false
+	}
+	methods := make([]byte, nm)
+	if _, err := io.ReadFull(br, methods); err != nil {
+		return "", false
+	}
+	if b.cfg.slotSecret == "" || bytes.IndexByte(methods, methodUserPass) < 0 {
+		c.Write([]byte{socksVer5, methodNoAuth})
+		return "", true
+	}
+	c.Write([]byte{socksVer5, methodUserPass})
+	user, pass, err := readUserPass(br)
+	if err != nil {
+		c.Write([]byte{userPassVer, userPassFail})
+		return "", false
+	}
+	_, isSlot := slotUser(user)
+	anon := user == "" && pass == ""
+	if !anon && !(isSlot && subtle.ConstantTimeCompare([]byte(pass), []byte(b.cfg.slotSecret)) == 1) {
+		log.Printf("socks: login refused for user %q", user)
+		c.Write([]byte{userPassVer, userPassFail})
+		return "", false
+	}
+	c.Write([]byte{userPassVer, userPassOK})
+	return user, true
+}
+
+// readUserPass reads an RFC 1929 request: VER ULEN UNAME PLEN PASSWD.
+func readUserPass(br *bufio.Reader) (user, pass string, err error) {
+	var hdr [2]byte
+	if _, err = io.ReadFull(br, hdr[:]); err != nil {
+		return "", "", err
+	}
+	if hdr[0] != userPassVer {
+		return "", "", errors.New("bad user/pass version")
+	}
+	u := make([]byte, hdr[1])
+	if _, err = io.ReadFull(br, u); err != nil {
+		return "", "", err
+	}
+	pl, err := br.ReadByte()
+	if err != nil {
+		return "", "", err
+	}
+	p := make([]byte, pl)
+	if _, err = io.ReadFull(br, p); err != nil {
+		return "", "", err
+	}
+	return string(u), string(p), nil
+}
+
+// slotUser parses a "slot-N" SOCKS username (N >= 1, plain decimal).
+func slotUser(u string) (int, bool) {
+	s, ok := strings.CutPrefix(u, "slot-")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || strconv.Itoa(n) != s {
+		return 0, false
+	}
+	return n, true
+}
 
 func (b *broker) handleSocks(c net.Conn) {
 	defer c.Close()
 	c.SetReadDeadline(time.Now().Add(30 * time.Second))
 	br := bufio.NewReader(c)
 
-	ver, _ := br.ReadByte()
-	if ver != socksVer5 {
+	user, ok := b.socksGreeting(c, br)
+	if !ok {
 		return
 	}
-	nm, _ := br.ReadByte()
-	if _, err := io.CopyN(io.Discard, br, int64(nm)); err != nil {
-		return
-	}
-	c.Write([]byte{socksVer5, 0x00})
 
 	hdr := make([]byte, 4)
 	if _, err := io.ReadFull(br, hdr); err != nil {
@@ -487,11 +594,16 @@ func (b *broker) handleSocks(c net.Conn) {
 	port := int(pb[0])<<8 | int(pb[1])
 	c.SetReadDeadline(time.Time{})
 
+	if slot, pinned := slotUser(user); pinned {
+		b.dialSlot(c, slot, host, port)
+		return
+	}
+
 	deadline := time.Now().Add(b.cfg.dialWait)
 	tried := map[*muxSession]bool{}
 	var ic *idleConn
 	for {
-		if st, rep, ok := b.dialViaMux(host, port, tried); ok {
+		if st, rep, ok := b.dialViaMux(host, port, tried, nil); ok {
 			b.finishMux(c, st, rep)
 			return
 		}
@@ -547,9 +659,25 @@ func (b *broker) handleSocks(c net.Conn) {
 	ic.node.addStats(0, 0, up, down)
 }
 
+// dialSlot serves a "slot-N" customer on the board holding slot N only. A slot
+// nobody holds, or whose board has no usable mux link, is refused with "host
+// unreachable" — never rerouted to the pool or another board.
+func (b *broker) dialSlot(c net.Conn, slot int, host string, port int) {
+	pin := b.reg.bySlot(slot)
+	if pin == nil {
+		atomic.AddInt64(&b.dialsPinnedOffline, 1)
+		log.Printf("socks: slot %d has no device for %s:%d", slot, host, port)
+		socksReply(c, repHostFail)
+		return
+	}
+	st, rep, _ := b.dialViaMux(host, port, map[*muxSession]bool{}, pin)
+	b.finishMux(c, st, rep)
+}
+
+// finishMux answers the customer and relays a successful stream; a failed dial
+// (st == nil) was already counted by dialViaMux.
 func (b *broker) finishMux(c net.Conn, st *muxStream, rep byte) {
 	if st == nil {
-		atomic.AddInt64(&b.dialsErr, 1)
 		socksReply(c, rep)
 		return
 	}
@@ -639,28 +767,35 @@ func (b *broker) pipe(gost net.Conn, esp net.Conn, espRd *bufio.Reader) (up, dow
 // ---- status / nodes API (internal network only) -------------------------
 
 func (b *broker) serveStatus() {
+	log.Printf("status listening on %s", b.cfg.statusAddr)
+	http.ListenAndServe(b.cfg.statusAddr, b.statusMux())
+}
+
+func (b *broker) statusMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
-			"idle_nodes":          len(b.idle),
-			"mux_links":           b.muxCount(),
-			"nodes_online":        b.reg.onlineCount(),
-			"nodes_total":         b.reg.count(),
-			"dials_ok":            atomic.LoadInt64(&b.dialsOK),
-			"dials_err":           atomic.LoadInt64(&b.dialsErr),
-			"dials_no_node":       atomic.LoadInt64(&b.dialsNoNode),
-			"streams_evicted":     atomic.LoadInt64(&b.streamsEvicted),
-			"streams_idle_closed": atomic.LoadInt64(&b.streamsIdleClosed),
-			"bytes_up":            atomic.LoadInt64(&b.bytesUp),
-			"bytes_down":          atomic.LoadInt64(&b.bytesDown),
-			"uptime_sec":          int64(time.Since(b.started).Seconds()),
-			"tls":                 b.cfg.tlsCert != "",
+			"idle_nodes":           len(b.idle),
+			"mux_links":            b.muxCount(),
+			"nodes_online":         b.reg.onlineCount(),
+			"nodes_total":          b.reg.count(),
+			"slots_assigned":       b.reg.slotCount(),
+			"dials_ok":             atomic.LoadInt64(&b.dialsOK),
+			"dials_err":            atomic.LoadInt64(&b.dialsErr),
+			"dials_no_node":        atomic.LoadInt64(&b.dialsNoNode),
+			"dials_pinned_offline": atomic.LoadInt64(&b.dialsPinnedOffline),
+			"streams_evicted":      atomic.LoadInt64(&b.streamsEvicted),
+			"streams_idle_closed":  atomic.LoadInt64(&b.streamsIdleClosed),
+			"bytes_up":             atomic.LoadInt64(&b.bytesUp),
+			"bytes_down":           atomic.LoadInt64(&b.bytesDown),
+			"uptime_sec":           int64(time.Since(b.started).Seconds()),
+			"tls":                  b.cfg.tlsCert != "",
 		})
 	})
 	mux.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, b.reg.list())
 	})
-	// POST /nodes/{mac}/block | /allow | /forget
+	// POST /nodes/{mac}/ota | /block | /allow | /forget | /slot {"slot": N} (0 clears)
 	mux.HandleFunc("/nodes/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
@@ -691,6 +826,20 @@ func (b *broker) serveStatus() {
 			ok = b.reg.setBlocked(mac, false)
 		case "forget":
 			ok = b.reg.forget(mac)
+		case "slot":
+			var body struct {
+				Slot *int `json:"slot"`
+			}
+			if json.NewDecoder(r.Body).Decode(&body) != nil || body.Slot == nil || *body.Slot < 0 {
+				http.Error(w, "slot must be a number >= 0 (0 clears)", http.StatusBadRequest)
+				return
+			}
+			err := b.reg.setSlot(mac, *body.Slot)
+			if errors.Is(err, errSlotTaken) {
+				http.Error(w, "slot taken", http.StatusConflict)
+				return
+			}
+			ok = err == nil
 		default:
 			http.Error(w, "unknown action", http.StatusBadRequest)
 			return
@@ -702,8 +851,7 @@ func (b *broker) serveStatus() {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
-	log.Printf("status listening on %s", b.cfg.statusAddr)
-	http.ListenAndServe(b.cfg.statusAddr, mux)
+	return mux
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
