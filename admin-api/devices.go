@@ -73,6 +73,7 @@ type deviceView struct {
 	IPGroupSize int    `json:"ip_group_size"`
 	MaxUsers    int    `json:"max_users"`
 	ActiveUsers int    `json:"active_users"`
+	Seats       int    `json:"-"` // seats taken on this board alone (admission)
 }
 
 // maxUsers is how many users a device may take: one for a dedicated board,
@@ -139,6 +140,7 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 		}
 		v.Port = slotPort(v.Slot)
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
+		v.Seats = activeByMAC[n.MAC]
 		if macs := group[n.RemoteIP]; len(macs) > 0 {
 			v.IPGroupSize = len(macs)
 			for _, m := range macs {

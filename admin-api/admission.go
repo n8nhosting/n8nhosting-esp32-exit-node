@@ -44,9 +44,12 @@ func (s *server) boundDevice(u *User) (*Device, error) {
 
 // admit applies the capacity rule to binding username to the board mac. Seats
 // are counted over mac's IP group exactly as the device list shows it (broker
-// /nodes), not counting username itself. It returns 0 when the binding may
-// proceed, else the status and body to answer with. Callers hold admitMu until
-// the binding is written.
+// /nodes), not counting username itself. The sellable unit is the exit IP: a
+// user on a dedicated board owns the whole group, so a dedicated board takes a
+// user only while the rest of its group is empty, and no board in the group
+// takes anyone while a dedicated board there is held. It returns 0 when the
+// binding may proceed, else the status and body to answer with. Callers hold
+// admitMu until the binding is written.
 func (s *server) admit(username, mac string) (int, map[string]string) {
 	u, err := s.store.Get(username)
 	if errors.Is(err, ErrNotFound) {
@@ -59,11 +62,9 @@ func (s *server) admit(username, mac string) (int, map[string]string) {
 	if err := s.brokerGET("/nodes", &nodes); err != nil {
 		return http.StatusBadGateway, map[string]string{"error": "broker unreachable"}
 	}
-	ip, known := "", false
+	known := false
 	for _, n := range nodes {
-		if n.MAC == mac {
-			ip, known = n.RemoteIP, true
-		}
+		known = known || n.MAC == mac
 	}
 	if !known {
 		if _, err := s.devices.Get(mac); errors.Is(err, ErrNotFound) {
@@ -73,31 +74,46 @@ func (s *server) admit(username, mac string) (int, map[string]string) {
 		}
 		nodes = append(nodes, brokerNode{MAC: mac}) // a group of its own
 	}
+	views := s.buildDeviceViews(nodes)
 	var v deviceView
-	for _, dv := range s.buildDeviceViews(nodes) {
+	for _, dv := range views {
 		if dv.MAC == mac {
 			v = dv
 		}
 	}
-	taken := v.ActiveUsers
-	if takesSeat(u, time.Now()) {
-		inGroup := u.DeviceMAC == mac
-		for _, n := range nodes {
-			inGroup = inGroup || (ip != "" && n.MAC == u.DeviceMAC && n.RemoteIP == ip)
+	// seats in mac's IP group held by others: on mac itself, on the group's
+	// other boards, and on those of them that are dedicated
+	self := takesSeat(u, time.Now())
+	onTarget, elsewhere, onDedicated := 0, 0, 0
+	for _, dv := range views {
+		if dv.MAC != mac && (v.IPGroup == "" || dv.IPGroup != v.IPGroup) {
+			continue
 		}
-		if inGroup {
-			taken--
+		n := dv.Seats
+		if self && dv.MAC == u.DeviceMAC {
+			n--
+		}
+		if dv.MAC == mac {
+			onTarget = n
+			continue
+		}
+		elsewhere += n
+		if dv.Kind == "dedicated" {
+			onDedicated += n
 		}
 	}
+	taken := onTarget + elsewhere // the group's active_users, less this user
 	reason := ""
 	switch {
-	case v.Kind == "dedicated":
-		if taken >= v.MaxUsers {
-			reason = "dedicated device already has a user"
-		}
-	case v.CapacityMbps <= 0:
+	case v.Kind == "dedicated" && onTarget >= v.MaxUsers:
+		reason = "dedicated device already has a user"
+	case onDedicated > 0:
+		reason = "IP is dedicated to another user"
+	case v.Kind == "dedicated" && elsewhere > 0:
+		reason = "IP already shared"
+	case v.Kind != "dedicated" && v.CapacityMbps <= 0:
 		reason = "capacity not measured"
-	case taken >= v.MaxUsers:
+	case v.Kind != "dedicated" && taken >= v.MaxUsers:
 		reason = fmt.Sprintf("shared IP full (%d/%d)", taken, v.MaxUsers)
 	}
 	if reason != "" {
