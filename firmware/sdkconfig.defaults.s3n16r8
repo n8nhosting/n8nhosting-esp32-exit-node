@@ -30,3 +30,23 @@ CONFIG_LWIP_MAX_ACTIVE_TCP=64
 # Keep LWIP_MAX_SOCKETS >= streams + ~15 (web UI, console, DNS, the link) and
 # <= 58: the VFS needs FD_SETSIZE(64) - LWIP_MAX_SOCKETS >= 6 fds for the console.
 CONFIG_RPROXY_MAX_STREAMS=40
+
+# --- TCP / WiFi throughput for the mux link ---
+# rproxy terminates TCP on the ESP32 (unlike plain NAT forwarding), so every
+# customer byte crosses ONE TLS socket to the broker. With the lwIP defaults
+# (5760-byte send buffer and window) that socket can keep only ~5.7 KB in
+# flight: 5760 B / RTT caps the whole node at a few Mbps. Values follow the
+# ESP-IDF wifi/iperf example. Buffers are only used while data is queued and
+# lwIP allocations may go to PSRAM (SPIRAM_TRY_ALLOCATE_WIFI_LWIP above).
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65534
+CONFIG_LWIP_TCP_WND_DEFAULT=65534
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=64
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_RX_BA_WIN=32
+
+# Outgoing TLS records up to 16 KB (default 4 KB): a full DATA frame
+# (RPROXY_RELAY_BUF + 8-byte header) goes out as one record, a quarter of the
+# per-record AES/HMAC and syscall work. Costs ~12 KB more internal RAM for
+# the broker link (and the OTA download while it runs).
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=16384

@@ -1,15 +1,27 @@
 {
   "name": "ESP32-S3 Exit Node (NAT Router + rproxy)",
-  "version": "2.4.21-mux1.1",
+  "version": "2.4.21-mux1.2",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/bootloader.bin", "offset": 0 },
-        { "path": "firmware/partition-table.bin", "offset": 32768 },
-        { "path": "firmware/ota_data_initial.bin", "offset": 61440 },
-        { "path": "firmware/esp32_nat_router.bin", "offset": 131072 }
+        {
+          "path": "firmware/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/partition-table.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/ota_data_initial.bin",
+          "offset": 61440
+        },
+        {
+          "path": "firmware/esp32_nat_router.bin",
+          "offset": 131072
+        }
       ]
     }
   ]

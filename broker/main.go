@@ -808,7 +808,7 @@ func (b *broker) statusMux() *http.ServeMux {
 	mux.HandleFunc("/nodes", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, b.reg.list())
 	})
-	// POST /nodes/{mac}/ota | /block | /allow | /forget
+	// POST /nodes/{mac}/block | /allow | /forget | /ota {url,version} | /ota-cancel
 	//      /slot {"slot": N, "pool": bool} (slot 0 clears; pool absent = unchanged)
 	mux.HandleFunc("/nodes/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -826,14 +826,21 @@ func (b *broker) statusMux() *http.ServeMux {
 		switch action {
 		case "ota":
 			var body struct {
-				URL string `json:"url"`
+				URL     string `json:"url"`
+				Version string `json:"version"` // expected firmware afterwards (optional)
 			}
 			json.NewDecoder(r.Body).Decode(&body)
 			if !strings.HasPrefix(body.URL, "http://") && !strings.HasPrefix(body.URL, "https://") {
 				http.Error(w, "url required", http.StatusBadRequest)
 				return
 			}
-			ok = b.reg.setOTA(mac, body.URL)
+			if len(body.URL) >= 256 || len(body.Version) > 32 {
+				http.Error(w, "url or version too long", http.StatusBadRequest)
+				return
+			}
+			ok = b.reg.setOTA(mac, body.URL, body.Version)
+		case "ota-cancel":
+			ok = b.reg.setOTA(mac, "", "")
 		case "block":
 			ok = b.reg.setBlocked(mac, true)
 		case "allow":

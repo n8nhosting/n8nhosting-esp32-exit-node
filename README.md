@@ -130,7 +130,10 @@ block/allow a device or push a firmware update (**Update FW**) from there.
 Rebuild with your own secrets: copy `firmware/sdkconfig.prov.example` →
 `sdkconfig.prov`, fill in broker host + `POOL_TOKEN`, put your CA at
 `firmware/components/rproxy/broker_ca.pem`, run `firmware/build_s3n16r8.sh`,
-then copy the 4 bins to `flasher/firmware/`. Never commit `sdkconfig.prov`.
+then archive it with `tools/fw_release.py add firmware/build_s3n16r8 --latest`.
+Never commit `sdkconfig.prov`. Every release stays available for rollback
+(flasher version picker, dashboard **Update FW**); see
+[docs/FIRMWARE_RELEASES.md](docs/FIRMWARE_RELEASES.md).
 
 ## Manage users / devices / billing
 
@@ -145,7 +148,7 @@ PUT    /api/users/{name}          update any field
 DELETE /api/users/{name}
 POST   /api/users/{name}/enable | /disable | /reset-quota | /extend {days}
 GET    /api/devices               ESP32 nodes: mac, online, exit IP, traffic, firmware
-POST   /api/devices/{mac}/block | /allow | /forget | /ota {url}
+POST   /api/devices/{mac}/block | /allow | /forget | /ota {url,version} | /ota-cancel
 GET    /api/overview              dashboard summary (users + broker)
 POST   /webhook/payment           PSP -> activate/extend (X-Webhook-Token or HMAC)
 ```

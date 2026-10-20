@@ -48,6 +48,9 @@ type brokerNode struct {
 	BytesUp    int64  `json:"bytes_up"`
 	BytesDown  int64  `json:"bytes_down"`
 	PendingOTA string `json:"pending_ota,omitempty"`
+	OTATarget  string `json:"ota_target,omitempty"`
+	OTAStatus  string `json:"ota_status,omitempty"`
+	OTAAt      string `json:"ota_at,omitempty"`
 	// routing the broker holds for the board; a device view's own "slot" (the
 	// record's) shadows Slot in JSON
 	Slot int   `json:"slot"`
@@ -366,7 +369,7 @@ func (s *server) handleRevealWifi(w http.ResponseWriter, r *http.Request, mac st
 }
 
 // PUT /api/devices/{mac}, POST /api/devices/{mac}/slot|reveal-wifi|measure (local); any
-// other POST /api/devices/{mac}/block|allow|forget|ota is proxied to the broker.
+// other POST /api/devices/{mac}/block|allow|forget|ota|ota-cancel is proxied to the broker.
 func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	rest := r.URL.Path[len("/api/devices/"):]
 	if r.Method == http.MethodPut && rest != "" && !strings.Contains(rest, "/") {

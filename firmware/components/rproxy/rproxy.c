@@ -41,6 +41,7 @@
 #include "esp_app_desc.h"
 #include "esp_tls.h"
 #include "esp_https_ota.h"
+#include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_system.h"
@@ -80,7 +81,7 @@ extern const uint8_t broker_ca_pem_start[] asm("_binary_broker_ca_pem_start");
 extern const uint8_t broker_ca_pem_end[]   asm("_binary_broker_ca_pem_end");
 
 #define NVS_NS            "rproxy"
-#define RPROXY_PROV_GEN   1   /* bump to force re-provision over stale NVS */
+#define RPROXY_PROV_GEN   2   /* bump to force re-provision over stale NVS (2: broker by domain, not IP) */
 #define CONNECT_TIMEOUT_S 10
 #define DIAL_TIMEOUT_S    10
 #define BACKOFF_MIN_MS    1000
@@ -360,6 +361,7 @@ static int dial_target(const char *host, uint16_t port)
 }
 
 static void start_ota(const char *url);
+static void ota_confirm(const char *why);
 
 /* ---- multiplexed link ("mux1") ------------------------------------------
  *
@@ -778,6 +780,7 @@ static void mux_task(void *arg)
         backoff = BACKOFF_MIN_MS;
         s_link_up = true;
         ESP_LOGI(TAG, "mux link up -> %s:%u (tls=%d, max %d streams)", host, port, tls, RPROXY_MAX_STREAMS);
+        ota_confirm("mux link up");
 
         mux_serve(&link, rx);
 
@@ -791,6 +794,67 @@ static void mux_task(void *arg)
     free(rx);
     s_mux_task = NULL;
     vTaskDelete(NULL);
+}
+
+/* ---- OTA self-test / automatic rollback --------------------------------- *
+ * With CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE a freshly written image boots in
+ * PENDING_VERIFY. It is only marked valid once the mux link to the broker is
+ * up. If it crashes or reboots before that, the bootloader boots the previous
+ * image; if it runs but cannot reach the broker within OTA_VERIFY_S while the
+ * board is provisioned (STA SSID + broker set), it rolls itself back. Boards
+ * that are not provisioned (setup mode, rproxy off) have nothing to test
+ * against, so the image is accepted after the timeout.
+ */
+#define OTA_VERIFY_S 300
+
+static volatile bool s_verify_pending;
+
+static void ota_confirm(const char *why)
+{
+    if (!s_verify_pending) return;
+    s_verify_pending = false;
+    ESP_LOGI(TAG, "OTA: firmware %s confirmed (%s)", s_fw, why);
+    esp_ota_mark_app_valid_cancel_rollback();
+}
+
+static bool sta_configured(void)
+{
+    wifi_config_t c;
+    return esp_wifi_get_config(WIFI_IF_STA, &c) == ESP_OK && c.sta.ssid[0] != 0;
+}
+
+static void ota_verify_task(void *arg)
+{
+    for (int i = 0; i < OTA_VERIFY_S && s_verify_pending; i++) vTaskDelay(pdMS_TO_TICKS(1000));
+    if (s_verify_pending) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        bool provisioned = s_cfg.enabled && s_cfg.host[0] && s_cfg.token[0];
+        xSemaphoreGive(s_lock);
+        if (provisioned && sta_configured() && !s_rejected) {
+            ESP_LOGE(TAG, "OTA: firmware %s never reached the broker in %d s, rolling back",
+                     s_fw, OTA_VERIFY_S);
+            esp_ota_mark_app_invalid_rollback_and_reboot();   /* does not return on success */
+        }
+        ota_confirm(provisioned ? "broker unreachable, uplink or policy issue" : "not provisioned");
+    }
+    vTaskDelete(NULL);
+}
+
+static void ota_verify_start(void)
+{
+    const esp_partition_t *bad = esp_ota_get_last_invalid_partition();
+    esp_app_desc_t bd;
+    if (bad && esp_ota_get_partition_description(bad, &bd) == ESP_OK)
+        ESP_LOGW(TAG, "OTA: firmware %s on '%s' was rejected earlier (rolled back)", bd.version, bad->label);
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t st;
+    if (esp_ota_get_state_partition(running, &st) != ESP_OK || st != ESP_OTA_IMG_PENDING_VERIFY) return;
+    ESP_LOGW(TAG, "OTA: new firmware %s on '%s' is on probation (%d s to reach the broker)",
+             s_fw, running->label, OTA_VERIFY_S);
+    s_verify_pending = true;
+    if (xTaskCreate(ota_verify_task, "ota_verify", 3072, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+        ota_confirm("no memory for self-test");
 }
 
 /* ---- OTA pulled on command from the broker ------------------------------ */
@@ -893,6 +957,7 @@ esp_err_t rproxy_init(void)
     strlcpy(s_fw, d ? d->version : "unknown", sizeof(s_fw));
 
     cfg_load(&s_cfg);
+    ota_verify_start();
     ESP_LOGI(TAG, "init: enabled=%d host=%s:%u pool=%u tls=%d mac=%s fw=%s",
              s_cfg.enabled, s_cfg.host, s_cfg.port, s_cfg.pool, s_cfg.use_tls, s_mac, s_fw);
     if (s_cfg.enabled && s_cfg.host[0] && s_cfg.token[0]) start_pool();

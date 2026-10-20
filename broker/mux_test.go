@@ -345,7 +345,7 @@ func TestMuxOTADeliveredToConnectedLink(t *testing.T) {
 	}()
 	go runMuxNode(t, poolLn.Addr().String(), "tok", "aa:bb:cc:dd:ee:60", true, 24, ota, stop)
 	waitFor(t, func() bool { return b.muxCount() == 1 })
-	if !b.reg.setOTA("aa:bb:cc:dd:ee:60", "https://x/fw.bin") {
+	if !b.reg.setOTA("aa:bb:cc:dd:ee:60", "https://x/fw.bin", "") {
 		t.Fatal("setOTA")
 	}
 	select {
@@ -369,7 +369,7 @@ func TestMuxOTAAndBlock(t *testing.T) {
 
 	mac := "aa:bb:cc:dd:ee:52"
 	b.reg.touch(mac, "", "", 0, "")
-	b.reg.setOTA(mac, "https://flash.example/fw.bin")
+	b.reg.setOTA(mac, "https://flash.example/fw.bin", "")
 	ota := make(chan string, 1)
 	go runMuxNode(t, poolLn.Addr().String(), "tok", mac, true, 24, ota, stop)
 	select {
