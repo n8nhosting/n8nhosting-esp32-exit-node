@@ -30,6 +30,8 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`<th>Device</th>`,
 		`reveal-wifi`,
 		`id="dmCoordHint"`,
+		`measureDevice(`,
+		`slotPort(`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

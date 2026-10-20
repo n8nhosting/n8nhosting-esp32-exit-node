@@ -120,6 +120,8 @@
     <div class="field"><label for="dmName">Name</label><input id="dmName" autocomplete="off" /></div>
     <div class="field"><label for="dmKind">Kind</label>
       <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select></div>
+    <div class="field"><label for="dmSlot">Slot <span class="muted">(blank = none, 1–30)</span></label><input id="dmSlot" type="number" step="1" min="1" max="30" inputmode="numeric" /></div>
+    <div class="muted" id="dmPort" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
     <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
     <div class="muted" id="dmCoordHint" style="margin:-6px 0 12px;font-size:.78rem"></div>
@@ -138,7 +140,10 @@ const i18n = {
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
   coordHint:'Coordinates cannot be cleared yet; a blank field keeps the current value.',
-  mbps:'Mbps', openMap:'Open in OpenStreetMap'
+  mbps:'Mbps', openMap:'Open in OpenStreetMap',
+  slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
+  measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
+  justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: '
 };
 const T = k => i18n[k] ?? k;
 const $ = s => document.querySelector(s);
@@ -149,10 +154,20 @@ async function api(path, opts={}){
   if(r.status===401){ logout(); throw new Error('unauthorized'); }
   const ct=r.headers.get('content-type')||'';
   const body = ct.includes('json') ? await r.json() : await r.text();
-  if(!r.ok) throw new Error((body&&body.error)||('HTTP '+r.status));
+  if(!r.ok){ const err=new Error((body&&body.error)||('HTTP '+r.status)); err.status=r.status; err.body=body; throw err; }
   return body;
 }
 function fmtBytes(n){ n=+n||0; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return n.toFixed(i?1:0)+' '+u[i]; }
+const SLOT_BASE=3130, SLOT_MAX=30;
+function slotPort(slot){ slot=+slot; return Number.isInteger(slot)&&slot>=1&&slot<=SLOT_MAX ? SLOT_BASE+slot : 0; }
+function fmtAgo(iso){
+  const t=Date.parse(iso); if(!iso||isNaN(t)) return '';
+  const m=Math.max(0,Math.floor((Date.now()-t)/60000));
+  if(m<1) return T('justNow');
+  if(m<60) return m+' '+T('minAgo');
+  if(m<1440) return Math.floor(m/60)+' '+T('hAgo');
+  return Math.floor(m/1440)+' '+T('dAgo');
+}
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 /* ---- auth ---- */
@@ -223,7 +238,8 @@ async function viewUsers(){
       let devLabel = '';
       if(u.device_mac){
         devLabel = dv && dv.name ? `${esc(dv.name)} <span class="mono muted">(${esc(u.device_mac)})</span>` : `<span class="mono">${esc(u.device_mac)}</span>`;
-        if(dv && dv.slot>0) devLabel += ` <span class="mono">:${esc(dv.port)}</span>`;
+        const up = dv ? slotPort(dv.slot) : 0;
+        if(up) devLabel += ` <span class="mono">\u00b7 :${esc(up)}</span>`;
       }
       const dev = u.device_mac
         ? `${devLabel} <button type="button" class="link" data-assign="${esc(u.username)}">${esc(T('change'))}</button>`
@@ -273,8 +289,18 @@ async function assignDevice(username){
   const mac = prompt('Assign user "'+username+'" to device MAC (blank = unassign):'+hint, '');
   if(mac===null) return;
   const action = mac.trim()? 'assign' : 'unassign';
-  await api('/api/users/'+encodeURIComponent(username)+'/'+action,{method:'POST',body:JSON.stringify({device_mac:mac.trim()})});
+  try{
+    await api('/api/users/'+encodeURIComponent(username)+'/'+action,{method:'POST',body:JSON.stringify({device_mac:mac.trim()})});
+  }catch(e){
+    const reason = e.body && e.body.error==='capacity' && e.body.reason ? T('capacityReason')+e.body.reason : e.message;
+    showUsersErr(reason); return;
+  }
   viewUsers();
+}
+function showUsersErr(msg){
+  let el=$('#uErr');
+  if(!el){ el=document.createElement('div'); el.id='uErr'; el.className='err'; el.setAttribute('role','alert'); $('#view').insertBefore(el,$('#view').children[1]||null); }
+  el.textContent=msg;
 }
 let editUser=null;
 function openUser(u){
@@ -326,12 +352,23 @@ async function viewDevices(){
       const wifi = `<span data-wifi="${mac}">${esc(n.ssid||'\u2014')} ${n.wifi_password_set
         ? `<span class="mono">\u2022\u2022\u2022\u2022</span> <button type="button" class="sec" data-act="reveal" data-mac="${mac}">${esc(T('reveal'))}</button>`
         : `<span class="muted">(${esc(T('notSet'))})</span>`}</span>`;
-      const cap = n.capacity_mbps>0 ? `${esc(n.capacity_mbps)} ${esc(T('mbps'))}` : `<span class="pill warn">${esc(T('unmeasured'))}</span>`;
+      let cap;
+      if(n.capacity_mbps>0){
+        const ns=+n.capacity_active_streams||0, ago=fmtAgo(n.capacity_measured_at);
+        cap = esc(n.capacity_mbps)+' '+esc(T('mbps'))+' \u00b7 '+esc(ns)+' '+esc(T(ns===1?'stream1':'streamsActive'))+(ago?' \u00b7 '+esc(ago):'');
+      } else cap = `<span class="pill warn">${esc(T('unmeasured'))}</span>`;
+      const hasSlot = slotPort(n.slot)>0;
+      cap = `<div>${cap}</div><button type="button" class="sec" data-act="measure" data-mac="${mac}"${hasSlot?'':' disabled'}>${esc(T('measure'))}</button><div class="err" data-merr="${mac}" role="alert"></div>`;
+      const portTxt = hasSlot ? `<div class="mono muted">${esc(T('slot'))} ${esc(n.slot)} \u00b7 :${esc(slotPort(n.slot))}</div>` : '';
+      const grp = n.ip_group_size>1 ? `<div><span class="pill off">${esc(T('ipGroup'))} ${esc(n.ip_group||n.remote_ip||'')} (${esc(n.ip_group_size)} ${esc(T('boards'))})</span></div>` : '';
+      const full = n.max_users>0 && n.active_users>=n.max_users;
+      const nm = `${esc(n.active_users??0)}/${esc(n.max_users??0)}`;
+      const nmHtml = full ? `<span class="pill bad">${nm}</span>` : `<span class="muted">${nm}</span>`;
       return `<tr>
-        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div></td>
+        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div>${portTxt}</td>
         <td>${esc(n.kind||'\u2014')}</td>
         <td>${st}</td>
-        <td>${users}<div class="muted">${esc(n.active_users??0)}/${esc(n.max_users??0)}</div></td>
+        <td>${users}<div>${nmHtml}</div>${grp}</td>
         <td>${wifi}</td>
         <td class="mono">${esc(n.remote_ip||'\u2014')}</td>
         <td>${loc}</td>
@@ -351,11 +388,30 @@ async function viewDevices(){
     $('#dtbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
       const mac=b.dataset.mac, act=b.dataset.act;
       if(act==='edit') openDevice(mac,b);
+      else if(act==='measure') measureDevice(mac,b);
       else if(act==='reveal') revealWifi(mac,b);
       else if(act==='ota') otaDevice(mac);
       else devAction(mac,act);
     }));
   }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+const measuring = new Set();
+async function measureDevice(mac, btn){
+  if(measuring.has(mac)) return;
+  measuring.add(mac);
+  const errEl = [...document.querySelectorAll('#dtbl [data-merr]')].find(x=>x.dataset.merr===mac);
+  const label = btn ? btn.textContent : '';
+  if(errEl) errEl.textContent='';
+  if(btn){ btn.disabled=true; btn.textContent=T('measuring'); }
+  try{
+    await api('/api/devices/'+encodeURIComponent(mac)+'/measure',{method:'POST'});
+    measuring.delete(mac);
+    await viewDevices();
+  }catch(e){
+    measuring.delete(mac);
+    if(btn && btn.isConnected){ btn.disabled=false; btn.textContent=label; }
+    if(errEl && errEl.isConnected){ errEl.textContent=''; const p=document.createElement('span'); p.className='pill bad'; p.textContent=e.message; errEl.appendChild(p); }
+  }
 }
 function fmtUptime(s){ s=+s||0; if(!s) return '—'; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
 async function otaDevice(mac){
@@ -383,6 +439,7 @@ function openDevice(mac, opener){
   $('#dmWifiClear').checked=false; $('#dmWifiClear').disabled=!d.wifi_password_set;
   $('#dmWifiClearLbl').textContent=T('wifiClear');
   $('#dmNotes').value = d.notes||'';
+  $('#dmSlot').value = d.slot>0 ? d.slot : ''; updPort();
   $('#dmCancel').textContent=T('cancel'); $('#dmSave').textContent=T('save');
   $('#dmCoordHint').textContent=T('coordHint');
   $('#dmErr').textContent=''; $('#dmodal').style.display='flex';
@@ -395,6 +452,9 @@ function closeDevice(keepFocus){
   if(keepFocus!==true && dmOpener && dmOpener.isConnected) dmOpener.focus();
   dmOpener=null;
 }
+function slotInput(){ const v=$('#dmSlot').value.trim(); if(v==='') return 0; return /^\d+$/.test(v) ? +v : NaN; }
+function updPort(){ const s=slotInput(), p=slotPort(s); $('#dmPort').textContent = T('port')+': '+(p?(':'+p):(s===0?T('noPort'):T('slotInvalid'))); }
+$('#dmSlot').addEventListener('input',updPort);
 $('#dmCancel').addEventListener('click',closeDevice);
 $('#dmSave').addEventListener('click', async ()=>{
   if(!editDev) return;
@@ -407,6 +467,9 @@ $('#dmSave').addEventListener('click', async ()=>{
   const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
   if(lat!=='' && +lat!==d.lat) body.lat = +lat;
   if(lon!=='' && +lon!==d.lon) body.lon = +lon;
+  const slot=slotInput();
+  if(Number.isNaN(slot) || slot>SLOT_MAX){ $('#dmErr').textContent=T('slotInvalid'); return; }
+  if(slot!==(d.slot>0?d.slot:0)) body.slot = slot;
   if($('#dmWifiClear').checked) body.wifi_password = '';
   else if($('#dmWifi').value) body.wifi_password = $('#dmWifi').value;
   $('#dmErr').textContent=''; $('#dmSave').disabled=true;
@@ -463,7 +526,8 @@ function viewSettings(){
       <div class="field"><label>GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
       <div class="field"><label>Default OTA firmware URL (used by "Update FW")</label><input id="setOta" value="${esc(otaUrl)}" /></div>
       <button onclick="saveSettings()">Save</button>
-      <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3128</span> (HTTP &amp; SOCKS5, username/password).<br>
+      <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3131\u20133160</span> (per-customer slot ports, one per device slot 1\u201330; HTTP &amp; SOCKS5, username/password).<br>
+      Legacy pool port: <span class="mono">3128</span> (shared pool across devices).<br>
       Flash new devices at the Flash page — each self-provisions (TLS, token baked in) and appears under <b>Devices</b> by MAC.<br>
       <b>OTA:</b> on the Devices tab, "Update FW" pushes the firmware URL above; the device downloads over HTTPS and reboots.</p>
     </div>`;
