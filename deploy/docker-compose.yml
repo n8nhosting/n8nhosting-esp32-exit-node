@@ -71,6 +71,8 @@ services:
       - PROXY_PUBLIC_PORT=${PROXY_PUBLIC_PORT:-3128}
       - CRED_KEY=${CRED_KEY}
       - SLOT_COUNT=${SLOT_COUNT:-30}
+      - SPEEDTEST_URL=${SPEEDTEST_URL:-https://flash.jbacteam.com/speedtest.bin}  # capacity measurement download
+      - GOST_INTERNAL_HOST=${GOST_INTERNAL_HOST:-gost}  # gost service the slot ports run in
     expose:
       - "8088"                        # dashboard + REST (map to admin.<domain>)
     volumes:

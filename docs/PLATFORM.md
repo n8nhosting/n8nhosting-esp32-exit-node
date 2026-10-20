@@ -68,9 +68,10 @@ Every "growth" feature below is secondary to that.
      lists, complaint volume. Action: auto rate-cut, suspend user, alert admin.
    - Destination allow/deny categories (optional): block high-risk categories.
 
-8. **Device↔user binding & pinning** *(partial — informational binding built)*
-   - Informational assignment now; optional **routing pin** so a customer always
-     exits through a chosen device/region. Needs broker per-user node selection.
+8. **Device↔user binding & pinning** ✅ *built*
+   - Customers are bound to a board, and the routing pin is built: each board has
+     its own slot port (`3131`–`3160`), so a customer's traffic always exits
+     through the chosen device.
 
 9. **Fleet health & alerting**
    - Device offline > N min → alert. Low pool / high no-node rate → alert.
@@ -117,7 +118,7 @@ Every "growth" feature below is secondary to that.
   account-takeover, credential stuffing, or CAPTCHA farms — these are the abuse
   cases residential proxies are infamous for; the AUP and abuse enforcement
   exist to keep the service out of that market.
-- **Home WiFi passwords in the dashboard** — never uploaded off the device; a
-  compromise would expose the operator's own LANs. SSID only.
-- **Precise GPS of devices** — not available without a GPS module; the platform
-  shows city-level geo derived from the exit IP instead.
+- **Home WiFi passwords are never uploaded from the device** — the operator may
+  enter one in the console; it is stored encrypted and shown masked.
+- **Device GPS is operator-entered lat/long** (no GPS module); geo-IP city
+  remains the hint.

@@ -27,7 +27,7 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
 |-----|-----------|--------|
 | `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **one multiplexed TLS link (CA pinned)** with up to 24 concurrent streams and per-stream flow control, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
 | `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push**, `/status` `/nodes`. | `go test` (17 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side) |
-| `admin-api/` | Go: **admin dashboard** (users, devices by MAC, OTA push, stats) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, JSON store, no external deps. | `go test` (7 tests) + headless-browser smoke test |
+| `admin-api/` | Go: **admin dashboard** (users; **devices** by MAC with name, `shared`/`dedicated` kind, lat/lon, operator-entered WiFi password shown masked, notes; OTA push; **capacity measurement** and the admission rule) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, SQLite store (no cgo). | `go test` (7 tests) + headless-browser smoke test |
 | `flasher/` | ESP Web Tools static page to flash the board from Chrome/Edge + configure it. | manifest validated |
 | `deploy/` | Full-stack `docker-compose.yml` for Coolify (gost + broker + admin-api + flasher). | YAML validated |
 
@@ -39,6 +39,34 @@ customer connection runs as a stream inside it (frame format in
 Deploy the new **broker first**: it serves old (pool) and new (mux) devices at
 the same time. Then OTA the devices. New firmware refuses to talk to an old
 broker (it logs "broker does not support the mux link").
+
+## Customer ports and capacity
+
+Each board gets its own **slot port** in `3131`–`3160` (slot N ↔ port `3130+N`).
+The slot is assigned in the console's device editor. Customers connect to
+`proxy.<domain>:<port>` with their credentials, and `/credentials` returns the
+port for their slot. Each slot exits through exactly one board, so a slot port
+pins the customer to that device's exit IP. Port `3128` remains the legacy
+shared pool.
+
+How many customers a board takes is set by its measured capacity:
+
+- **Shared** device: `max_shared_users = min(3, floor(capacity_mbps / 5))`.
+- **Dedicated** device: 1 customer, who owns the whole exit IP (every board
+  behind the same `remote_ip`).
+- **Unmeasured** shared device: no new bindings until it has been measured.
+- The limiter is capped at the device's capacity.
+
+**Measure** (in the device editor) downloads `speedtest.bin` through the
+device's slot as a temporary `_measure-*` user and records the capacity. A
+measurement taken while customers are active is a lower bound, so the console
+shows the active-stream count next to the result.
+
+| Env var | Default | What it does |
+|---------|---------|--------------|
+| `SLOT_COUNT` | `30` | Number of slot ports (`3131`–`3160`) |
+| `SLOT_SECRET` | none (alphanumeric) | Secret each slot's gost uses to authenticate to the broker. Must be set, or slot traffic is refused |
+| `SPEEDTEST_URL` | `https://flash.jbacteam.com/speedtest.bin` | File the Measure button downloads |
 
 ## Deploy on Coolify (one stack)
 

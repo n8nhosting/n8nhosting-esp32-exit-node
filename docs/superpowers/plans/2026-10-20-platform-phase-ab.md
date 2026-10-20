@@ -1,5 +1,7 @@
 # Proxy Seller Platform — Phases A+B Implementation Plan
 
+> Status: Tasks 1–11 implemented on branch feat/platform-ab; Task 12 steps 2–5 pending operator deploy.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make device capacity, user↔device binding and rate limits real: measured per-IP capacity with the 2–3-per-shared-IP / 1-per-dedicated rule, customers routed through the board they are bound to via per-slot ports, device fields (lat/long, operator-entered WiFi password), SQLite storage, and the two known bugs fixed.
