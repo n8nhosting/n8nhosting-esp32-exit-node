@@ -32,6 +32,8 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`id="dmCoordHint"`,
 		`measureDevice(`,
 		`slotPort(`,
+		`n.slot_mismatch`,            // drift pill on the device row
+		`d.slot_mismatch) body.slot`, // Save re-sends a drifted slot
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

@@ -143,7 +143,8 @@ const i18n = {
   mbps:'Mbps', openMap:'Open in OpenStreetMap',
   slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
   measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
-  justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: '
+  justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: ',
+  slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.'
 };
 const T = k => i18n[k] ?? k;
 const $ = s => document.querySelector(s);
@@ -359,7 +360,8 @@ async function viewDevices(){
       } else cap = `<span class="pill warn">${esc(T('unmeasured'))}</span>`;
       const hasSlot = slotPort(n.slot)>0;
       cap = `<div>${cap}</div><button type="button" class="sec" data-act="measure" data-mac="${mac}"${hasSlot?'':' disabled'}>${esc(T('measure'))}</button><div class="err" data-merr="${mac}" role="alert"></div>`;
-      const portTxt = hasSlot ? `<div class="mono muted">${esc(T('slot'))} ${esc(n.slot)} \u00b7 :${esc(slotPort(n.slot))}</div>` : '';
+      const portTxt = (hasSlot ? `<div class="mono muted">${esc(T('slot'))} ${esc(n.slot)} \u00b7 :${esc(slotPort(n.slot))}</div>` : '')
+        + (n.slot_mismatch ? `<div><span class="pill warn" title="${esc(T('slotMismatchHint'))}">${esc(T('slotMismatch'))}</span></div>` : '');
       const grp = n.ip_group_size>1 ? `<div><span class="pill off">${esc(T('ipGroup'))} ${esc(n.ip_group||n.remote_ip||'')} (${esc(n.ip_group_size)} ${esc(T('boards'))})</span></div>` : '';
       const full = n.max_users>0 && n.active_users>=n.max_users;
       const nm = `${esc(n.active_users??0)}/${esc(n.max_users??0)}`;
@@ -469,7 +471,8 @@ $('#dmSave').addEventListener('click', async ()=>{
   if(lon!=='' && +lon!==d.lon) body.lon = +lon;
   const slot=slotInput();
   if(Number.isNaN(slot) || slot>SLOT_MAX){ $('#dmErr').textContent=T('slotInvalid'); return; }
-  if(slot!==(d.slot>0?d.slot:0)) body.slot = slot;
+  // a slot the broker does not hold is always re-sent, so Save repairs the drift
+  if(slot!==(d.slot>0?d.slot:0) || d.slot_mismatch) body.slot = slot;
   if($('#dmWifiClear').checked) body.wifi_password = '';
   else if($('#dmWifi').value) body.wifi_password = $('#dmWifi').value;
   $('#dmErr').textContent=''; $('#dmSave').disabled=true;

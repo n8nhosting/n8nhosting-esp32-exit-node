@@ -141,6 +141,82 @@ func TestDeviceListWithoutRow(t *testing.T) {
 	}
 }
 
+// A board whose broker routing differs from its record (the broker lost the
+// slot, holds another one, or still pools a dedicated board) is flagged so the
+// operator sees the drift and can re-push it from the editor.
+func TestDeviceSlotMismatch(t *testing.T) {
+	s, mux, fb := newTestServerWithBroker(t)
+	yes := true
+	inSync, lost, other, pooled, extra, oldBroker := "aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03",
+		"aa:bb:cc:dd:ee:04", "aa:bb:cc:dd:ee:05", "aa:bb:cc:dd:ee:06"
+	fb.nodes = []brokerNode{
+		{MAC: inSync, Slot: 1, Pool: &yes},
+		{MAC: lost},                        // record slot 2, broker none
+		{MAC: other, Slot: 9},              // record slot 3, broker slot 9
+		{MAC: pooled, Slot: 4, Pool: &yes}, // record dedicated, broker still pools it
+		{MAC: extra, Slot: 7},              // no record: the broker holds a slot the console does not
+		{MAC: oldBroker, Slot: 5},          // a broker without the pool field: slot alone decides
+	}
+	for _, d := range []struct {
+		mac, kind string
+		slot      int
+	}{{inSync, "shared", 1}, {lost, "shared", 2}, {other, "shared", 3}, {pooled, "dedicated", 4}, {oldBroker, "dedicated", 5}} {
+		if err := s.devices.Upsert(d.mac, func(x *Device) error { x.Kind, x.Slot = d.kind, d.slot; return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, list := doJSONList(t, mux, "GET", "/api/devices", "admintok")
+	got := map[string]any{}
+	for _, d := range list {
+		got[d["mac"].(string)] = d["slot_mismatch"]
+	}
+	want := map[string]any{inSync: false, lost: true, other: true, pooled: true, extra: true, oldBroker: false}
+	for mac, w := range want {
+		if got[mac] != w {
+			t.Errorf("%s: slot_mismatch = %v, want %v", mac, got[mac], w)
+		}
+	}
+	// the view keeps the record's slot, not the broker's
+	for _, d := range list {
+		if d["mac"] == other && (d["slot"] != float64(3) || d["port"] != float64(3133)) {
+			t.Fatalf("view must show the record's slot: %v", d)
+		}
+	}
+}
+
+// On start admin-api re-sends every recorded slot and pool flag to the broker
+// (it may have lost them); a failure is logged and does not stop the rest.
+func TestStartupRepushesSlots(t *testing.T) {
+	s, _, fb := newTestServerWithBroker(t)
+	for _, d := range []struct {
+		mac, kind string
+		slot      int
+	}{{"aa:bb:cc:dd:ee:02", "shared", 2}, {"aa:bb:cc:dd:ee:01", "dedicated", 0}, {"aa:bb:cc:dd:ee:03", "dedicated", 5}} {
+		if err := s.devices.Upsert(d.mac, func(x *Device) error { x.Kind, x.Slot = d.kind, d.slot; return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if failed := s.pushSlotsToBroker(); failed != 0 {
+		t.Fatalf("%d pushes failed against a healthy broker", failed)
+	}
+	want := []string{
+		"/nodes/aa:bb:cc:dd:ee:01/slot {\"slot\":0,\"pool\":false}",
+		"/nodes/aa:bb:cc:dd:ee:02/slot {\"slot\":2,\"pool\":true}",
+		"/nodes/aa:bb:cc:dd:ee:03/slot {\"slot\":5,\"pool\":false}",
+	}
+	if got := fb.callLog(); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("broker calls %q, want %q", got, want)
+	}
+	// a broker that refuses every push: all three are tried and reported
+	fb.setSlotStatus(http.StatusInternalServerError)
+	if failed := s.pushSlotsToBroker(); failed != 3 {
+		t.Fatalf("failed = %d, want 3", failed)
+	}
+	if n := len(fb.callLog()); n != 6 {
+		t.Fatalf("%d broker calls, want 6", n)
+	}
+}
+
 func TestDeviceIPGroupAndMaxUsers(t *testing.T) {
 	s, mux, fb := newTestServerWithBroker(t)
 	a, b, c := "aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02", "aa:bb:cc:dd:ee:03"

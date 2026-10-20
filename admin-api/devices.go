@@ -48,6 +48,10 @@ type brokerNode struct {
 	BytesUp    int64  `json:"bytes_up"`
 	BytesDown  int64  `json:"bytes_down"`
 	PendingOTA string `json:"pending_ota,omitempty"`
+	// routing the broker holds for the board; a device view's own "slot" (the
+	// record's) shadows Slot in JSON
+	Slot int   `json:"slot"`
+	Pool *bool `json:"pool"` // nil from a broker without the pool flag
 }
 
 type deviceView struct {
@@ -67,6 +71,10 @@ type deviceView struct {
 	Lat                   *float64 `json:"lat"`
 	Lon                   *float64 `json:"lon"`
 	WifiPasswordSet       bool     `json:"wifi_password_set"` // the password itself is never listed
+
+	// the broker routes this board differently from the record (slot, or pool
+	// flag when the broker reports one); saving the slot again re-pushes it
+	SlotMismatch bool `json:"slot_mismatch"`
 
 	// devices behind one public IP share a group (one household line)
 	IPGroup     string `json:"ip_group"`
@@ -140,6 +148,7 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			v.WifiPasswordSet = d.WifiPasswordEnc != ""
 		}
 		v.Port = slotPort(v.Slot)
+		v.SlotMismatch = n.Slot != v.Slot || (n.Pool != nil && *n.Pool != poolFlag(v.Kind))
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
 		v.Seats = activeByMAC[n.MAC]
 		if macs := group[n.RemoteIP]; len(macs) > 0 {
@@ -200,6 +209,19 @@ func (s *server) brokerSetSlot(mac string, slot int, pool bool) error {
 		return fmt.Errorf("broker: %s", m)
 	}
 	return fmt.Errorf("broker: %s", resp.Status)
+}
+
+// pushSlotsToBroker re-sends every recorded slot and pool flag to the broker,
+// which may have lost them (a broker volume reset, a forget, a failed
+// rollback). Failures are logged and counted, never fatal.
+func (s *server) pushSlotsToBroker() (failed int) {
+	for _, d := range s.devices.List() {
+		if err := s.brokerSetSlot(d.MAC, d.Slot, poolFlag(d.Kind)); err != nil {
+			failed++
+			log.Printf("startup: slot %d (pool %v) for %s not pushed to the broker: %v", d.Slot, poolFlag(d.Kind), d.MAC, err)
+		}
+	}
+	return failed
 }
 
 // PUT /api/devices/{mac} — create/update the operator record. Absent fields

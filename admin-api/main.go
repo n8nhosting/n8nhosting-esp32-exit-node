@@ -114,6 +114,18 @@ func main() {
 
 	addr := envOr("LISTEN_ADDR", ":8088")
 
+	// Re-push every recorded slot and pool flag once the broker answers (it
+	// may start after admin-api); failures are logged, startup goes on.
+	go func() {
+		var nodes []brokerNode
+		for i := 0; i < 30 && s.brokerGET("/nodes", &nodes) != nil; i++ {
+			time.Sleep(2 * time.Second)
+		}
+		if failed := s.pushSlotsToBroker(); failed > 0 {
+			log.Printf("startup: %d device slot(s) not pushed to the broker; see above", failed)
+		}
+	}()
+
 	// Optionally push plugin + service config into GOST on startup.
 	if os.Getenv("GOST_API_URL") != "" {
 		go func() {
