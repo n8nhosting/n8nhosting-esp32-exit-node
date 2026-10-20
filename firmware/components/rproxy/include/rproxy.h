@@ -43,7 +43,7 @@ extern "C" {
 #define RPROXY_MAX_POOL        8      /* legacy setting, kept for NVS compat   */
 #define RPROXY_DEFAULT_POOL    4
 #define RPROXY_DEFAULT_PORT    7000
-#define RPROXY_RELAY_BUF       4096   /* max DATA frame read from a target     */
+#define RPROXY_RELAY_BUF       16376  /* max DATA frame read from a target: header + payload = one 16 KB TLS record */
 #ifdef CONFIG_RPROXY_MAX_STREAMS
 #define RPROXY_MAX_STREAMS     CONFIG_RPROXY_MAX_STREAMS
 #else
