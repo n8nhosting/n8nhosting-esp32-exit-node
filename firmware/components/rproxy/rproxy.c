@@ -638,6 +638,7 @@ static void mux_serve(link_t *l, uint8_t *rx)
 {
     int rxlen = 0;
     int64_t last_rx = esp_timer_get_time();
+    int64_t last_stats = last_rx;
     int lfd = link_fd(l);
     if (lfd < 0) return;
 
@@ -696,6 +697,20 @@ static void mux_serve(link_t *l, uint8_t *rx)
         if ((esp_timer_get_time() - last_rx) / 1000 > MUX_DEAD_MS) {
             ESP_LOGW(TAG, "broker silent for %ds, reconnecting", MUX_DEAD_MS / 1000);
             return;
+        }
+
+        /* One stats line a minute: enough to spot a slow leak or heap
+         * starvation (the v1.2 pool died with internal RAM exhausted and
+         * nothing in the log said so). */
+        if (esp_timer_get_time() - last_stats > 60 * 1000000LL) {
+            last_stats = esp_timer_get_time();
+            ESP_LOGI(TAG, "stats: streams %d/%d (dialing %d), dials ok %lu err %lu, "
+                          "heap free %u min %u, internal free %u largest %u",
+                     s_active, RPROXY_MAX_STREAMS, dialing,
+                     (unsigned long)s_total_dials, (unsigned long)s_failed_dials,
+                     (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(),
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
         }
     }
 }

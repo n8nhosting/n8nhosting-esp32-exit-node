@@ -23,5 +23,10 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 
 # --- rproxy mux link: up to 24 customer streams + web UI/console/broker link ---
-CONFIG_LWIP_MAX_SOCKETS=40
-CONFIG_LWIP_MAX_ACTIVE_TCP=40
+CONFIG_LWIP_MAX_SOCKETS=56
+CONFIG_LWIP_MAX_ACTIVE_TCP=64
+
+# --- mux link capacity: 40 customer streams (32 KB PSRAM window each) ---
+# Keep LWIP_MAX_SOCKETS >= streams + ~15 (web UI, console, DNS, the link) and
+# <= 58: the VFS needs FD_SETSIZE(64) - LWIP_MAX_SOCKETS >= 6 fds for the console.
+CONFIG_RPROXY_MAX_STREAMS=40
