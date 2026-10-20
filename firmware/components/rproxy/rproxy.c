@@ -81,7 +81,7 @@ extern const uint8_t broker_ca_pem_start[] asm("_binary_broker_ca_pem_start");
 extern const uint8_t broker_ca_pem_end[]   asm("_binary_broker_ca_pem_end");
 
 #define NVS_NS            "rproxy"
-#define RPROXY_PROV_GEN   1   /* bump to force re-provision over stale NVS */
+#define RPROXY_PROV_GEN   2   /* bump to force re-provision over stale NVS (2: broker by domain, not IP) */
 #define CONNECT_TIMEOUT_S 10
 #define DIAL_TIMEOUT_S    10
 #define BACKOFF_MIN_MS    1000

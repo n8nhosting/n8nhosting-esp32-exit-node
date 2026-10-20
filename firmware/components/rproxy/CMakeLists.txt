@@ -4,4 +4,3 @@ idf_component_register(
     REQUIRES nvs_flash esp_netif lwip console esp_timer log esp_hw_support esp-tls esp_wifi esp_app_format esp_https_ota esp_http_client app_update mbedtls cmd_router
     EMBED_TXTFILES "broker_ca.pem"
 )
-target_compile_options(${COMPONENT_LIB} PRIVATE -Os)

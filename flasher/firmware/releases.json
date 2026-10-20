@@ -2,6 +2,21 @@
   "latest": "2.4.21-mux1.2",
   "releases": [
     {
+      "version": "2.4.21-mux1.4",
+      "reports": "2.4.21-mux1.4",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 01:47:46",
+      "added": "2026-10-21",
+      "size": 1395216,
+      "sha256": "ea3062612facedba55162cca077baba6ca146380353002af0eec0b542c2ace25",
+      "url": "firmware/releases/2.4.21-mux1.4/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.4/manifest.json",
+      "title": "อัปโหลดเร็วขึ้น + ต่อ broker ด้วยโดเมน (ทดลอง)",
+      "notes": "ส่งข้อมูลเป็นเฟรม DATA 16 KB ใน TLS record 16 KB, คอมไพล์ rproxy แบบ -O2 และต่อ broker ด้วยโดเมน proxy.jbacteam.com แทน IP ทดสอบได้ ~9 Mbps ขาลง / 12 Mbps ขาขึ้น ใช้ internal RAM มากกว่า mux1.2 ราว 12 KB (รุ่นทดลอง)",
+      "status": "testing",
+      "commit": "812171e"
+    },
+    {
       "version": "2.4.21-mux1.3",
       "reports": "2.4.21-mux1.3",
       "protocol": "mux1",
