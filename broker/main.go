@@ -58,7 +58,7 @@ type config struct {
 	tlsCert    string // PEM (env TLS_CERT_PEM) or empty for plain TCP (dev only)
 	tlsKey     string
 	nodesFile  string // persisted node policy (block list)
-	slotSecret string // SOCKS user/pass password for gost's per-slot chains ("" = no-auth only)
+	slotSecret string // SOCKS user/pass password for gost's per-slot chains ("" = slot logins refused)
 }
 
 // pemFromEnv reads a PEM from a plain env var or a base64-encoded one
@@ -129,7 +129,7 @@ func main() {
 		log.Fatal("POOL_TOKEN is required")
 	}
 	if cfg.slotSecret == "" {
-		log.Printf("SLOT_SECRET unset: slot routing off, every SOCKS client uses the shared pool")
+		log.Printf("SLOT_SECRET unset: every slot-N login is refused; only the shared pool is served")
 	}
 	depth, _ := strconv.Atoi(envOr("POOL_BACKLOG", "64"))
 
@@ -488,11 +488,12 @@ const (
 // returns the username ("" = shared pool) and false if the client must be
 // dropped.
 //
-// With a slot secret set, user/pass (RFC 1929) is selected whenever the client
-// offers it: gost's per-slot chains log in as "slot-N" with that secret. gost's
-// socks5 connector offers user/pass even when it has no credentials (the pool
-// chain), so an empty username and password is the pool, like no-auth.
-// Without a secret the broker answers no-auth as it always has.
+// User/pass (RFC 1929) is selected whenever the client offers it: gost's
+// per-slot chains log in as "slot-N" with SLOT_SECRET. gost's socks5 connector
+// offers user/pass even when it has no credentials (the pool chain), so an
+// empty username and password is the pool, like no-auth. Without a secret
+// every slot-N login is refused (fail closed); a client offering only no-auth
+// gets no-auth and the pool.
 func (b *broker) socksGreeting(c net.Conn, br *bufio.Reader) (user string, ok bool) {
 	ver, _ := br.ReadByte()
 	if ver != socksVer5 {
@@ -506,7 +507,7 @@ func (b *broker) socksGreeting(c net.Conn, br *bufio.Reader) (user string, ok bo
 	if _, err := io.ReadFull(br, methods); err != nil {
 		return "", false
 	}
-	if b.cfg.slotSecret == "" || bytes.IndexByte(methods, methodUserPass) < 0 {
+	if bytes.IndexByte(methods, methodUserPass) < 0 {
 		c.Write([]byte{socksVer5, methodNoAuth})
 		return "", true
 	}
@@ -518,7 +519,8 @@ func (b *broker) socksGreeting(c net.Conn, br *bufio.Reader) (user string, ok bo
 	}
 	_, isSlot := slotUser(user)
 	anon := user == "" && pass == ""
-	if !anon && !(isSlot && subtle.ConstantTimeCompare([]byte(pass), []byte(b.cfg.slotSecret)) == 1) {
+	slotOK := isSlot && b.cfg.slotSecret != "" && subtle.ConstantTimeCompare([]byte(pass), []byte(b.cfg.slotSecret)) == 1
+	if !anon && !slotOK {
 		log.Printf("socks: login refused for user %q", user)
 		c.Write([]byte{userPassVer, userPassFail})
 		return "", false

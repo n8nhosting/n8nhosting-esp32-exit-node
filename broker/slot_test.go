@@ -84,7 +84,13 @@ func socks5ConnectAuth(proxy, user, pass, host string, port int) (net.Conn, erro
 // spinSlotBroker starts a broker with SLOT_SECRET "ss" and one mux node per MAC.
 func spinSlotBroker(t *testing.T, macs ...string) (b *broker, socksAddr string) {
 	t.Helper()
-	b = newBroker(config{token: "tok", dialWait: 500 * time.Millisecond, slotSecret: "ss"}, 8)
+	return spinSlotBrokerSecret(t, "ss", macs...)
+}
+
+// spinSlotBrokerSecret is spinSlotBroker with the given SLOT_SECRET ("" = unset).
+func spinSlotBrokerSecret(t *testing.T, secret string, macs ...string) (b *broker, socksAddr string) {
+	t.Helper()
+	b = newBroker(config{token: "tok", dialWait: 500 * time.Millisecond, slotSecret: secret}, 8)
 	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	socksLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	go b.servePool(poolLn)
@@ -240,6 +246,76 @@ func TestPoolStillNoAuth(t *testing.T) {
 	}
 	if got := httpOver(t, c, "/hello"); !strings.Contains(got, "HELLO-ORIGIN") {
 		t.Fatalf("pool body %q", got)
+	}
+}
+
+// Without SLOT_SECRET the broker fails closed: it still selects user/pass when
+// the client offers it, takes the empty login as the pool, and refuses every
+// slot-N login (an unset secret must never match an empty password).
+func TestNoSecretPoolWorksSlotsRefused(t *testing.T) {
+	oh, op, oclose := originServer(t)
+	defer oclose()
+	const mac = "aa:bb:cc:dd:ee:76"
+	b, socks := spinSlotBrokerSecret(t, "", mac)
+	if err := b.reg.setSlot(mac, 1); err != nil {
+		t.Fatal(err)
+	}
+	greet := func(methods ...byte) (net.Conn, byte) {
+		t.Helper()
+		c, err := net.DialTimeout("tcp", socks, 3*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.SetDeadline(time.Now().Add(5 * time.Second))
+		c.Write(append([]byte{5, byte(len(methods))}, methods...))
+		sel := make([]byte, 2)
+		if _, err := io.ReadFull(c, sel); err != nil {
+			c.Close()
+			t.Fatalf("greeting %v: %v", methods, err)
+		}
+		return c, sel[1]
+	}
+
+	// a client offering only no-auth still gets 0x00 and the pool
+	if body, err := fetchVia(socks, oh, op, "/hello"); err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
+		t.Fatalf("no-auth pool dial: err=%v body=%q", err, body)
+	}
+
+	// gost's pool chain offers {no-auth, user/pass}: user/pass is selected and
+	// the empty login is the pool
+	c, sel := greet(0x00, 0x02)
+	if sel != 0x02 {
+		c.Close()
+		t.Fatalf("no secret, {0x00,0x02} offered: broker selected %#x, want user/pass", sel)
+	}
+	if st, err := socks5UserPass(c, "", ""); err != nil || st != 0 {
+		t.Fatalf("empty login must be the pool: status %d %v", st, err)
+	}
+	if err := socks5Request(c, oh, op); err != nil {
+		t.Fatalf("pool dial after empty login: %v", err)
+	}
+	if got := httpOver(t, c, "/hello"); !strings.Contains(got, "HELLO-ORIGIN") {
+		t.Fatalf("pool body %q", got)
+	}
+	c.Close()
+
+	// every slot login is refused, whatever the password
+	for _, pass := range []string{"x", ""} {
+		c, sel := greet(0x00, 0x02)
+		if sel != 0x02 {
+			c.Close()
+			t.Fatalf("slot-1/%q: broker selected %#x, want user/pass", pass, sel)
+		}
+		if st, err := socks5UserPass(c, "slot-1", pass); err != nil || st != 0x01 {
+			t.Fatalf("slot-1/%q without SLOT_SECRET: want auth status 1, got %d %v", pass, st, err)
+		}
+		if !closedWithin(c, time.Second) {
+			t.Fatalf("slot-1/%q: connection must be closed after a refused login", pass)
+		}
+		c.Close()
+	}
+	if n := nodeRow(t, b, mac); n.DialsOK != 2 {
+		t.Fatalf("dials_ok = %d, want the 2 pool dials only", n.DialsOK)
 	}
 }
 

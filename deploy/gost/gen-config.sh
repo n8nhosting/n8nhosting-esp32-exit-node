@@ -6,12 +6,14 @@
 #   auther-slot-N   -> end of authers:   (just before "limiters:")
 # Usage: SLOT_COUNT=<n> PLUGIN_SECRET=<s> SLOT_SECRET=<p> sh gen-config.sh base.yaml
 # PLUGIN_SECRET unset -> the literal ${PLUGIN_SECRET} placeholder is kept so the
-# later awk render fills it in. SLOT_SECRET is substituted directly (alphanumeric).
+# later awk render fills it in. SLOT_SECRET is substituted directly (alphanumeric)
+# and required: unset or empty exits non-zero, so the gost container does not
+# start with slot chains that log in with an empty password.
 set -eu
 
 base=${1:?usage: gen-config.sh base.yaml}
 count=${SLOT_COUNT:-30}
-slot_secret=${SLOT_SECRET:-}
+slot_secret=${SLOT_SECRET:?SLOT_SECRET must be set}
 plugin_secret=${PLUGIN_SECRET:-}
 if [ -z "$plugin_secret" ]; then
   plugin_secret='${PLUGIN_SECRET}'

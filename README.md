@@ -65,7 +65,7 @@ shows the active-stream count next to the result.
 | Env var | Default | What it does |
 |---------|---------|--------------|
 | `SLOT_COUNT` | `30` | Number of slot ports (`3131`–`3160`) |
-| `SLOT_SECRET` | none (alphanumeric) | Secret each slot's gost uses to authenticate to the broker. Must be set, or slot traffic is refused |
+| `SLOT_SECRET` | none (alphanumeric, required) | Secret each slot's gost uses to authenticate to the broker (same value for both). Must be set: without it gost refuses to start (`gen-config.sh` exits before writing the slot services, so port `3128` stays down too) and the broker refuses every `slot-N` login |
 | `SPEEDTEST_URL` | `https://flash.jbacteam.com/speedtest.bin` | File the Measure button downloads |
 
 ## Deploy on Coolify (one stack)
