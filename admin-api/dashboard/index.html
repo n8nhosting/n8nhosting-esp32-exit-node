@@ -342,8 +342,8 @@ async function openFw(macs, title){
   const idx = await loadReleases();
   const cur = new Set((window._nodes||[]).filter(n=>macs.includes(n.mac)).map(n=>n.firmware));
   const opts = idx.releases.map((r,i)=>{
-    const tags=[r.version===idx.latest?'latest':'', cur.has(r.reports||r.version)?'current':'', r.protocol].filter(Boolean).join(', ');
-    return `<option value="${i}" ${r.version===idx.latest?'selected':''}>${esc(r.version)} (${esc(tags)})</option>`;
+    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', cur.has(r.reports||r.version)?'current':'', r.protocol].filter(Boolean).join(', ');
+    return `<option value="${i}" ${r.version===idx.latest?'selected':''}>${esc(r.version)}${r.title?' · '+esc(r.title):''} (${esc(tags)})</option>`;
   });
   opts.push('<option value="custom">Custom URL…</option>');
   $('#fwSel').innerHTML = opts.join('');

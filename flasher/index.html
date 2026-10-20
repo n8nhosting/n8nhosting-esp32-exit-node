@@ -68,6 +68,14 @@
   a { color: var(--accent); }
   .pill { display:inline-block; font-size:.75rem; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:2px 10px; color:var(--muted); }
   .notice { border-left:3px solid var(--warn); padding-left:12px; }
+  .rel { border-top:1px solid var(--line); padding:12px 0; }
+  .rel:first-child { border-top:none; padding-top:4px; }
+  .rel-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .rel-head b { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .rel p { margin:4px 0 0; font-size:.92rem; }
+  .rel .meta { font-size:.8rem; color:var(--muted); }
+  .pill.latest { color:var(--accent2); border-color:var(--accent2); }
+  .pill.testing { color:var(--warn); border-color:var(--warn); }
   footer { text-align:center; color:var(--muted); font-size:.85rem; margin-top:30px; }
 </style>
 </head>
@@ -91,7 +99,13 @@
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
       </esp-web-install-button>
     </div>
-    <p class="muted" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, 40 streams, 64 KB TCP buffers, auto-provision, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+    <p class="muted" id="fwline" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, 40 streams, 64 KB TCP buffers, auto-provision, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+  </div>
+
+  <div class="card" id="changelog" hidden>
+    <h2>📋 เวอร์ชันทั้งหมด (ใหม่สุดอยู่บน)</h2>
+    <p class="muted" style="font-size:.88rem;margin-top:0">เลือกเวอร์ชันไหนก็ได้จากช่อง “เวอร์ชัน firmware” ด้านบน รวมถึงถอยกลับไปเวอร์ชันเก่า บอร์ดที่ต่อ VPS อยู่แล้วอัปเดต/ถอยเวอร์ชันผ่าน Dashboard → Devices → Update FW ได้โดยไม่ต้องเสียบสาย</p>
+    <div id="rels"></div>
   </div>
 
   <div class="card">
@@ -135,22 +149,46 @@
   document.getElementById('gostui').href = gostui;
   document.getElementById('dash').href = params.get('dash') || location.origin.replace('//flash.','//admin.');
 
-  // Version picker: every archived release can be USB-flashed (rollback).
+  // Versions: picker (every archived release can be USB-flashed = rollback),
+  // the version line and the changelog all come from firmware/releases.json.
+  const STATUS = { testing: 'กำลังทดสอบ', legacy: 'รุ่นเก่า' };
+  function h(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
   fetch('firmware/releases.json', {cache: 'no-cache'}).then(r => r.ok ? r.json() : null).then(idx => {
-    if (!idx || !idx.releases) return;
+    if (!idx || !idx.releases || !idx.releases.length) return;
     const sel = document.getElementById('fwver'), note = document.getElementById('fwnote');
+    const latest = idx.releases.find(r => r.version === idx.latest) || idx.releases[0];
+    const describe = r => [r.title, r.notes].filter(Boolean).join(' — ');
+    sel.options[0].textContent = 'ล่าสุด: ' + latest.version + (latest.title ? ' · ' + latest.title : '') + ' (แนะนำ)';
+    sel.options[0].dataset.notes = describe(latest);
+    note.textContent = describe(latest);
     for (const r of idx.releases) {
       const o = document.createElement('option');
       o.value = r.manifest;
-      o.textContent = r.version + (r.version === idx.latest ? ' (ล่าสุด)' : '') + ' — ' + r.protocol;
-      o.dataset.notes = r.notes || '';
+      o.textContent = r.version + (r.title ? ' · ' + r.title : '') +
+        (r.version === idx.latest ? ' (ล่าสุด)' : STATUS[r.status] ? ' (' + STATUS[r.status] + ')' : '');
+      o.dataset.notes = describe(r);
       sel.appendChild(o);
     }
     sel.addEventListener('change', () => {
       document.getElementById('installBtn').setAttribute('manifest', sel.value);
-      const o = sel.selectedOptions[0];
-      note.textContent = o.dataset.notes || '';
+      note.textContent = sel.selectedOptions[0].dataset.notes || '';
     });
+
+    document.getElementById('fwline').textContent = 'เวอร์ชันล่าสุด: ' + latest.version +
+      (latest.title ? ' · ' + latest.title : '') + ' • target: ESP32-S3 16MB flash / 8MB PSRAM';
+
+    document.getElementById('rels').innerHTML = idx.releases.map(r => {
+      const badges = [
+        r.version === idx.latest ? '<span class="pill latest">ล่าสุด · แนะนำ</span>' : '',
+        r.version !== idx.latest && STATUS[r.status] ? '<span class="pill ' + h(r.status) + '">' + STATUS[r.status] + '</span>' : '',
+        '<span class="pill">' + h(r.protocol) + '</span>',
+      ].join(' ');
+      return '<div class="rel"><div class="rel-head"><b>' + h(r.version) + '</b> ' + badges + '</div>' +
+        (r.title ? '<p><b>' + h(r.title) + '</b></p>' : '') +
+        (r.notes ? '<p class="muted">' + h(r.notes) + '</p>' : '') +
+        '<div class="meta">build ' + h(r.built || '') + ' · ' + (r.size ? (r.size / 1048576).toFixed(2) + ' MB' : '') + '</div></div>';
+    }).join('');
+    document.getElementById('changelog').hidden = false;
   }).catch(() => {});
 
   function esc(s){ return String(s).replace(/[^\w.\-:@]/g,''); }

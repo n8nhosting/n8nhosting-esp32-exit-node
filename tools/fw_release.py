@@ -11,7 +11,7 @@ older ones included (rollback):
     flasher/firmware/*.bin           the "latest" release (old OTA URL keeps working)
 
 Usage:
-    tools/fw_release.py add <build_dir> [--notes "..."] [--protocol mux1] [--latest]
+    tools/fw_release.py add <build_dir> [--title ".."] [--notes "..."] [--status testing] [--latest]
         Copy a build (e.g. firmware/build_s3n16r8 or firmware/prebuilt_s3n16r8)
         into releases/<version>/. The version is read from the app image itself
         (PROJECT_VER), so a release can never be filed under the wrong name.
@@ -76,14 +76,14 @@ def sha256(path):
 
 def load_index():
     if os.path.exists(INDEX):
-        with open(INDEX) as f:
+        with open(INDEX, encoding="utf-8") as f:
             return json.load(f)
     return {"latest": "", "releases": []}
 
 
 def save_json(path, obj):
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(tmp, path)
@@ -114,7 +114,9 @@ def entry_for(version, old=None):
         "sha256": sha256(app),
         "url": f"firmware/releases/{version}/{APP}",
         "manifest": f"firmware/releases/{version}/manifest.json",
-        "notes": old.get("notes", ""),
+        "title": old.get("title", ""),     # one-line headline (Thai) on the flasher page
+        "notes": old.get("notes", ""),     # what changed, shown in the changelog + dashboard
+        "status": old.get("status", ""),   # stable | testing | legacy ("" = stable)
     }
     if old.get("commit"):
         e["commit"] = old["commit"]
@@ -162,7 +164,7 @@ def cmd_add(a):
     idx = load_index()
     old = next((e for e in idx["releases"] if e["version"] == version), {})
     old = dict(old)
-    for k in ("notes", "protocol", "commit"):
+    for k in ("title", "notes", "status", "protocol", "commit"):
         v = getattr(a, k)
         if v:
             old[k] = v
@@ -190,6 +192,9 @@ def set_latest(version):
                 f.write(html2)
     idx = load_index()
     idx["latest"] = version
+    for e in idx["releases"]:
+        if e["version"] == version and e.get("status") == "testing":
+            e["status"] = "stable"
     write_index(idx)
     print(f"latest -> {version} (flasher/firmware/*.bin, flasher/manifest.json)")
 
@@ -217,7 +222,7 @@ def cmd_list(_a):
     idx = load_index()
     for e in sorted(idx["releases"], key=sort_key, reverse=True):
         tag = " (latest)" if e["version"] == idx.get("latest") else ""
-        print(f"{e['version']:<20} {e['protocol']:<5} {e['built']:<22} {e['size']:>8}  {e.get('notes', '')}{tag}")
+        print(f"{e['version']:<20} {e['protocol']:<5} {e['built']:<22} {e['size']:>8}  {e.get('status') or 'stable':<7} {e.get('title') or e.get('notes', '')}{tag}")
 
 
 def main():
@@ -225,7 +230,9 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("add")
     s.add_argument("build_dir")
+    s.add_argument("--title", default="", help="one-line headline for the flasher changelog")
     s.add_argument("--notes", default="")
+    s.add_argument("--status", default="", choices=["", "stable", "testing", "legacy"])
     s.add_argument("--protocol", default="")
     s.add_argument("--commit", default="")
     s.add_argument("--latest", action="store_true", help="also make it the default firmware")

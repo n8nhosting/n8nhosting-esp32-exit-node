@@ -11,7 +11,9 @@
       "sha256": "82c239f9e02ad285962267bceb2e2bf33aae1e345fa297d8cf1568151cb8dacb",
       "url": "firmware/releases/2.4.21-mux1.3/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.21-mux1.3/manifest.json",
-      "notes": "self-test rollback: new image confirmed only after the mux link is up, reverts after 5 min otherwise"
+      "title": "ถอยกลับเวอร์ชันเดิมเองอัตโนมัติ (auto-rollback)",
+      "notes": "เหมือน mux1.2 ทุกอย่าง และเพิ่มระบบกันพัง: firmware ใหม่ที่ OTA เข้าไปจะถูกยืนยันก็ต่อเมื่อต่อ broker ได้แล้ว ถ้า crash หรือต่อ broker ไม่ได้ภายใน 5 นาที บอร์ดจะกลับไปใช้เวอร์ชันก่อนหน้าเอง (กำลังทดสอบกับบอร์ดจริง)",
+      "status": "testing"
     },
     {
       "version": "2.4.21-mux1.2",
@@ -23,7 +25,9 @@
       "sha256": "b01751ace58d9451fdd196085af5b4c86bc204104707965b0d7a3d2377542111",
       "url": "firmware/releases/2.4.21-mux1.2/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.21-mux1.2/manifest.json",
-      "notes": "64 KB lwIP TCP buffers (faster per stream)",
+      "title": "เร็วขึ้นต่อการเชื่อมต่อ (บัฟเฟอร์ TCP 64 KB)",
+      "notes": "ขยายบัฟเฟอร์ TCP ของ lwIP เป็น 64 KB และหน้าต่างรับ WiFi ให้ใหญ่ขึ้น ดาวน์โหลดต่อ 1 การเชื่อมต่อได้ราว 9–10 Mbps",
+      "status": "stable",
       "commit": "2bac35e"
     },
     {
@@ -36,7 +40,9 @@
       "sha256": "17f689e8c85275c962d2aa689afb5e0023ceffc95de235f474819b5e3623b04c",
       "url": "firmware/releases/2.4.21-mux1.1/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.21-mux1.1/manifest.json",
-      "notes": "mux1: one TLS link, 40 streams, one stats line a minute",
+      "title": "40 การเชื่อมต่อพร้อมกันบนลิงก์เดียว",
+      "notes": "ลิงก์ TLS เส้นเดียวรองรับลูกค้าพร้อมกันได้ 40 stream, log สถิติ 1 บรรทัดต่อนาที, broker ปิด stream ที่ค้างหรือไม่ได้ใช้ให้เอง",
+      "status": "stable",
       "commit": "9f308f5"
     },
     {
@@ -49,7 +55,9 @@
       "sha256": "09b138eb2f16d4def5ca0fc952b0a51b84de5565c4b190b1fd9c0f40a46309d8",
       "url": "firmware/releases/2.4.21-mux1/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.21-mux1/manifest.json",
-      "notes": "first mux1 build (24 streams)",
+      "title": "ลิงก์ TLS เส้นเดียว (mux) รุ่นแรก",
+      "notes": "ทุกการเชื่อมต่อของลูกค้าวิ่งใน TLS เส้นเดียวระหว่างบอร์ดกับ VPS (สูงสุด 24 stream) ต้องใช้ broker เวอร์ชันใหม่",
+      "status": "legacy",
       "commit": "6b6f689"
     },
     {
@@ -62,7 +70,9 @@
       "sha256": "4cc1a12d52c3c76c5c6e0d583f24fdfc654beef2857b23717628a6878e0e61b6",
       "url": "firmware/releases/2.4.21-pool/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.21-pool/manifest.json",
-      "notes": "v1.2 pool protocol (no mux). Reports firmware \"2.4.21\". Use only if mux1 misbehaves; needs a broker that still accepts pool nodes",
+      "title": "v1.2 แบบเก่า (pool, ไม่มี mux)",
+      "notes": "เปิด 1 การเชื่อมต่อ TLS ต่อลูกค้า 1 ราย ใช้เฉพาะตอนที่ mux มีปัญหา บอร์ดจะรายงานเวอร์ชันเป็น \"2.4.21\"",
+      "status": "legacy",
       "commit": "7e52acd"
     }
   ]
