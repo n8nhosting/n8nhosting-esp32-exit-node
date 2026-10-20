@@ -215,7 +215,12 @@ func TestCredentialsAndAssign(t *testing.T) {
 	os.Setenv("PROXY_PUBLIC_HOST", "203.0.113.9")
 	os.Setenv("PROXY_PUBLIC_PORT", "3128")
 	defer os.Unsetenv("PROXY_PUBLIC_HOST")
-	_, mux := newTestServer(t)
+	s, mux, fb := newTestServerWithBroker(t)
+	// assign needs a board the broker or the devices table knows, with room
+	fb.nodes = []brokerNode{{MAC: "aa:bb:cc:dd:ee:ff", RemoteIP: "27.1.1.1"}}
+	if err := s.devices.Upsert("aa:bb:cc:dd:ee:ff", func(d *Device) error { d.Kind = "dedicated"; return nil }); err != nil {
+		t.Fatal(err)
+	}
 	doJSON(t, mux, "POST", "/api/users", "admintok", map[string]any{"username": "gina", "password": "Pw1", "rate_mbps": 5, "quota_gb": 2})
 
 	// credentials returns the connection string with the real password
@@ -231,7 +236,9 @@ func TestCredentialsAndAssign(t *testing.T) {
 	}
 
 	// assign to a device, visible on the user
-	doJSON(t, mux, "POST", "/api/users/gina/assign", "admintok", map[string]any{"device_mac": "aa:bb:cc:dd:ee:ff"})
+	if rr, out := doJSON(t, mux, "POST", "/api/users/gina/assign", "admintok", map[string]any{"device_mac": "aa:bb:cc:dd:ee:ff"}); rr.Code != http.StatusOK {
+		t.Fatalf("assign: %d %v", rr.Code, out)
+	}
 	_, u := doJSON(t, mux, "GET", "/api/users/gina", "admintok", nil)
 	if u["device_mac"] != "aa:bb:cc:dd:ee:ff" {
 		t.Fatalf("assign failed: %v", u["device_mac"])

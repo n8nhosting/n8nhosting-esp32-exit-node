@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,18 +29,54 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, authResp{OK: false})
 		return
 	}
+	// gost does not send the service name: each slot service's auther URL
+	// carries ?slot=N, and the pool port's carries none
+	slot := r.URL.Query().Get("slot")
 	ok, reason := s.store.Authorize(req.Username, req.Password, time.Now())
+	if ok {
+		ok, reason = s.portAllowed(req.Username, slot)
+	}
 	if !ok {
-		log.Printf("auth deny user=%q from=%q: %s", req.Username, req.Client, reason)
+		log.Printf("auth deny user=%q from=%q slot=%q: %s", req.Username, req.Client, slot, reason)
 		writeJSON(w, http.StatusOK, authResp{OK: false})
 		return
 	}
 	writeJSON(w, http.StatusOK, authResp{OK: true, ID: req.Username})
 }
 
+// portAllowed reports whether username may use the gost service that asked:
+// slot port N (slot "N") only when bound to the board holding slot N; the
+// pool port (slot "") when unbound, or bound to a board with no slot yet (so
+// bound users keep working until the operator assigns their board a slot).
+func (s *server) portAllowed(username, slot string) (bool, string) {
+	u, err := s.store.Get(username)
+	if err != nil {
+		return false, "store: " + err.Error()
+	}
+	d, err := s.boundDevice(u)
+	if err != nil {
+		return false, "store: " + err.Error()
+	}
+	held := 0
+	if d != nil {
+		held = d.Slot
+	}
+	if slot == "" {
+		if held == 0 {
+			return true, ""
+		}
+		return false, "wrong port"
+	}
+	if n, err := strconv.Atoi(slot); err != nil || n < 1 || n != held {
+		return false, "wrong port"
+	}
+	return true, ""
+}
+
 // ---- limiter plugin -----------------------------------------------------
 // GOST POSTs {scope,service,network,addr,client,src}; reply {in,out} bytes/sec.
-// client is the user id returned by the auther. 0 => unlimited.
+// client is the user id returned by the auther. 0 => unlimited. A user bound to
+// a measured board gets min(own rate, board capacity); own rate 0 => capacity.
 
 type limiterReq struct {
 	Scope   string `json:"scope"`
@@ -61,11 +99,21 @@ func (s *server) handleLimiter(w http.ResponseWriter, r *http.Request) {
 	}
 	// Only enforce at the per-user (client) scope. Service/conn scopes get the
 	// user's cap too when a client id is present; otherwise unlimited.
-	if req.Client == "" {
+	// A measurement user is never capped, or a board could never measure
+	// faster than its last result.
+	if req.Client == "" || strings.HasPrefix(req.Client, measurePrefix) {
 		writeJSON(w, http.StatusOK, limiterResp{In: 0, Out: 0})
 		return
 	}
-	bps := s.store.RateBytesPerSec(req.Client)
+	capMbps := 0.0
+	if u, err := s.store.Get(req.Client); err == nil {
+		if d, err := s.boundDevice(u); err != nil {
+			log.Printf("limiter: board of user=%q: %v (user rate only)", req.Client, err)
+		} else if d != nil {
+			capMbps = d.CapacityMbps
+		}
+	}
+	bps := s.store.RateBytesPerSecCapped(req.Client, capMbps)
 	writeJSON(w, http.StatusOK, limiterResp{In: bps, Out: bps})
 }
 

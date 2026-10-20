@@ -13,11 +13,13 @@ import (
 
 // fakeBroker stands in for the broker's status API: it serves GET /nodes from
 // nodes and records POST /nodes/{mac}/<action> as "<path> <body>" in calls.
+// POSTs answer 200 {"ok":true}, except /slot while slotStatus is set.
 type fakeBroker struct {
 	*httptest.Server
-	mu    sync.Mutex
-	nodes []brokerNode
-	calls []string
+	mu         sync.Mutex
+	nodes      []brokerNode
+	calls      []string
+	slotStatus int
 }
 
 func newFakeBroker(t *testing.T) *fakeBroker {
@@ -31,6 +33,14 @@ func newFakeBroker(t *testing.T) *fakeBroker {
 		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/nodes/"):
 			b, _ := io.ReadAll(r.Body)
 			fb.calls = append(fb.calls, r.URL.Path+" "+string(b))
+			if code := fb.slotStatus; code != 0 && strings.HasSuffix(r.URL.Path, "/slot") {
+				msg := http.StatusText(code)
+				if code == http.StatusConflict {
+					msg = "slot taken" // what the broker says
+				}
+				http.Error(w, msg, code)
+				return
+			}
 			w.Write([]byte(`{"ok":true}`))
 		default:
 			http.NotFound(w, r)
@@ -39,6 +49,20 @@ func newFakeBroker(t *testing.T) *fakeBroker {
 	t.Cleanup(fb.Close)
 	t.Setenv("BROKER_STATUS_URL", fb.URL)
 	return fb
+}
+
+// setSlotStatus makes POST /nodes/{mac}/slot answer code; 0 restores 200.
+func (fb *fakeBroker) setSlotStatus(code int) {
+	fb.mu.Lock()
+	defer fb.mu.Unlock()
+	fb.slotStatus = code
+}
+
+// callLog is a copy of the POSTs recorded so far.
+func (fb *fakeBroker) callLog() []string {
+	fb.mu.Lock()
+	defer fb.mu.Unlock()
+	return append([]string(nil), fb.calls...)
 }
 
 func newTestServerWithBroker(t *testing.T) (*server, *http.ServeMux, *fakeBroker) {

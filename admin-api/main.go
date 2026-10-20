@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -41,6 +42,9 @@ type server struct {
 	// usage accounting state for cumulative mode: last seen totals per client
 	lastSeen map[string]int64
 	geo      *geoCache
+	// admitMu holds a capacity check (admit) and the binding it allows
+	// together, so two assigns cannot both take the last seat
+	admitMu sync.Mutex
 }
 
 func envOr(k, def string) string {

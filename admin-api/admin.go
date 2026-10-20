@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -120,6 +121,17 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad body"})
 			return
 		}
+		if in.DeviceMAC != "" {
+			// a new binding passes the same capacity rule as /assign
+			s.admitMu.Lock()
+			defer s.admitMu.Unlock()
+			if cur, err := s.store.Get(name); err == nil && cur.DeviceMAC != in.DeviceMAC {
+				if code, body := s.admit(name, in.DeviceMAC); code != 0 {
+					writeJSON(w, code, body)
+					return
+				}
+			}
+		}
 		err := s.store.Update(name, func(u *User) error {
 			if in.Password != "" {
 				u.PassHash = hashPassword(in.Password)
@@ -181,6 +193,16 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 	case "assign":
 		var in userInput
 		json.NewDecoder(r.Body).Decode(&in)
+		if in.DeviceMAC == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "device_mac required"})
+			return
+		}
+		s.admitMu.Lock()
+		defer s.admitMu.Unlock()
+		if code, body := s.admit(name, in.DeviceMAC); code != 0 {
+			writeJSON(w, code, body)
+			return
+		}
 		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = in.DeviceMAC; return nil })
 	case "unassign":
 		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = ""; return nil })
@@ -216,15 +238,24 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 
 // handleCredentials returns the connection string for handing to a customer.
 // Admin-only (bearer). Decrypts the stored credential; falls back to a reset if
-// the record predates reversible storage.
+// the record predates reversible storage. A user bound to a board with a slot
+// connects on that slot's port; anyone else on the pool port.
 func (s *server) handleCredentials(w http.ResponseWriter, r *http.Request, name string) {
 	u, err := s.store.Get(name)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
 	}
+	d, err := s.boundDevice(u)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "store: " + err.Error()})
+		return
+	}
 	host := envOr("PROXY_PUBLIC_HOST", "")
 	port := envOr("PROXY_PUBLIC_PORT", "3128")
+	if d != nil && d.Slot > 0 {
+		port = strconv.Itoa(slotPort(d.Slot))
+	}
 	pw := ""
 	if u.CredEnc != "" {
 		pw = decryptCred(u.CredEnc)

@@ -341,11 +341,19 @@ func (s *Store) Authorize(username, password string, now time.Time) (bool, strin
 	return true, ""
 }
 
-// RateBytesPerSec returns the per-user rate cap in bytes/sec (0 = unlimited).
-func (s *Store) RateBytesPerSec(username string) int64 {
+// RateBytesPerSecCapped returns the per-user rate cap in bytes/sec (0 =
+// unlimited), bounded by capMbps (the measured capacity of the user's board;
+// 0 = no bound). A user rate of 0 means the bound itself.
+func (s *Store) RateBytesPerSecCapped(username string, capMbps float64) int64 {
 	var mbps float64
 	err := s.db.QueryRow(`SELECT rate_mbps FROM users WHERE username = ?`, username).Scan(&mbps)
-	if err != nil || mbps <= 0 {
+	if err != nil {
+		mbps = 0
+	}
+	if capMbps > 0 && (mbps <= 0 || capMbps < mbps) {
+		mbps = capMbps
+	}
+	if mbps <= 0 {
 		return 0
 	}
 	return int64(mbps * 1_000_000 / 8)

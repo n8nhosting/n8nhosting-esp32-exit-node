@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -84,6 +88,17 @@ func maxUsers(kind string, capacityMbps float64) int {
 	return n
 }
 
+// slotPort is the gost port serving slot (3130+slot); 0 for no slot.
+func slotPort(slot int) int {
+	if slot <= 0 {
+		return 0
+	}
+	return 3130 + slot
+}
+
+// slotCount is how many slot ports gost serves: slots 1..SLOT_COUNT.
+func slotCount() int { return atoiDefault(envOr("SLOT_COUNT", "30"), 30) }
+
 // buildDeviceViews merges broker nodes with device records, users and IP groups.
 func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 	recs := map[string]*Device{}
@@ -97,7 +112,7 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			group[n.RemoteIP] = append(group[n.RemoteIP], n.MAC)
 		}
 	}
-	// users bound per MAC, and enabled/unexpired non-measurement users per MAC
+	// users bound per MAC, and the seats they take (takesSeat) per MAC
 	byMAC := map[string][]string{}
 	activeByMAC := map[string]int{}
 	now := time.Now()
@@ -106,15 +121,9 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			continue
 		}
 		byMAC[u.DeviceMAC] = append(byMAC[u.DeviceMAC], u.Username)
-		if !u.Enabled || strings.HasPrefix(u.Username, "_measure-") {
-			continue
+		if takesSeat(u, now) {
+			activeByMAC[u.DeviceMAC]++
 		}
-		if u.ExpiresAt != "" {
-			if exp, e := time.Parse(time.RFC3339, u.ExpiresAt); e == nil && now.After(exp) {
-				continue
-			}
-		}
-		activeByMAC[u.DeviceMAC]++
 	}
 	out := make([]deviceView, 0, len(nodes))
 	for _, n := range nodes {
@@ -128,9 +137,7 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			v.Lat, v.Lon = d.Lat, d.Lon
 			v.WifiPasswordSet = d.WifiPasswordEnc != ""
 		}
-		if v.Slot > 0 {
-			v.Port = 3130 + v.Slot
-		}
+		v.Port = slotPort(v.Slot)
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
 		if macs := group[n.RemoteIP]; len(macs) > 0 {
 			v.IPGroupSize = len(macs)
@@ -157,8 +164,30 @@ func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.buildDeviceViews(nodes))
 }
 
+// brokerSetSlot tells the broker to route slot to mac (0 clears). Clearing a
+// MAC the broker does not know succeeds: the broker holds no slot for it.
+func (s *server) brokerSetSlot(mac string, slot int) error {
+	body, _ := json.Marshal(map[string]int{"slot": slot})
+	cl := &http.Client{Timeout: 5 * time.Second}
+	resp, err := cl.Post(s.brokerURL()+"/nodes/"+url.PathEscape(mac)+"/slot", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return errors.New("broker unreachable")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 == 2 || (slot == 0 && resp.StatusCode == http.StatusNotFound) {
+		return nil
+	}
+	msg, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+	if m := strings.TrimSpace(string(msg)); m != "" {
+		return fmt.Errorf("broker: %s", m)
+	}
+	return fmt.Errorf("broker: %s", resp.Status)
+}
+
 // PUT /api/devices/{mac} — create/update the operator record. Absent fields
-// are left unchanged; wifi_password "" clears the stored password.
+// are left unchanged; wifi_password "" clears the stored password. slot N
+// (1..SLOT_COUNT, 0 clears) is set on the broker first; if the broker refuses
+// or is down, nothing in the request is saved.
 func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac string) {
 	var in struct {
 		Name         *string  `json:"name"`
@@ -167,6 +196,7 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		Lon          *float64 `json:"lon"`
 		Notes        *string  `json:"notes"`
 		WifiPassword *string  `json:"wifi_password"`
+		Slot         *int     `json:"slot"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
@@ -183,6 +213,35 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 	if in.Lon != nil && (*in.Lon < -180 || *in.Lon > 180) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "lon must be between -180 and 180"})
 		return
+	}
+	if n := slotCount(); in.Slot != nil && (*in.Slot < 0 || *in.Slot > n) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("slot must be between 1 and %d (0 clears)", n)})
+		return
+	}
+	prevSlot := 0
+	if in.Slot != nil {
+		if *in.Slot > 0 {
+			holder, err := s.devices.BySlot(*in.Slot)
+			if err == nil && holder.MAC != mac {
+				writeJSON(w, http.StatusConflict, map[string]string{"error": "slot taken"})
+				return
+			}
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
+				return
+			}
+		}
+		cur, err := s.devices.Get(mac)
+		if err == nil {
+			prevSlot = cur.Slot
+		} else if !errors.Is(err, ErrNotFound) {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
+			return
+		}
+		if err := s.brokerSetSlot(mac, *in.Slot); err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
 	}
 	err := s.devices.Upsert(mac, func(d *Device) error {
 		if in.Name != nil {
@@ -207,9 +266,18 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 				d.WifiPasswordEnc = encryptCred(*in.WifiPassword)
 			}
 		}
+		if in.Slot != nil {
+			d.Slot = *in.Slot
+		}
 		return nil
 	})
 	if err != nil {
+		if in.Slot != nil && *in.Slot != prevSlot {
+			// keep the broker on the slot the record still holds
+			if rerr := s.brokerSetSlot(mac, prevSlot); rerr != nil {
+				log.Printf("device %s: slot %d not saved (%v), and the broker still has it: %v", mac, *in.Slot, err, rerr)
+			}
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
 		return
 	}
@@ -242,13 +310,21 @@ func (s *server) handleRevealWifi(w http.ResponseWriter, r *http.Request, mac st
 	writeJSON(w, http.StatusOK, map[string]string{"wifi_password": decryptCred(d.WifiPasswordEnc)})
 }
 
-// PUT /api/devices/{mac}, POST /api/devices/{mac}/reveal-wifi (local); any other
-// POST /api/devices/{mac}/block|allow|forget|ota is proxied to the broker.
+// PUT /api/devices/{mac}, POST /api/devices/{mac}/slot|reveal-wifi (local); any
+// other POST /api/devices/{mac}/block|allow|forget|ota is proxied to the broker.
 func (s *server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 	rest := r.URL.Path[len("/api/devices/"):]
 	if r.Method == http.MethodPut && rest != "" && !strings.Contains(rest, "/") {
 		s.handlePutDevice(w, r, rest)
 		return
+	}
+	// POST …/slot {"slot": N} is the PUT's slot field, never a bare broker
+	// passthrough, so the devices table and the broker cannot disagree
+	if r.Method == http.MethodPost && strings.HasSuffix(rest, "/slot") {
+		if mac := strings.TrimSuffix(rest, "/slot"); mac != "" && !strings.Contains(mac, "/") {
+			s.handlePutDevice(w, r, mac)
+			return
+		}
 	}
 	if r.Method == http.MethodPost && strings.HasSuffix(rest, "/reveal-wifi") {
 		if mac := strings.TrimSuffix(rest, "/reveal-wifi"); mac != "" && !strings.Contains(mac, "/") {
