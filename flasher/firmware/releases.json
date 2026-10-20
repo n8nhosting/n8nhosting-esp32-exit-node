@@ -2,6 +2,18 @@
   "latest": "2.4.21-mux1.2",
   "releases": [
     {
+      "version": "2.4.21-mux1.3",
+      "reports": "2.4.21-mux1.3",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 01:20:16",
+      "added": "2026-10-21",
+      "size": 1393872,
+      "sha256": "82c239f9e02ad285962267bceb2e2bf33aae1e345fa297d8cf1568151cb8dacb",
+      "url": "firmware/releases/2.4.21-mux1.3/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.21-mux1.3/manifest.json",
+      "notes": "self-test rollback: new image confirmed only after the mux link is up, reverts after 5 min otherwise"
+    },
+    {
       "version": "2.4.21-mux1.2",
       "reports": "2.4.21-mux1.2",
       "protocol": "mux1",
