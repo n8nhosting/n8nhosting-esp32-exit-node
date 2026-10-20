@@ -392,7 +392,7 @@ function openDevice(mac, opener){
 function closeDevice(keepFocus){
   $('#dmodal').style.display='none'; editDev=null;
   $('#app').inert = false;
-  if(!keepFocus && dmOpener && dmOpener.isConnected) dmOpener.focus();
+  if(keepFocus!==true && dmOpener && dmOpener.isConnected) dmOpener.focus();
   dmOpener=null;
 }
 $('#dmCancel').addEventListener('click',closeDevice);
