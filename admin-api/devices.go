@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -101,6 +102,7 @@ type deviceView struct {
 	CapacityMbps          float64  `json:"capacity_mbps"`
 	CapacityMeasuredAt    string   `json:"capacity_measured_at"`
 	CapacityActiveStreams int      `json:"capacity_active_streams"`
+	CapacitySource        string   `json:"capacity_source"` // unmeasured, manual, or measured
 	Lat                   *float64 `json:"lat"`
 	Lon                   *float64 `json:"lon"`
 	WifiPasswordSet       bool     `json:"wifi_password_set"` // the password itself is never listed
@@ -147,6 +149,28 @@ func slotPort(slot int) int {
 
 // slotCount is how many slot ports gost serves: slots 1..SLOT_COUNT.
 func slotCount() int { return atoiDefault(envOr("SLOT_COUNT", "30"), 30) }
+
+// Display-only defaults keep operator names and existing records untouched.
+func boardDisplayName(mac, name string) string {
+	if strings.TrimSpace(name) != "" {
+		return name
+	}
+	hex := strings.ToUpper(strings.NewReplacer(":", "", "-", "", ".", "").Replace(mac))
+	if len(hex) < 4 {
+		return "Board"
+	}
+	return "Board-" + hex[len(hex)-4:]
+}
+
+func capacitySource(mbps float64, measuredAt string) string {
+	if mbps <= 0 {
+		return "unmeasured"
+	}
+	if measuredAt == "" {
+		return "manual"
+	}
+	return "measured"
+}
 
 // buildDeviceViews merges broker nodes with device records, users and IP groups.
 func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
@@ -202,6 +226,8 @@ func (s *server) buildDeviceViewsWithHealth(nodes []brokerNode, rich bool) []dev
 			v.MapsURL = d.MapsURL
 			v.WifiPasswordSet = d.WifiPasswordEnc != ""
 		}
+		v.Name = boardDisplayName(n.MAC, v.Name)
+		v.CapacitySource = capacitySource(v.CapacityMbps, v.CapacityMeasuredAt)
 		v.Port = slotPort(v.Slot)
 		v.SlotMismatch = n.Slot != v.Slot || (n.Pool != nil && *n.Pool != poolFlag(v.Kind))
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
@@ -299,7 +325,8 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		Notes        *string  `json:"notes"`
 		WifiPassword *string  `json:"wifi_password"`
 		Slot         *int     `json:"slot"`
-		MapsURL      *string  `json:"maps_url"` // Google Maps share link; resolved into lat/lon here, "" clears the link
+		MapsURL      *string  `json:"maps_url"`      // Google Maps share link; resolved into lat/lon here, "" clears the link
+		CapacityMbps *float64 `json:"capacity_mbps"` // operator override; zero resets to unmeasured
 	}
 	var raw map[string]json.RawMessage
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16384)).Decode(&raw); err != nil || raw == nil {
@@ -309,6 +336,10 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 	encoded, _ := json.Marshal(raw)
 	if err := json.Unmarshal(encoded, &in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
+		return
+	}
+	if _, present := raw["capacity_mbps"]; present && (in.CapacityMbps == nil || math.IsNaN(*in.CapacityMbps) || math.IsInf(*in.CapacityMbps, 0) || *in.CapacityMbps < 0 || *in.CapacityMbps > 100000) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "capacity_mbps must be a number between 0 and 100000"})
 		return
 	}
 	latNull := strings.TrimSpace(string(raw["lat"])) == "null"
@@ -344,6 +375,15 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 	if n := slotCount(); in.Slot != nil && (*in.Slot < 0 || *in.Slot > n) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("slot must be between 1 and %d (0 clears)", n)})
 		return
+	}
+	if in.CapacityMbps != nil {
+		// Serialize operator overrides with live measurements, so a completed
+		// download cannot silently overwrite a speed just saved in Settings.
+		if !s.beginMeasure(mac) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "measurement in progress"})
+			return
+		}
+		defer s.endMeasure(mac)
 	}
 	if in.Slot != nil && *in.Slot > 0 {
 		holder, err := s.devices.BySlot(*in.Slot)
@@ -415,6 +455,12 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		if in.Slot != nil {
 			d.Slot = *in.Slot
 		}
+		if in.CapacityMbps != nil {
+			d.CapacityMbps = *in.CapacityMbps
+			// Manual values are not automated measurements. Empty metadata also
+			// makes zero a complete reset, without retaining a misleading date.
+			d.CapacityMeasuredAt, d.CapacityActiveStreams = "", 0
+		}
 		return nil
 	})
 	if err != nil {
@@ -429,12 +475,16 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 	}
 	// the broker may not know this MAC (or be down): still answer with the record
 	changed := []string{}
-	for _, field := range []string{"name", "kind", "slot", "lat", "lon", "notes", "maps_url", "wifi_password"} {
+	for _, field := range []string{"name", "kind", "slot", "lat", "lon", "notes", "maps_url", "wifi_password", "capacity_mbps"} {
 		if _, ok := raw[field]; ok {
 			changed = append(changed, field)
 		}
 	}
-	s.emit("device.updated", "info", "device", strings.ToLower(mac), "admin", "Device settings updated", map[string]any{"fields": changed})
+	eventData := map[string]any{"fields": changed}
+	if in.CapacityMbps != nil {
+		eventData["source"], eventData["capacity_mbps"] = "manual", *in.CapacityMbps
+	}
+	s.emit("device.updated", "info", "device", strings.ToLower(mac), "admin", "Device settings updated", eventData)
 	var nodes []brokerNode
 	_ = s.brokerGET("/nodes", &nodes)
 	known := false

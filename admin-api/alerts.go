@@ -176,12 +176,10 @@ func (s *server) observeActivity(nodes []brokerNode, brokerOK bool, now time.Tim
 				pinnedGrew = true
 			}
 			d := recs[n.MAC]
-			kind, name, capacity, slot := "shared", n.MAC, 0.0, 0
+			kind, name, capacity, slot := "shared", boardDisplayName(n.MAC, ""), 0.0, 0
 			if d != nil {
 				kind, capacity, slot = d.Kind, d.CapacityMbps, d.Slot
-				if d.Name != "" {
-					name = d.Name
-				}
+				name = boardDisplayName(n.MAC, d.Name)
 			}
 			otaAt, _ := time.Parse(time.RFC3339, n.OTAAt)
 			otaAge := now.Sub(otaAt)
