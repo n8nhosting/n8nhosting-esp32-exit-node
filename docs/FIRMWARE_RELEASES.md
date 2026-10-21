@@ -28,6 +28,17 @@ the build directory's target (a C3 bin in the S3 folder). The dashboard sends
 the per-chip string as the OTA target version, so a push is only "ok" when the
 board comes back reporting exactly that.
 
+**2.4.24 (testing)** yields for 100 ms when the console returns NULL/EOF.
+ESP-IDF 5.5.2's USB-Serial/JTAG VFS returns a read error immediately when no
+USB host is attached; the previous main console loop retried without blocking.
+On a standalone board this can keep the main task runnable and starve idle,
+producing 100% reported CPU even when proxy streams are idle. The delay applies
+only to failed/empty console reads, preserves valid commands, and allows the
+console to recover when a host returns. This release does not change the CPU
+counter formula, mux limits, provisioning, partition layouts, or latest/stable
+selection. Build checks and archive verification are local evidence; hardware
+CPU/console recovery validation remains a separate canary check.
+
 **2.4.23** adds the board health report: a `STATS` frame on the mux link
 every 30 s (internal heap free / low-water / total, PSRAM, CPU load, image /
 OTA slot / flash sizes, open streams) that the dashboard shows in the Health
@@ -105,7 +116,11 @@ Older firmware (up to 2.4.21-mux1.2) confirmed itself right at boot, so the
 automatic part applies from the first board that runs mux1.3 onward. Rolling
 back *to* an older version is still fine, it just won't auto-revert itself.
 
-The broker tracks each push: the dashboard FW column shows `queued`,
-`updating`, `updated`, or **rolled back** (the board rebooted but came back on
-its old version). The firmware also logs
-`OTA: firmware X ... was rejected earlier (rolled back)` at boot.
+The broker tracks each push as `queued`, `sent` (awaiting firmware
+confirmation), `ok`, `failed`, or `timeout`. Sending the OTA frame does not
+confirm a download or installation. Only a subsequent device report matching
+the requested firmware confirms `ok`; a failed or timed-out attempt does not
+prove rollback. A device still reporting its previous version may have failed
+before downloading, validating, writing, or booting the new image. Firmware
+evidence is needed to identify a rollback; its own boot log can report
+`OTA: firmware X ... was rejected earlier (rolled back)`.

@@ -1783,6 +1783,11 @@ void app_main(void)
          */
         char* line = linenoise(prompt);
         if (line == NULL) { /* Ignore empty lines */
+            /* USB-Serial/JTAG reads fail immediately when no USB host is
+             * attached, even with blocking input. Let idle/network tasks run
+             * instead of spinning on EOF; keep polling so the console recovers
+             * when a host reconnects. Valid command handling is unchanged. */
+            vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
         /* Add the command to the history */
