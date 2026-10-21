@@ -307,4 +307,31 @@ Assign cancellation races. No uncaught browser errors. Evidence is in
 `output/playwright/settings-acceptance.json` and
 `settings-{drawer-desktop,drawer-mobile,drawer-mobile-bottom,devices-desktop}.png`.
 
-Production validation for this revision is recorded below after deployment.
+Production: initial deployment `4ikmzplifmlyfbovwmw1c4wn` imported
+`0f04a51f17984fdf5f4306efa659129786471f9c` and finished successfully with all
+services started by 03:01:54 +07. After the first successful sampler following
+board reconnects, the live dashboard confirmed Board 1 retained slot 1 / 3131,
+Board-7EB0 received slot 3 / 3133, and Board-AEC0 received slot 4 / 3134. Saved
+offline slot 2 remained unavailable. Board 1's mismatch cleared automatically;
+no manual re-push was necessary. Settings showed the real slot as editable and
+the derived port. Assign retained current slot 3 and omitted occupied 1/2/4;
+the verification dialog was cancelled without changing a customer binding.
+
+All ten production sections fit inside the checked 1440x900 frame; 375x812
+has no horizontal overflow, retains all sections and supports keyboard scrolling
+with `scrollbar-width:none`. Screenshots are
+`production-device-details-complete.jpg` and
+`production-device-details-mobile-complete.jpg` under `output/playwright/`.
+Live manual capacity and firmware values present before this deployment were
+retained: Board-AEC0 1 Mbps manual / 2.4.22-c3,
+Board-7EB0 unmeasured / 2.4.23-c3, Board 1 5.3 Mbps / 2.4.21-mux1.4. This work
+did not initiate hardware flash/OTA or assign customers automatically.
+
+Final copy correction: deployment `ery4rhcuvftl5epmvvdzanjz` imported
+`08220c97431b074402c57b606fc63b9b616ce592`, started all services by 03:05:20 +07
+and finished successfully. Assign help now describes saving the slot separately
+from assigning a customer, including slots already reserved automatically.
+Reloaded production confirms reservations 1/3/4 persisted through restart,
+current slot 3 remains selected, and occupied 1/2/4 are absent from its picker.
+Production was rechecked at exact 1440x900 and 375x812; console has no captured
+errors/warnings. Viewport overrides are reset after verification.

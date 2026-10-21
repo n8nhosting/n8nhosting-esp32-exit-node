@@ -7,6 +7,12 @@
 > `vzz99qns9ndckzuhxrzzmgvp` succeeded. Production browser checks and the
 > separately approved Board 1 routing restoration are recorded in that handoff.
 > Hardware throughput/soak acceptance remains separate.
+>
+> Follow-up approved 2026-10-22: registered boards without routing receive
+> durable automatic slots (editable); complete device details appear together
+> without section tabs. See the latest acceptance section and
+> [`device-settings-and-flasher-refinement.md`](../specs/2026-10-22-device-settings-and-flasher-refinement.md)
+> for the superseding UI and migration v6 contracts.
 
 
 > **For agentic workers:** this plan sequences design work that already
