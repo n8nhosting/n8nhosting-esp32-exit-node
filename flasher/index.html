@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ESP32-S3 Exit Node Flasher</title>
-<meta name="description" content="Flash ESP32-S3 (N16R8) exit-node firmware from your browser and configure it to connect to the VPS broker." />
+<title>ESP32 Exit Node Flasher</title>
+<meta name="description" content="Flash ESP32-S3 (N16R8) or ESP32-C3 Super Mini exit-node firmware from your browser and configure it to connect to the VPS broker." />
 <script type="module" src="https://unpkg.com/esp-web-tools@10.0.0/dist/web/install-button.js?module"></script>
 <style>
   :root {
@@ -82,13 +82,13 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>ESP32-S3 Exit Node Flasher</h1>
-    <div class="sub">Flash firmware ลงบอร์ด ESP32-S3 (N16R8) แล้วตั้งค่าให้ต่อออกไปหา VPS broker • <span class="pill">Chrome / Edge เท่านั้น</span></div>
+    <h1>ESP32 Exit Node Flasher</h1>
+    <div class="sub">Flash firmware ลงบอร์ด <b>ESP32-S3 N16R8</b> หรือ <b>ESP32-C3 Super Mini</b> แล้วตั้งค่าให้ต่อออกไปหา VPS broker • <span class="pill">Chrome / Edge เท่านั้น</span></div>
   </header>
 
   <div class="card">
     <h2><span class="step-n">1</span> เสียบบอร์ดแล้วกดติดตั้ง</h2>
-    <p class="muted">เสียบ ESP32-S3 เข้าพอร์ต USB (ใช้พอร์ต <b>USB</b> ของ S3 หรือกดปุ่ม BOOT ค้างแล้วแตะ RST หากเข้าโหมดแฟลชไม่ได้) แล้วกดปุ่มด้านล่าง เลือกพอร์ต Serial ของบอร์ด</p>
+    <p class="muted">เสียบบอร์ดเข้าพอร์ต USB แล้วกดปุ่มด้านล่าง เลือกพอร์ต Serial ของบอร์ด เบราว์เซอร์จะตรวจว่าเป็นชิป S3 หรือ C3 แล้วเลือก image ให้ถูกรุ่นเอง (S3: ใช้พอร์ต <b>USB</b> ของบอร์ด ถ้าเข้าโหมดแฟลชไม่ได้ให้กด BOOT ค้างแล้วแตะ RST • C3 Super Mini: เสียบ USB-C ได้เลย ไม่ต้องกดปุ่ม)</p>
     <label for="fwver">เวอร์ชัน firmware</label>
     <select id="fwver"><option value="manifest.json">ล่าสุด (แนะนำ)</option></select>
     <p class="muted" id="fwnote" style="font-size:.85rem;margin:6px 0 0"></p>
@@ -99,7 +99,7 @@
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
       </esp-web-install-button>
     </div>
-    <p class="muted" id="fwline" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, 40 streams, 64 KB TCP buffers, auto-provision, OTA) • target: ESP32-S3 16MB flash / 8MB PSRAM</p>
+    <p class="muted" id="fwline" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, auto-provision, OTA) • บอร์ด: ESP32-S3 N16R8 (40 streams) และ ESP32-C3 Super Mini (4 streams)</p>
   </div>
 
   <div class="card" id="changelog" hidden>
@@ -110,11 +110,11 @@
 
   <div class="card">
     <h2><span class="step-n">2</span> ต่อ WiFi บ้าน (STA)</h2>
-    <p>หลังแฟลชเสร็จ บอร์ดจะเปิด WiFi ชื่อ <code>ESP32_NAT_Router</code> (เปิด ไม่มีรหัส)</p>
+    <p>หลังแฟลชเสร็จ บอร์ดจะเปิด WiFi ชื่อ <code>ESP32_NAT_Router</code> (เปิด ไม่มีรหัส) พร้อมหน้าตั้งค่า WiFi หน้าเดียว</p>
     <ol>
-      <li>เชื่อมต่อ WiFi <code>ESP32_NAT_Router</code> ด้วยมือถือหรือโน้ตบุ๊ก</li>
-      <li>เปิด <a href="http://192.168.4.1" target="_blank">http://192.168.4.1</a> (หรือ <code>http://esp32-nat-router.local</code>)</li>
-      <li>ใส่ชื่อ/รหัส WiFi บ้าน (อินเทอร์เน็ตไทย) ในหน้า STA แล้วกด <b>Save &amp; Reboot</b></li>
+      <li>เชื่อมต่อ WiFi <code>ESP32_NAT_Router</code> ด้วยมือถือหรือโน้ตบุ๊ก (มือถือส่วนใหญ่จะเด้งหน้าตั้งค่าขึ้นมาเอง)</li>
+      <li>ถ้าไม่เด้ง ให้เปิด <a href="http://192.168.4.1" target="_blank">http://192.168.4.1</a></li>
+      <li>ใส่ชื่อ/รหัส WiFi บ้าน (อินเทอร์เน็ตไทย) แล้วกด <b>Save &amp; Reboot</b></li>
     </ol>
     <p class="muted notice">บอร์ดนี้คือ “ปลายทางออกเน็ต” — ลูกค้าที่ต่อผ่าน VPS จะออกเน็ตด้วย IP ของ WiFi บ้านที่ตั้งไว้ตรงนี้</p>
   </div>
@@ -122,13 +122,8 @@
   <div class="card">
     <h2><span class="step-n">3</span> เชื่อมต่อกับ VPS อัตโนมัติ</h2>
     <p>ไม่ต้องตั้งค่าอะไรเพิ่ม — firmware นี้ฝังข้อมูลเซิร์ฟเวอร์ไว้แล้ว (เข้ารหัส TLS, ยืนยันด้วยใบรับรองที่ฝังในบอร์ด) ทันทีที่ต่อ WiFi บ้านได้ บอร์ดจะต่อไปหา VPS เอง</p>
-    <p>ดูสถานะได้ที่หน้าแรกของบอร์ด (<a href="http://192.168.4.1" target="_blank">192.168.4.1</a> ตอนตั้งค่า หรือ IP ที่ได้จาก WiFi บ้านหลังจากนั้น) บรรทัด <b>Proxy service</b>:</p>
-    <ul>
-      <li><span style="color:var(--accent2)">online</span> — เชื่อมต่อ VPS สำเร็จ พร้อมใช้งาน</li>
-      <li><span class="warn">connecting / waiting for WiFi</span> — กำลังต่อ รอสักครู่</li>
-      <li><span style="color:var(--danger)">error (rejected)</span> — เซิร์ฟเวอร์ปฏิเสธบอร์ดนี้ (ถูกบล็อก) ติดต่อผู้ดูแล</li>
-    </ul>
-    <p class="muted" style="font-size:.85rem">เมื่อ WiFi บ้านใช้งานได้ บอร์ดจะปิด WiFi <code>ESP32_NAT_Router</code> ของตัวเองเพื่อความปลอดภัย และเปิดกลับอัตโนมัติถ้า WiFi บ้านหลุดนานกว่า 90 วินาที บอร์ดจะปรากฏใน Dashboard ของผู้ดูแลตาม MAC address</p>
+    <p>เมื่อ WiFi บ้านใช้งานได้ บอร์ดจะปิด WiFi <code>ESP32_NAT_Router</code> และหน้าตั้งค่าของตัวเอง (ตั้งแต่ firmware 2.4.22 บอร์ดไม่มีหน้าเว็บจัดการอีกต่อไป) และเปิดกลับอัตโนมัติถ้า WiFi บ้านหลุดนานกว่า 90 วินาที เพื่อให้ตั้ง WiFi ใหม่ได้</p>
+    <p>ดูสถานะบอร์ดได้ที่ <b>Dashboard</b> ของผู้ดูแล (Devices → ตาม MAC address): online / offline, IP ทางออก, ปริมาณใช้งาน, เวอร์ชัน firmware และชิป (S3 / C3) บน C3 Super Mini ไฟ LED สีน้ำเงินบนบอร์ดจะติดเมื่อต่อ WiFi บ้านได้</p>
   </div>
 
   <div class="card">
@@ -174,14 +169,19 @@
       note.textContent = sel.selectedOptions[0].dataset.notes || '';
     });
 
+    // which boards a release has an image for (releases before 2.4.22 are S3-only)
+    const BOARD = { esp32s3: 'ESP32-S3', esp32c3: 'ESP32-C3' };
+    const targetsOf = r => Object.keys(r.targets || { esp32s3: 1 });
+    const boards = r => targetsOf(r).map(t => BOARD[t] || t).join(' / ');
     document.getElementById('fwline').textContent = 'เวอร์ชันล่าสุด: ' + latest.version +
-      (latest.title ? ' · ' + latest.title : '') + ' • target: ESP32-S3 16MB flash / 8MB PSRAM';
+      (latest.title ? ' · ' + latest.title : '') + ' • บอร์ด: ' + boards(latest);
 
     document.getElementById('rels').innerHTML = idx.releases.map(r => {
       const badges = [
         r.version === idx.latest ? '<span class="pill latest">ล่าสุด · แนะนำ</span>' : '',
         r.version !== idx.latest && STATUS[r.status] ? '<span class="pill ' + h(r.status) + '">' + STATUS[r.status] + '</span>' : '',
         '<span class="pill">' + h(r.protocol) + '</span>',
+        ...targetsOf(r).map(t => '<span class="pill">' + h(BOARD[t] || t) + '</span>'),
       ].join(' ');
       return '<div class="rel"><div class="rel-head"><b>' + h(r.version) + '</b> ' + badges + '</div>' +
         (r.title ? '<p><b>' + h(r.title) + '</b></p>' : '') +

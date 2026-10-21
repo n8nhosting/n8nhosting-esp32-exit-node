@@ -1,9 +1,17 @@
-# ESP32-S3 Exit-Node Proxy Platform
+# ESP32 Exit-Node Proxy Platform
 
 Rent out a home/office internet connection as a proxy with a **Thai exit IP**,
-using an **ESP32-S3** at home as the exit node and a **VPS** (GOST) as the
-customer-facing proxy. The ESP32 sits behind NAT and dials **out** to the VPS,
-so no port-forwarding at home is needed.
+using an **ESP32-S3 N16R8** or an **ESP32-C3 Super Mini** at home as the exit
+node and a **VPS** (GOST) as the customer-facing proxy. The ESP32 sits behind
+NAT and dials **out** to the VPS, so no port-forwarding at home is needed.
+
+| Board | Streams per link | Notes |
+|---|---|---|
+| ESP32-S3 N16R8 (16 MB flash, 8 MB PSRAM) | 40, 32 KB window | the original node; ~9–12 Mbps per board |
+| ESP32-C3 Super Mini (4 MB flash, no PSRAM) | 4, 8 KB window | cheaper node from firmware 2.4.22; single core, less RAM |
+
+Both boards run the same firmware tree (`firmware/`), built with a per-board
+sdkconfig overlay; the broker learns a board's limits from its HELLO.
 
 ```
  customer abroad                         VPS (Coolify)                         home
@@ -119,21 +127,29 @@ Ports to open on the VPS firewall: **8080** (customers' pool port, or your
 `PROXY_PORT`), **3131–3160** (slot ports, `3130+SLOT_COUNT` at most) and
 **7000** (your ESP32).
 
-## Flash & configure the ESP32-S3 (N16R8)
+## Flash & configure a board (ESP32-S3 N16R8 or ESP32-C3 Super Mini)
 
-Open `flash.<domain>` in Chrome/Edge: flash → join home WiFi (STA). That's it —
-the firmware carries the broker address, token and CA, so the device connects
-on its own (TLS), shows **Proxy service: online** on its status page, turns its
-setup AP off, and appears in the dashboard under **Devices** by MAC. Admins can
-block/allow a device or push a firmware update (**Update FW**) from there.
+Open `flash.<domain>` in Chrome/Edge: flash → join home WiFi (STA) on the
+board's one-page setup portal. That's it — the firmware carries the broker
+address, token and CA, so the device connects on its own (TLS), turns its setup
+AP and portal off, and appears in the dashboard under **Devices** by MAC with
+its chip. Admins can block/allow a device or push a firmware update (**Update
+FW**, which picks the image built for that board's chip) from there. Since
+2.4.22 the board has no management web UI; the dashboard and the serial
+console are the operator's tools, and the portal returns whenever the uplink is
+down for more than 90 s.
 
 Rebuild with your own secrets: copy `firmware/sdkconfig.prov.example` →
 `sdkconfig.prov`, fill in broker host + `POOL_TOKEN`, put your CA at
-`firmware/components/rproxy/broker_ca.pem`, run `firmware/build_s3n16r8.sh`,
-then archive it with `tools/fw_release.py add firmware/build_s3n16r8 --latest`.
-Never commit `sdkconfig.prov`. Every release stays available for rollback
-(flasher version picker, dashboard **Update FW**); see
-[docs/FIRMWARE_RELEASES.md](docs/FIRMWARE_RELEASES.md).
+`firmware/components/rproxy/broker_ca.pem`, run `firmware/build_s3n16r8.sh`
+and/or `firmware/build_c3mini.sh`, then archive each build with
+`tools/fw_release.py add firmware/build_s3n16r8` / `add firmware/build_c3mini`
+(one version, one image per chip) and promote with `tools/fw_release.py latest
+<version>`. Never commit `sdkconfig.prov`. Every release stays available for
+rollback (flasher version picker, dashboard **Update FW**); see
+[docs/FIRMWARE_RELEASES.md](docs/FIRMWARE_RELEASES.md). Flash a C3 from the
+command line with esptool's `--after watchdog_reset` (its USB-JTAG otherwise
+stays in download mode on Windows).
 
 ## Manage users / devices / billing
 

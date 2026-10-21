@@ -109,7 +109,9 @@ Every "growth" feature below is secondary to that.
 - **Subscription**: plan, status, current-period, renew flag, PSP references.
 - **Invoice**: line items, tax fields, paid/void.
 - **AbuseEvent**: user, signal, action, ts.
-- **Device**: + assigned_user, region/geo, uptime, ssid (built), firmware.
+- **Device**: + assigned_user, region/geo, uptime, ssid (built), firmware,
+  chip (`esp32s3` / `esp32c3`, from the firmware's HELLO since 2.4.22; the
+  broker refuses an OTA whose image target differs from it).
 - **Reseller**: parent of customers, markup, payout account.
 
 ## Explicitly out of scope / declined

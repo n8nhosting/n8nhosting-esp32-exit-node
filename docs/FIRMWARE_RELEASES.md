@@ -1,37 +1,53 @@
 # Firmware versions and rollback
 
 Every firmware release is kept, so any board can be moved to any version,
-older ones included.
+older ones included. Since 2.4.22 one version carries one image per board chip
+(**target**: `esp32s3` for the S3 N16R8, `esp32c3` for the C3 Super Mini).
 
 ```
-flasher/firmware/releases/<version>/   4 bins + manifest.json (one folder per release)
-flasher/firmware/releases.json         index: version, protocol, build time, sha256, notes
-flasher/firmware/*.bin                 the "latest" release (old OTA URL still works)
-flasher/manifest.json                  web flasher default = latest
+flasher/firmware/releases/<version>/<target>/   4 bins per target
+flasher/firmware/releases/<version>/manifest.json   ESP Web Tools: one build per target
+flasher/firmware/releases.json         index: version, protocol, build time, notes,
+                                       "targets": {<target>: {url, size, sha256, built}}
+                                       (+ url/size/sha256 of the esp32s3 image for old readers)
+flasher/firmware/*.bin                 the "latest" esp32s3 release (old OTA URL still works)
+flasher/firmware/esp32c3/*.bin         the "latest" esp32c3 release
+flasher/manifest.json                  web flasher default = latest, both chips
 ```
 
-The flasher page (`flash.<domain>`) has a version picker for USB flashing, and
-the dashboard's **Update FW** lists the same releases.
+Releases up to 2.4.21-mux1.4 keep their four bins at the version root; the
+tool reads them as `esp32s3` and never moves them.
+
+The flasher page (`flash.<domain>`) has a version picker for USB flashing and
+ESP Web Tools picks the build matching the chip it detects; the dashboard's
+**Update FW** lists the same releases and sends each board the image for its
+own chip (the broker refuses a mismatch).
 
 ## Cutting a release
 
 1. Bump `PROJECT_VER` in `firmware/CMakeLists.txt` (each release needs a new
-   version; the tool refuses to overwrite a release with a different image).
-2. Build: `firmware/build_s3n16r8.sh`.
-3. Archive it and, once tested on one board, make it the default:
+   version; the tool refuses to overwrite a target's image with a different one).
+2. Build each board: `firmware/build_s3n16r8.sh` and `firmware/build_c3mini.sh`.
+3. Archive each build (the target comes from the build directory's
+   `project_description.json`, the version from the image) and, once tested
+   on one board of each kind, make the version the default:
 
 ```
 tools/fw_release.py add firmware/build_s3n16r8 --status testing \
     --title "one-line headline (Thai)" --notes "what changed" --commit $(git rev-parse --short HEAD)
-tools/fw_release.py add firmware/build_s3n16r8 --latest      # same, and make it the default
+tools/fw_release.py add firmware/build_c3mini --status testing   # same version, second target
+tools/fw_release.py latest <version>                             # needs the esp32s3 image
 tools/fw_release.py list
 ```
 
    `--title` / `--notes` are what the flasher page's version list and the
-   dashboard picker show; `--status` is `testing`, `stable` (default) or
-   `legacy`, and promoting a release with `latest` makes it `stable`.
-   The version is read from the image itself, so a bin cannot be filed under
-   the wrong name. Commit `flasher/` and redeploy the flasher on Coolify.
+   dashboard picker show (given once per version; a second `add` keeps them);
+   `--status` is `testing`, `stable` (default) or `legacy`, and promoting a
+   release with `latest` makes it `stable`. Commit `flasher/` and redeploy
+   the flasher on Coolify.
+4. Flashing a C3 by hand: `esptool.py --chip esp32c3 --after watchdog_reset
+   write_flash ...` — the default `hard_reset` leaves a C3 Super Mini in ROM
+   download mode on Windows (the board looks dead until it is replugged).
 4. Optional: tag the commit, `git tag fw-<version> && git push origin fw-<version>`.
 
 ## Rolling back
