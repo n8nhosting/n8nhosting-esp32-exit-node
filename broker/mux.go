@@ -88,6 +88,8 @@ type muxSession struct {
 	br         *bufio.Reader
 	node       *node
 	maxStreams int
+	window     int // broker -> node credit per stream (the node's receive window, from HELLO win=)
+	frame      int // largest DATA payload the node accepts (HELLO frame=)
 
 	wmu sync.Mutex // serialises frame writes
 
@@ -123,11 +125,19 @@ type muxStream struct {
 	pending int    // bytes written to the client but not yet granted back
 }
 
-func newMuxSession(c net.Conn, br *bufio.Reader, n *node, maxStreams int) *muxSession {
+func newMuxSession(c net.Conn, br *bufio.Reader, n *node, o helloOpts) *muxSession {
+	maxStreams := o.MaxStreams
 	if maxStreams <= 0 {
 		maxStreams = 24
 	}
-	s := &muxSession{conn: c, br: br, node: n, maxStreams: maxStreams,
+	window, frame := o.Window, o.Frame
+	if window <= 0 {
+		window = helloDefaultWindow
+	}
+	if frame <= 0 || frame > muxMaxPayload {
+		frame = helloDefaultFrame
+	}
+	s := &muxSession{conn: c, br: br, node: n, maxStreams: maxStreams, window: window, frame: frame,
 		streams: map[uint32]*muxStream{}, done: make(chan struct{})}
 	s.lastRx.Store(time.Now().UnixNano())
 	return s
@@ -313,7 +323,7 @@ func (s *muxSession) open(host string, port int) (*muxStream, string) {
 		return nil, "link closed"
 	}
 	s.nextID++
-	st := &muxStream{id: s.nextID, s: s, openRes: make(chan string, 1), credit: muxWindow}
+	st := &muxStream{id: s.nextID, s: s, openRes: make(chan string, 1), credit: s.window}
 	st.cond = sync.NewCond(&st.mu)
 	st.touch()
 	s.streams[st.id] = st
@@ -463,7 +473,7 @@ func (st *muxStream) Write(p []byte) (int, error) {
 			st.mu.Unlock()
 			return written, errStreamReset
 		}
-		n := min(len(p), st.credit, muxMaxPayload)
+		n := min(len(p), st.credit, st.s.frame)
 		st.credit -= n
 		st.mu.Unlock()
 		if err := st.s.writeFrame(frameData, st.id, p[:n]); err != nil {

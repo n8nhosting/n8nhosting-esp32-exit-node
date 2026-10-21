@@ -220,9 +220,9 @@ func (b *broker) handlePoolConn(c net.Conn) {
 	// "mux1" as the 7th field selects the multiplexed link; an optional 8th
 	// field is the node's stream limit.
 	useMux := len(f) >= 7 && f[6] == "mux1"
-	maxStreams := 0
-	if useMux && len(f) >= 8 {
-		maxStreams, _ = strconv.Atoi(f[7])
+	opts := helloOpts{Window: helloDefaultWindow, Frame: helloDefaultFrame}
+	if useMux {
+		opts = parseHelloOpts(f) // max_streams and the optional win= frame= chip= tokens
 	}
 	mac, fw := "unknown", ""
 	var uptime uint64
@@ -242,14 +242,14 @@ func (b *broker) handlePoolConn(c net.Conn) {
 		}
 	}
 	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
-	n := b.reg.touch(mac, fw, remoteIP, uptime, ssid)
+	n := b.reg.touch(mac, fw, remoteIP, uptime, ssid, opts.Chip)
 	if n.isBlocked() {
 		c.Write([]byte("DENY blocked\n"))
 		c.Close()
 		return
 	}
 	if useMux {
-		b.serveMux(c, br, n, maxStreams)
+		b.serveMux(c, br, n, opts)
 		return
 	}
 	if _, err := c.Write([]byte("READY\n")); err != nil {
@@ -278,13 +278,13 @@ func (b *broker) handlePoolConn(c net.Conn) {
 }
 
 // serveMux runs a multiplexed node link until it drops.
-func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int) {
+func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	if _, err := c.Write([]byte("READY mux1\n")); err != nil {
 		c.Close()
 		return
 	}
 	c.SetReadDeadline(time.Time{})
-	s := newMuxSession(c, br, n, maxStreams)
+	s := newMuxSession(c, br, n, o)
 	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
 	s.pollOTA = func() string { return b.reg.takeOTA(n) }
 	if url := b.reg.takeOTA(n); url != "" {
@@ -295,7 +295,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, maxStreams int)
 	b.muxes = append(b.muxes, s)
 	b.muxMu.Unlock()
 	n.addMux(1)
-	log.Printf("mux link up: %s (max %d streams)", n.MAC, s.maxStreams)
+	log.Printf("mux link up: %s (max %d streams, win %d, frame %d, chip %q)", n.MAC, s.maxStreams, s.window, s.frame, n.Chip)
 
 	s.run()
 

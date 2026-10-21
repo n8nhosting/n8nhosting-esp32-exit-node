@@ -21,14 +21,41 @@ type tnStream struct {
 	cond    *sync.Cond
 	credit  int
 	pending int
+	// broker -> node accounting: bytes received and credit granted back, so a
+	// test can check the broker never exceeds the window the node advertised
+	recvTotal, grantTotal int
+}
+
+// tnStats is what a test node observed about the broker's behaviour.
+type tnStats struct {
+	mu          sync.Mutex
+	maxFrame    int // largest DATA payload the broker sent
+	maxInflight int // peak of bytes received minus credit granted back, any stream
+}
+
+func (s *tnStats) note(frame, inflight int) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.maxFrame = max(s.maxFrame, frame)
+	s.maxInflight = max(s.maxInflight, inflight)
+	s.mu.Unlock()
+}
+
+func (s *tnStats) get() (maxFrame, maxInflight int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.maxFrame, s.maxInflight
 }
 
 type testMuxNode struct {
-	c   net.Conn
-	wmu sync.Mutex
-	mu  sync.Mutex
-	st  map[uint32]*tnStream
-	ota chan string
+	c     net.Conn
+	wmu   sync.Mutex
+	mu    sync.Mutex
+	st    map[uint32]*tnStream
+	ota   chan string
+	stats *tnStats
 }
 
 func (n *testMuxNode) send(typ byte, sid uint32, p []byte) {
@@ -43,6 +70,12 @@ func (n *testMuxNode) send(typ byte, sid uint32, p []byte) {
 
 // runMuxNode keeps one mux link up (reconnecting) until stop closes.
 func runMuxNode(t *testing.T, poolAddr, token, mac string, allowLocal bool, maxStreams int, ota chan string, stop <-chan struct{}) {
+	runMuxNodeOpts(t, poolAddr, token, mac, allowLocal, maxStreams, "", nil, ota, stop)
+}
+
+// runMuxNodeOpts is runMuxNode with extra HELLO tokens (e.g. " win=8192
+// frame=4096 chip=esp32c3", leading space included) and optional stats.
+func runMuxNodeOpts(t *testing.T, poolAddr, token, mac string, allowLocal bool, maxStreams int, opts string, stats *tnStats, ota chan string, stop <-chan struct{}) {
 	for {
 		select {
 		case <-stop:
@@ -56,14 +89,14 @@ func runMuxNode(t *testing.T, poolAddr, token, mac string, allowLocal bool, maxS
 		}
 		go func() { <-stop; c.Close() }()
 		br := bufio.NewReader(c)
-		fmt.Fprintf(c, "HELLO %s %s test-fw 1 - mux1 %d\n", token, mac, maxStreams)
+		fmt.Fprintf(c, "HELLO %s %s test-fw 1 - mux1 %d%s\n", token, mac, maxStreams, opts)
 		line, err := br.ReadString('\n')
 		if err != nil || strings.TrimSpace(line) != "READY mux1" {
 			c.Close()
 			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		n := &testMuxNode{c: c, st: map[uint32]*tnStream{}, ota: ota}
+		n := &testMuxNode{c: c, st: map[uint32]*tnStream{}, ota: ota, stats: stats}
 		n.loop(br, allowLocal, maxStreams)
 		c.Close()
 	}
@@ -122,9 +155,12 @@ func (n *testMuxNode) loop(br *bufio.Reader, allowLocal bool, maxStreams int) {
 				s.tc.Write(p) // test node: blocking write is fine
 				s.mu.Lock()
 				s.pending += len(p)
+				s.recvTotal += len(p)
+				n.stats.note(len(p), s.recvTotal-s.grantTotal)
 				g := 0
 				if s.pending >= muxGrantAt {
 					g, s.pending = s.pending, 0
+					s.grantTotal += g
 				}
 				s.mu.Unlock()
 				if g > 0 {
@@ -209,15 +245,90 @@ func (n *testMuxNode) dial(sid uint32, req string, allowLocal bool) {
 // ---- tests ---------------------------------------------------------------
 
 func spinMuxBroker(t *testing.T, maxStreams int) (b *broker, poolAddr, socksAddr string, stop func()) {
+	return spinMuxBrokerOpts(t, maxStreams, "", nil)
+}
+
+// spinMuxBrokerOpts is spinMuxBroker whose node sends extra HELLO tokens and
+// records what the broker did into stats.
+func spinMuxBrokerOpts(t *testing.T, maxStreams int, opts string, stats *tnStats) (b *broker, poolAddr, socksAddr string, stop func()) {
 	b = newBroker(config{token: "tok", dialWait: 2 * time.Second}, 64)
 	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	socksLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	go b.servePool(poolLn)
 	go b.serveSocks(socksLn)
 	stopCh := make(chan struct{})
-	go runMuxNode(t, poolLn.Addr().String(), "tok", "aa:bb:cc:dd:ee:50", true, maxStreams, nil, stopCh)
+	go runMuxNodeOpts(t, poolLn.Addr().String(), "tok", "aa:bb:cc:dd:ee:50", true, maxStreams, opts, stats, nil, stopCh)
 	waitFor(t, func() bool { return b.muxCount() == 1 })
 	return b, poolLn.Addr().String(), socksLn.Addr().String(), func() { close(stopCh); poolLn.Close(); socksLn.Close() }
+}
+
+// firstMux is the broker's only mux session (tests spin exactly one node).
+func firstMux(t *testing.T, b *broker) *muxSession {
+	t.Helper()
+	b.muxMu.Lock()
+	defer b.muxMu.Unlock()
+	if len(b.muxes) != 1 {
+		t.Fatalf("want 1 mux link, have %d", len(b.muxes))
+	}
+	return b.muxes[0]
+}
+
+// A board without PSRAM advertises win=8192 frame=4096: the broker must size
+// that session accordingly and never send a bigger frame or more unacknowledged
+// bytes than that, while a 1 MiB body still arrives intact.
+func TestMuxSmallWindowNodeNeverOverrun(t *testing.T) {
+	oh, op, oclose := originServer(t)
+	defer oclose()
+	stats := &tnStats{}
+	b, _, socks, stop := spinMuxBrokerOpts(t, 4, " win=8192 frame=4096 chip=esp32c3", stats)
+	defer stop()
+
+	s := firstMux(t, b)
+	if s.window != 8192 || s.frame != 4096 || s.maxStreams != 4 {
+		t.Fatalf("session sized wrong: window %d frame %d max %d", s.window, s.frame, s.maxStreams)
+	}
+	if n := b.reg.list(); len(n) != 1 || n[0].Chip != "esp32c3" {
+		t.Fatalf("chip not recorded: %+v", n)
+	}
+	big, err := fetchVia(socks, oh, op, "/big")
+	if err != nil || strings.Count(big, "A") != 1<<20 {
+		t.Fatalf("1 MiB body over a small-window link: err=%v got %d A's", err, strings.Count(big, "A"))
+	}
+	// the GET only carries bulk node->broker; push 256 KiB broker->node too
+	resp, err := postVia(socks, oh, op, "/echo-len", []byte(strings.Repeat("B", 256<<10)))
+	if err != nil || !strings.Contains(resp, "LEN=262144") {
+		t.Fatalf("256 KiB upload over a small-window link: err=%v resp=%q", err, resp)
+	}
+	maxFrame, maxInflight := stats.get()
+	if maxInflight < 4096 {
+		t.Fatalf("test did not exercise the broker->node window (peak in flight %d)", maxInflight)
+	}
+	if maxFrame > 4096 {
+		t.Errorf("broker sent a %d-byte DATA frame to a frame=4096 node", maxFrame)
+	}
+	if maxInflight > 8192 {
+		t.Errorf("broker had %d bytes in flight to a win=8192 node", maxInflight)
+	}
+}
+
+// Firmware that predates the tokens (2.4.21-mux1.x) keeps today's sizes.
+func TestMuxLegacyHelloDefaults(t *testing.T) {
+	oh, op, oclose := originServer(t)
+	defer oclose()
+	b, _, socks, stop := spinMuxBroker(t, 24)
+	defer stop()
+
+	s := firstMux(t, b)
+	if s.window != 32768 || s.frame != 16384 {
+		t.Fatalf("legacy session sized wrong: window %d frame %d", s.window, s.frame)
+	}
+	if n := b.reg.list(); len(n) != 1 || n[0].Chip != "" {
+		t.Fatalf("legacy node must have no chip: %+v", n)
+	}
+	big, err := fetchVia(socks, oh, op, "/big")
+	if err != nil || strings.Count(big, "A") != 1<<20 {
+		t.Fatalf("1 MiB body over a legacy link: err=%v", err)
+	}
 }
 
 func waitFor(t *testing.T, cond func() bool) {
@@ -374,7 +485,7 @@ func TestMuxOTAAndBlock(t *testing.T) {
 	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
 
 	mac := "aa:bb:cc:dd:ee:52"
-	b.reg.touch(mac, "", "", 0, "")
+	b.reg.touch(mac, "", "", 0, "", "")
 	b.reg.setOTA(mac, "https://flash.example/fw.bin", "")
 	ota := make(chan string, 1)
 	go runMuxNode(t, poolLn.Addr().String(), "tok", mac, true, 24, ota, stop)

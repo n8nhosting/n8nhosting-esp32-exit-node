@@ -159,7 +159,7 @@ func TestSlotOfflineIsRefusedNotRerouted(t *testing.T) {
 	defer oclose()
 	const macA, macGone = "aa:bb:cc:dd:ee:72", "aa:bb:cc:dd:ee:99"
 	b, socks := spinSlotBroker(t, macA)
-	b.reg.touch(macGone, "fw", "1.2.3.4", 0, "") // seen before, no link now
+	b.reg.touch(macGone, "fw", "1.2.3.4", 0, "", "") // seen before, no link now
 	if err := b.reg.setSlot(macGone, 2); err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestPoolFlagEndpointAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := newBroker(config{token: "tok", nodesFile: file}, 8)
-	b.reg.touch(macB, "fw", "", 0, "")
+	b.reg.touch(macB, "fw", "", 0, "", "")
 	pools := func() map[string]any {
 		t.Helper()
 		rec := httptest.NewRecorder()
@@ -466,7 +466,7 @@ func TestRegistryPersistsSlotPoolAndOTAStatus(t *testing.T) {
 	file := t.TempDir() + "/nodes.json"
 	const mac = "aa:bb:cc:dd:ee:7b"
 	r := newRegistry(file)
-	r.touch(mac, "1.0", "1.2.3.4", 500, "")
+	r.touch(mac, "1.0", "1.2.3.4", 500, "", "")
 	pool := false
 	if err := r.setSlotPool(mac, 2, &pool); err != nil {
 		t.Fatal(err)
@@ -483,7 +483,7 @@ func TestRegistryPersistsSlotPoolAndOTAStatus(t *testing.T) {
 		t.Fatalf("not restored: %+v", n)
 	}
 	// no target version: any firmware change counts as done
-	r2.touch(mac, "1.1", "1.2.3.4", 5, "")
+	r2.touch(mac, "1.1", "1.2.3.4", 5, "", "")
 	if n.OTAStatus != "ok" {
 		t.Fatalf("status %q, want ok", n.OTAStatus)
 	}
@@ -498,8 +498,8 @@ func TestSlotEndpointAndPersistence(t *testing.T) {
 	file := t.TempDir() + "/nodes.json"
 	b := newBroker(config{token: "tok", nodesFile: file}, 8)
 	const macA, macB = "aa:bb:cc:dd:ee:74", "aa:bb:cc:dd:ee:75"
-	b.reg.touch(macA, "fw", "", 0, "")
-	b.reg.touch(macB, "fw", "", 0, "")
+	b.reg.touch(macA, "fw", "", 0, "", "")
+	b.reg.touch(macB, "fw", "", 0, "", "")
 	h := b.statusMux()
 	post := func(mac, body string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()

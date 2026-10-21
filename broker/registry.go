@@ -21,6 +21,7 @@ type node struct {
 	LastSeen   string `json:"last_seen"`
 	UptimeSec  uint64 `json:"uptime_sec"`
 	SSID       string `json:"ssid,omitempty"`
+	Chip       string `json:"chip,omitempty"` // esp32s3 / esp32c3 from HELLO chip=; "" for firmware that predates it
 	Blocked    bool   `json:"blocked"`
 	Note       string `json:"note,omitempty"`
 	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
@@ -73,7 +74,7 @@ func (n *node) online() bool {
 // JSON encoder never reads fields that relays are updating.
 func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
-		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note,
+		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note,
 		PendingOTA: n.PendingOTA, Slot: n.Slot, Pool: n.Pool,
 		OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt,
 		lastSeenT: n.lastSeenT,
@@ -100,7 +101,7 @@ func newRegistry(file string) *registry {
 }
 
 // touch records a HELLO from mac and returns its node record.
-func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid string) *node {
+func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *node {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
@@ -122,6 +123,9 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid string) *node {
 	n.UptimeSec = uptime
 	if ssid != "" {
 		n.SSID = ssid
+	}
+	if chip != "" {
+		n.Chip = chip
 	}
 	if n.OTAStatus == "sent" {
 		done := n.Firmware != n.otaFromFW

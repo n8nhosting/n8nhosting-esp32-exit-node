@@ -179,6 +179,24 @@ func fetchVia(proxy, host string, port int, path string) (string, error) {
 	return string(data), nil
 }
 
+// postVia sends body to path through the proxy (customer -> broker -> node ->
+// origin, i.e. the broker->node direction carries the bulk) and returns the
+// raw response.
+func postVia(proxy, host string, port int, path string, body []byte) (string, error) {
+	conn, err := socks5Connect(proxy, host, port)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	fmt.Fprintf(conn, "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", path, host, len(body))
+	if _, err := conn.Write(body); err != nil {
+		return "", err
+	}
+	conn.SetReadDeadline(time.Now().Add(15 * time.Second))
+	data, _ := io.ReadAll(conn)
+	return string(data), nil
+}
+
 func originServer(t *testing.T) (host string, port int, close func()) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "HELLO-ORIGIN") })
@@ -186,6 +204,11 @@ func originServer(t *testing.T) (host string, port int, close func()) {
 	mux.HandleFunc("/big", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", strconv.Itoa(len(big))) // avoid chunked encoding
 		fmt.Fprint(w, big)
+	})
+	// echoes the number of body bytes received, e.g. "LEN=262144"
+	mux.HandleFunc("/echo-len", func(w http.ResponseWriter, r *http.Request) {
+		n, _ := io.Copy(io.Discard, r.Body)
+		fmt.Fprintf(w, "LEN=%d", n)
 	})
 	srv := httptest.NewServer(mux)
 	u := strings.TrimPrefix(srv.URL, "http://")
@@ -358,7 +381,7 @@ func TestBlockedNodeIsRefused(t *testing.T) {
 	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
 
 	// pre-block the MAC, then let it try to join
-	b.reg.touch("de:ad:be:ef:00:01", "", "", 0, "")
+	b.reg.touch("de:ad:be:ef:00:01", "", "", 0, "", "")
 	b.reg.setBlocked("de:ad:be:ef:00:01", true)
 	go runNodeMAC(t, poolLn.Addr().String(), "tok", "de:ad:be:ef:00:01", true, false, stop)
 	time.Sleep(400 * time.Millisecond)
@@ -377,7 +400,7 @@ func TestBlockedNodeIsRefused(t *testing.T) {
 func TestRegistryPersistence(t *testing.T) {
 	f := t.TempDir() + "/nodes.json"
 	r := newRegistry(f)
-	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4", 0, "")
+	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4", 0, "", "")
 	r.setBlocked("11:22:33:44:55:66", true)
 	r2 := newRegistry(f)
 	l := r2.list()
@@ -393,7 +416,7 @@ func TestOTACommandDelivered(t *testing.T) {
 	defer poolLn.Close()
 
 	mac := "0a:0b:0c:0d:0e:0f"
-	b.reg.touch(mac, "", "", 0, "")
+	b.reg.touch(mac, "", "", 0, "", "")
 	b.reg.setOTA(mac, "https://flash.example/fw.bin", "")
 
 	c, _ := net.Dial("tcp", poolLn.Addr().String())
@@ -439,7 +462,7 @@ func TestNodeReportsUptimeAndSSID(t *testing.T) {
 func TestOTAStatusTracking(t *testing.T) {
 	r := newRegistry("")
 	mac := "aa:bb:cc:00:00:01"
-	r.touch(mac, "1.0", "1.2.3.4", 500, "")
+	r.touch(mac, "1.0", "1.2.3.4", 500, "", "")
 	if !r.setOTA(mac, "https://flash.example/2.0.bin", "2.0") {
 		t.Fatal("setOTA")
 	}
@@ -451,12 +474,12 @@ func TestOTAStatusTracking(t *testing.T) {
 		t.Fatalf("take: %q %q", u, n.OTAStatus)
 	}
 	// still downloading on the old firmware, no reboot yet: stays "sent"
-	r.touch(mac, "1.0", "1.2.3.4", 520, "")
+	r.touch(mac, "1.0", "1.2.3.4", 520, "", "")
 	if n.OTAStatus != "sent" {
 		t.Fatalf("status %q, want sent", n.OTAStatus)
 	}
 	// came back after a reboot on the new firmware
-	r.touch(mac, "2.0", "1.2.3.4", 8, "")
+	r.touch(mac, "2.0", "1.2.3.4", 8, "", "")
 	if n.OTAStatus != "ok" {
 		t.Fatalf("status %q, want ok", n.OTAStatus)
 	}
@@ -464,8 +487,8 @@ func TestOTAStatusTracking(t *testing.T) {
 	// next update: the board reboots but is back on 2.0 (image rolled back)
 	r.setOTA(mac, "https://flash.example/3.0.bin", "3.0")
 	r.takeOTA(n)
-	r.touch(mac, "2.0", "1.2.3.4", 60, "")
-	r.touch(mac, "2.0", "1.2.3.4", 5, "")
+	r.touch(mac, "2.0", "1.2.3.4", 60, "", "")
+	r.touch(mac, "2.0", "1.2.3.4", 5, "", "")
 	if n.OTAStatus != "failed" {
 		t.Fatalf("status %q, want failed", n.OTAStatus)
 	}
