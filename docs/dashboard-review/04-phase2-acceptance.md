@@ -170,3 +170,47 @@ The existing firmware release index and latest/stable selections have not change
   `production-deployment-2026-10-22.jpg`, `production-overview-2026-10-22.jpg`,
   `production-devices-2026-10-22.jpg`, and
   `production-devices-mobile-2026-10-22.jpg`.
+
+## Device Settings / Assign / flasher follow-up (2026-10-22)
+
+- Device Settings exposes `capacity_mbps` (finite numeric 0–100000 Mbps,
+  omission keeps, zero resets unmeasured). Manual overrides clear automated
+  measurement metadata and return `capacity_source: manual`; ordinary tests
+  return `measured`, zero returns `unmeasured`. Existing users are not removed
+  when capacity is lowered. Seat admission and exit-IP grouping remain unchanged.
+- Unnamed boards display `Board-XXXX` from the last four uppercase MAC hex
+  digits, including in alerts. Existing operator names and stored records are
+  retained. This is a display fallback, not a bulk database rewrite.
+- All ten device detail sections remain in the 640px/full-mobile drawer, with
+  keyboard-accessible tabs and no visible scrollbar. Overflow remains reachable
+  by touch, wheel and keyboard in short/zoomed windows or long notes/history.
+  Activity pagination exposes all 50 fetched events instead of truncating at 12.
+- Device editor tabs retain General, Location, WiFi and Notes fields. Assign is
+  a primary Devices action; its board-first dialog fixes the clicked MAC and
+  supports slot-only setup before measurement, or optional user assignment.
+  Partial user-assignment failures explicitly retain the saved slot. Closing
+  during a delayed slot save does not submit the cancelled user assignment or
+  mutate a newer modal. Controls are locked while each save is pending.
+- Keyed refresh patches each unfocused cell independently, preserving the
+  focused action/menu while immediately displaying saved names and capacity.
+- Flasher matches admin tokens, typography and controls. All eight release
+  entries, setup text, manifest selection, query links and ESP Web Tools scripts
+  remain intact; no firmware images or release selections were changed.
+
+Local verification:
+
+- Both Go modules: `go test ./...` and `go vet ./...` pass. New backend tests
+  cover manual override validation/persistence/reset, concurrent measurement,
+  same-IP admission, default names and safe events; targeted race checks pass.
+- `tools/dashboard_settings_smoke.cjs`: seven functional groups pass against
+  real local Go handlers and isolated SQLite, with fake broker/geo plus explicit
+  simulated 409 and 50-event responses. Checks cover desktop 1440/1024 and mobile
+  375x812, keyboard tabs/focus, 10-second refresh, save/cancel races and overflow.
+- Flasher: 1440x900, 800x900 and 375x812 pass with the real custom element loaded;
+  seven contrast pairs pass 4.5:1, release tests pass 10/10, no page exceptions.
+- Impeccable detector returns `[]` for both changed UI files. Evidence is in
+  gitignored `output/playwright/settings-acceptance.json`, `settings-*.png`,
+  `flasher-acceptance.json` and `flasher-*-viewport.png`.
+
+These checks are local verification. Production rollout of this follow-up is
+recorded separately after deployment.

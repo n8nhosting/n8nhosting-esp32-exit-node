@@ -166,6 +166,36 @@
   .isp-brand[data-isp="true"] .isp-logo,.isp-brand[data-isp="nt"] .isp-logo{background:#fff;border-radius:4px;padding:3px}
   .health-hint{max-width:230px;font-size:13px;line-height:1.6;margin-top:4px;color:var(--muted)}
   .health-hint button{margin-top:6px}
+  .row-actions{flex-wrap:wrap;white-space:normal}.row-actions .assign-board{min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap}
+  .drawer-sheet{min-height:0;overflow:hidden}.drawer-head{flex:none;padding:20px 24px}.drawer-head .identity{overflow-wrap:anywhere}
+  .drawer-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+  .drawer-tabs button,.editor-tabs button{background:transparent;color:var(--muted);font-size:12px;font-weight:500;min-height:44px;padding:8px 4px;border-radius:8px}
+  .drawer-tabs button[aria-selected="true"],.editor-tabs button[aria-selected="true"]{background:#303852;color:var(--fg)}
+  .drawer-tabs button:hover,.editor-tabs button:hover{background:var(--panel2);color:var(--fg)}
+  .drawer-body{flex:1;min-height:0;padding:24px;overflow-x:hidden;overflow-y:auto;scrollbar-width:none}
+  .drawer-body::-webkit-scrollbar,#dmodal .modal::-webkit-scrollbar{display:none}
+  .drawer-section{border:0;margin:0;padding:0;min-width:0}.drawer-section[hidden]{display:none}.drawer-section h3{font-size:16px;margin-bottom:18px}
+  .drawer-footer{padding:12px 24px;background:var(--panel);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);flex:none}
+  .drawer-footer button{min-height:44px}.drawer-body:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px;color:var(--muted);font-size:12px}.pager button{min-height:44px;padding:8px 12px}
+  .editor-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;padding-bottom:8px}.editor-tabs button{flex:1}
+  #dmodal .modal{width:520px;scrollbar-width:none}#dmodal .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  #dmodal .editor-panel[hidden]{display:none}#dmodal .subline{font-size:12px}#dmodal .right{margin-top:18px}
+  .assign-summary{margin:0 0 20px;color:var(--muted);font-size:13px}.assign-summary strong{color:var(--fg);font-weight:500}.assign-summary .pill{margin-top:8px}
+  .assignment-help{font-size:13px;color:var(--muted);margin:12px 0 18px}.assignment-help a{cursor:pointer}
+  @media(min-width:721px){.fleet-table{table-layout:fixed}.fleet-table th,.fleet-table td{padding-left:10px;padding-right:10px;overflow-wrap:anywhere}.fleet-table th:nth-child(1){width:20%}.fleet-table th:nth-child(2){width:13%}.fleet-table th:nth-child(3){width:13%}.fleet-table th:nth-child(4){width:15%}.fleet-table th:nth-child(5){width:19%}.fleet-table th:nth-child(6){width:11%}.fleet-table th:nth-child(7){width:9%}.fleet-table td.device-cell,.fleet-table td.health{min-width:0}.fleet-table .meter{grid-template-columns:28px minmax(20px,40px) minmax(0,1fr);white-space:normal}.fleet-table .health-hint{font-size:12px}.fleet-table .row-actions{flex-direction:column;align-items:stretch}.fleet-table .row-actions .more{align-self:flex-end}.fleet-table .device-id{gap:6px}.fleet-table .slot-tag{width:26px;height:30px}}
+  @media(min-width:721px) and (max-width:1100px){.fleet-table .row-actions .assign-board{padding:8px 4px;font-size:12px}.fleet-table th:nth-child(1){width:19%}.fleet-table th:nth-child(5){width:18%}.fleet-table th:nth-child(7){width:11%}}
+  @media(min-width:721px) and (max-width:1180px){
+    .fleet-table,.fleet-table tbody{display:block;width:100%}.fleet-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+    .fleet-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr);gap:16px 20px;padding:20px;background:var(--panel);border-radius:12px;margin-bottom:12px}
+    .fleet-table td{display:block;min-width:0;background:transparent!important;padding:0;border-radius:0!important;box-shadow:none!important}
+    .fleet-table td:nth-child(1){grid-column:1;grid-row:1}.fleet-table td:nth-child(2){grid-column:2;grid-row:1}.fleet-table td:nth-child(3){grid-column:1;grid-row:2}.fleet-table td:nth-child(4){grid-column:2;grid-row:2}.fleet-table td:nth-child(5){grid-column:3;grid-row:1/3}.fleet-table td:nth-child(6){grid-column:1/3;grid-row:3}.fleet-table td:nth-child(7){grid-column:3;grid-row:3;align-self:end}
+    .fleet-table td:nth-child(3)::before,.fleet-table td:nth-child(4)::before,.fleet-table td:nth-child(5)::before,.fleet-table td:nth-child(6)::before{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
+    .fleet-table td:nth-child(3)::before{content:'Seats / capacity'}.fleet-table td:nth-child(4)::before{content:'Location / ISP'}.fleet-table td:nth-child(5)::before{content:'Health'}.fleet-table td:nth-child(6)::before{content:'Firmware'}
+    .fleet-table .row-actions{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}.fleet-table .row-actions .assign-board{padding:8px 14px;font-size:13px}.fleet-table .meter{grid-template-columns:30px 48px minmax(0,1fr);white-space:nowrap}.fleet-table .score{white-space:nowrap}.fleet-table .health-hint{max-width:none}.fleet-table .device-id{gap:8px}
+  }
+  @media(min-width:721px) and (max-width:900px){.fleet-table tbody tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.fleet-table td:nth-child(5){grid-column:1;grid-row:3}.fleet-table td:nth-child(6){grid-column:2;grid-row:3}.fleet-table td:nth-child(7){grid-column:1/-1;grid-row:4}.fleet-table .row-actions{justify-content:flex-start}}
+  @media(max-width:720px){.drawer-head{padding:16px}.drawer-head h2{font-size:18px}.drawer-tabs{padding:8px 12px;gap:2px}.drawer-tabs button{font-size:11px}.drawer-body{padding:20px 16px}.drawer-footer{padding:10px 16px}.fleet-table tbody tr{grid-template-columns:minmax(0,1fr) minmax(96px,auto)}.fleet-table td:nth-child(7){grid-column:1/-1;grid-row:3}.fleet-table td:nth-child(7) .row-actions{justify-content:space-between}.fleet-table .assign-board{min-width:130px}.fleet-table td:nth-child(3){grid-column:1/-1}.row-actions .assign-board{min-height:44px}#dmodal .field-grid{gap:0 10px}.drawer-footer .subline{max-width:190px}}
 </style>
 </head>
 <body>
@@ -221,25 +251,38 @@
 <div class="modal-bg" id="dmodal">
   <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="dmTitle">
     <h3 id="dmTitle">Edit device</h3>
+    <div class="editor-tabs" role="tablist" aria-label="Device settings"><button type="button" role="tab" id="dmTabGeneral" data-editor-tab="General" aria-controls="dmGeneral" aria-selected="true">General</button><button type="button" role="tab" id="dmTabLocation" data-editor-tab="Location" aria-controls="dmLocation" aria-selected="false" tabindex="-1">Location</button><button type="button" role="tab" id="dmTabWiFi" data-editor-tab="WiFi" aria-controls="dmWiFi" aria-selected="false" tabindex="-1">WiFi</button><button type="button" role="tab" id="dmTabNotes" data-editor-tab="Notes" aria-controls="dmNotesPanel" aria-selected="false" tabindex="-1">Notes</button></div>
+    <section class="editor-panel" id="dmGeneral" role="tabpanel" aria-labelledby="dmTabGeneral">
     <div class="field"><label for="dmName">Name</label><input id="dmName" autocomplete="off" /></div>
     <div class="field"><label for="dmKind">Kind</label>
       <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select><p class="subline">Dedicated reserves the whole exit IP for one customer. Shared seats follow measured capacity.</p></div>
     <div class="field"><label for="dmSlot">Slot <span class="muted">(blank = none, 1–30)</span></label><input id="dmSlot" type="number" step="1" min="1" max="30" inputmode="numeric" /></div>
     <div class="muted" id="dmPort" style="margin:-6px 0 12px;font-size:.78rem"></div>
+    <div class="field"><label for="dmCapacity">Measured speed (Mbps)</label><input id="dmCapacity" type="number" min="0" max="100000" step="any" inputmode="decimal" aria-describedby="dmCapacityHint" /><p id="dmCapacityHint" class="subline">Set capacity manually. 0 means unmeasured. This changes seat admission, not the board's CPU or WiFi speed.</p></div>
+    </section>
+    <section class="editor-panel" id="dmLocation" role="tabpanel" aria-labelledby="dmTabLocation" hidden>
+    <div class="field-grid">
     <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
     <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
+    </div>
     <div class="muted" id="dmCoordHint" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="toolbar"><button type="button" class="sec" id="dmGeo">Use geo-IP position</button><button type="button" class="sec" id="dmClearPos">Clear position</button></div>
     <div class="field"><label for="dmMaps">Google Maps link <span class="muted" id="dmMapsHint"></span></label>
       <div style="display:flex;gap:6px"><input id="dmMaps" autocomplete="off" placeholder="https://maps.app.goo.gl/…" style="flex:1;min-width:0" /><button type="button" class="sec" id="dmMapsGo"></button></div></div>
     <div class="muted" id="dmMapsMsg" style="margin:-6px 0 12px;font-size:.78rem"></div>
+    </section>
+    <section class="editor-panel" id="dmWiFi" role="tabpanel" aria-labelledby="dmTabWiFi" hidden>
     <div class="field"><label for="dmWifi">WiFi password <span class="muted" id="dmWifiHint"></span></label><input id="dmWifi" type="password" autocomplete="new-password" /></div>
     <div class="field inline"><label for="dmWifiClear"><input id="dmWifiClear" type="checkbox" /> <span id="dmWifiClearLbl"></span></label></div>
+    </section>
+    <section class="editor-panel" id="dmNotesPanel" role="tabpanel" aria-labelledby="dmTabNotes" hidden>
     <div class="field"><label for="dmNotes">Notes</label><textarea id="dmNotes" rows="3"></textarea></div>
+    </section>
     <div class="err" id="dmErr" role="alert"></div>
     <div class="right"><button type="button" class="sec" id="dmCancel"></button> <button type="button" id="dmSave"></button></div>
   </div>
 </div>
+<div class="modal-bg" id="bamodal"><div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="baTitle"><h3 id="baTitle">Assign board</h3><div id="baSummary" class="assign-summary"></div><div class="field"><label for="baSlot">Proxy slot</label><select id="baSlot"></select><p class="subline" id="baPort"></p></div><div class="field"><label for="baUser">User <span class="muted">(optional)</span></label><select id="baUser"><option value="">Set up slot only</option></select></div><p class="assignment-help" id="baHint"></p><div class="err" id="baErr" role="alert"></div><div class="right"><button type="button" class="sec" id="baCancel">Cancel</button><button type="button" id="baSave">Save assignment</button></div></div></div>
 
 <!-- firmware update modal -->
 <!-- connection details: what the operator sends to a customer, copyable per field or as one message -->
@@ -285,7 +328,7 @@
   </div>
 </div>
 
-<div id="ddrawer" hidden><section class="drawer-sheet" role="dialog" aria-modal="true" aria-labelledby="ddTitle"><header class="drawer-head"><div class="identity"><h2 id="ddTitle">Device</h2><div id="ddIdentity" class="subline mono"></div></div><button type="button" class="sec" id="ddEdit">Edit</button><button type="button" class="sec" id="ddClose" aria-label="Close device details">✕</button></header><div class="drawer-body" id="ddBody"></div></section></div>
+<div id="ddrawer" hidden><section class="drawer-sheet" role="dialog" aria-modal="true" aria-labelledby="ddTitle"><header class="drawer-head"><div class="identity"><h2 id="ddTitle">Device</h2><div id="ddIdentity" class="subline mono"></div></div><button type="button" class="sec" id="ddEdit">Settings</button><button type="button" class="sec" id="ddClose" aria-label="Close device details">✕</button></header><div class="drawer-tabs" id="ddTabs" role="tablist" aria-label="Device details"></div><div class="drawer-body" id="ddBody" tabindex="0"></div><footer class="drawer-footer"><span class="subline">Proxy slot &amp; user assignment</span><button type="button" id="ddAssign">Assign</button></footer></section></div>
 <script>
 const i18n = {
   name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
@@ -336,6 +379,8 @@ function fmtAgo(iso){
   return Math.floor(m/1440)+' '+T('dAgo');
 }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function boardName(d){return d.name||'Board-'+String(d.mac||'').replace(/[^a-f0-9]/gi,'').slice(-4).toUpperCase();}
+function capacityLabel(d){return d.capacity_mbps>0?esc(d.capacity_mbps)+' Mbps'+(d.capacity_source==='manual'?' · manual':''):esc(T('unmeasured'));}
 
 /* ---- auth ---- */
 $('#loginBtn').onclick = async ()=>{
@@ -427,7 +472,7 @@ function tableToolbar(kind){return `<div class="toolbar"><input type="search" id
 function patchRows(kind,items,markup){
   const table=$('#'+(kind==='devices'?'dtbl':'utbl')+' tbody');if(!table)return;const keyOf=x=>kind==='devices'?x.mac:x.username,existing=new Map([...table.children].map(r=>[r.dataset.key,r])),query=filters[kind].toLocaleLowerCase();
   const list=items.slice().sort((a,b)=>{const av=sorts[kind]==='status'?(a.status||''):sorts[kind]==='expiry'?(a.next_expiry||a.expires_at||'9999'):(a.name||a.username||a.mac),bv=sorts[kind]==='status'?(b.status||''):sorts[kind]==='expiry'?(b.next_expiry||b.expires_at||'9999'):(b.name||b.username||b.mac);return String(av).localeCompare(String(bv));});let visible=0;
-  for(const item of list){const key=keyOf(item),hay=JSON.stringify({...item,stats:undefined,health:undefined}).toLocaleLowerCase();let row=existing.get(key);existing.delete(key);const html=markup(item);if(!row){row=document.createElement('tr');row.dataset.key=key;row.innerHTML=html;}else if(!row.contains(document.activeElement)&&!(menuOpener&&row.contains(menuOpener))){const tmp=document.createElement('tr');tmp.innerHTML=html;[...tmp.children].forEach((cell,i)=>{if(row.children[i]&&row.children[i].innerHTML!==cell.innerHTML)row.children[i].innerHTML=cell.innerHTML;});}
+  for(const item of list){const key=keyOf(item),hay=JSON.stringify({...item,stats:undefined,health:undefined}).toLocaleLowerCase();let row=existing.get(key);existing.delete(key);const html=markup(item);if(!row){row=document.createElement('tr');row.dataset.key=key;row.innerHTML=html;}else{const tmp=document.createElement('tr');tmp.innerHTML=html;[...tmp.children].forEach((cell,i)=>{const current=row.children[i];if(current&&!current.contains(document.activeElement)&&!(menuOpener&&current.contains(menuOpener))&&current.innerHTML!==cell.innerHTML)current.innerHTML=cell.innerHTML;});}
     row.dataset.status=item.status||'';row.hidden=!!query&&!hay.includes(query);if(!row.hidden)visible++;
     if(!row.isConnected)table.appendChild(row);
   }
@@ -589,6 +634,7 @@ let assignUser=null, assignSel=null, assignBoards=[];
 function pickReason(d, username){
   const users=d.users||[];
   if(d.blocked) return T('reasonBlocked');
+  if(d.status==='updating')return 'Firmware update in progress';
   if(!(d.slot>0)) return T('reasonNoSlot');
   if(d.kind==='dedicated'){ if(users.length && !users.includes(username)) return T('reasonOwned'); }
   else {
@@ -643,6 +689,37 @@ function renderAssign(){
   });
 }
 function closeAssign(){ $('#amodal').style.display='none'; $('#app').inert=false; assignUser=null; }
+/* Board-first assignment keeps the clicked board fixed; slot setup can be saved
+   before a capacity measurement, without assigning a customer prematurely. */
+let boardAssign=null,boardAssignOpener=null,boardAssignUsers=[],boardAssignBoards=[],boardAssignRequest=0,boardAssignSavingRequest=0;
+async function openBoardAssign(mac,opener){
+  const request=++boardAssignRequest;boardAssignOpener=opener||document.activeElement;boardAssign=null;
+  $('#baTitle').textContent='Assign '+boardName(window._devs?.[mac]||{mac});$('#baSummary').textContent='Loading current board and users…';$('#baErr').textContent='';$('#baHint').textContent='';$('#baSlot').innerHTML='';$('#baUser').innerHTML='<option value="">Set up slot only</option>';$('#baSlot').disabled=true;$('#baUser').disabled=true;$('#baSave').disabled=true;$('#bamodal').style.display='flex';$('#baCancel').focus();
+  try{const [boards,people]=await Promise.all([api('/api/devices'),api('/api/users')]);if(request!==boardAssignRequest)return;const d=boards.find(n=>n.mac===mac);if(!d)throw new Error('This device is no longer listed. Refresh Devices and try again.');boardAssign=d;boardAssignBoards=boards;boardAssignUsers=people||[];
+    const occupied=new Set(boards.filter(n=>n.mac!==mac&&n.slot>0).map(n=>n.slot));const slots=Array.from({length:SLOT_MAX},(_,i)=>i+1).filter(s=>!occupied.has(s));const chosen=d.slot||slots[0]||0;
+    $('#baSlot').innerHTML='<option value="0">No slot</option>'+slots.map(s=>`<option value="${s}">Slot ${s} · :${slotPort(s)}</option>`).join('');$('#baSlot').value=String(chosen);
+    $('#baUser').innerHTML='<option value="">Set up slot only</option>'+boardAssignUsers.map(person=>`<option value="${esc(person.username)}">${esc(person.username)}${person.status&&person.status!=='active'?' · '+esc(person.status):''}${person.device_mac===mac?' · assigned here':''}</option>`).join('');
+    $('#baSummary').innerHTML=`<strong>${esc(boardName(d))}</strong><div class="mono">${esc(d.mac)}</div><div>${capacityLabel(d)} · ${esc(d.active_users??0)} / ${esc(d.max_users??0)} group seats</div>`;updateBoardAssign();$('#baSlot').focus();
+  }catch(e){if(request===boardAssignRequest){$('#baErr').textContent=e.message;$('#baSummary').textContent='Could not load assignment options.';}}
+}
+function updateBoardAssign(){if(!boardAssign)return;const slot=+$('#baSlot').value,username=$('#baUser').value,person=boardAssignUsers.find(p=>p.username===username),current=boardAssignBoards.find(d=>d.mac===person?.device_mac),sameSharedIP=boardAssign.kind==='shared'&&current?.kind==='shared'&&boardAssign.remote_ip&&current.remote_ip===boardAssign.remote_ip,users=sameSharedIP?[...(boardAssign.users||[]),username]:boardAssign.users,reason=username?pickReason({...boardAssign,slot,users},username):'';
+  $('#baPort').textContent=slot?'Customer proxy port :'+slotPort(slot):'A proxy slot is required for measurement and customer routing.';
+  const inactive=person&&person.status&&person.status!=='active';$('#baHint').textContent=inactive?'This account is '+person.status+'. Update the account before assigning it.':reason?'Cannot assign this user: '+reason+'. Save the slot only, then use Device settings or Measure speed.':username?'Assign this user to the board shown above. The server checks available seats.':'Save a slot first to enable Measure speed. You can assign a user after capacity is set.';
+  const saving=boardAssignSavingRequest===boardAssignRequest;$('#baSlot').disabled=saving;$('#baUser').disabled=saving;
+  $('#baSave').disabled=saving||!slot||!!reason||!!inactive;
+  $('#baSave').textContent=username?'Assign user':'Save slot';
+}
+function closeBoardAssign(){boardAssignRequest++;$('#bamodal').style.display='none';boardAssign=null;if(boardAssignOpener?.isConnected)boardAssignOpener.focus();boardAssignOpener=null;}
+$('#baSlot').addEventListener('change',updateBoardAssign);$('#baUser').addEventListener('change',updateBoardAssign);$('#baCancel').addEventListener('click',closeBoardAssign);
+$('#baSave').addEventListener('click',async()=>{if(!boardAssign||boardAssignSavingRequest===boardAssignRequest)return;const selectedBoard=boardAssign,request=boardAssignRequest,mac=selectedBoard.mac,slot=+$('#baSlot').value,username=$('#baUser').value;boardAssignSavingRequest=request;updateBoardAssign();$('#baErr').textContent='';let slotSaved=false;
+  try{if(slot!==selectedBoard.slot||selectedBoard.slot_mismatch){await api('/api/devices/'+encodeURIComponent(mac),{method:'PUT',body:JSON.stringify({slot})});selectedBoard.slot=slot;selectedBoard.slot_mismatch=false;slotSaved=true;}
+    if(request!==boardAssignRequest){if(slotSaved)showToast('Proxy slot saved. User assignment was cancelled.');await viewDevices();return;}
+    if(username)await api('/api/users/'+encodeURIComponent(username)+'/assign',{method:'POST',body:JSON.stringify({device_mac:mac})});
+    if(request!==boardAssignRequest){showToast(username?'User assignment completed.':'Proxy slot saved.');await viewDevices();return;}
+    closeBoardAssign();showToast(username?'User assigned to '+boardName(window._devs?.[mac]||{mac}):'Proxy slot saved. Measure speed or set capacity in Device settings.');await viewDevices();
+  }catch(e){const message=(slotSaved?'Slot saved; user assignment failed. ':'')+(e.body?.reason||e.message);if(request===boardAssignRequest)$('#baErr').textContent=message;else showToast(message,true);}
+  finally{if(boardAssignSavingRequest===request)boardAssignSavingRequest=0;if(request===boardAssignRequest)updateBoardAssign();}
+});
 $('#amShowAll').addEventListener('change', ()=>{ assignSel=null; renderAssign(); });
 $('#amCancel').addEventListener('click', closeAssign);
 $('#amUnassign').addEventListener('click', async ()=>{
@@ -717,7 +794,7 @@ document.addEventListener('error',e=>{const img=e.target;if(img instanceof HTMLI
 function deviceRow(n){
   const mac=esc(n.mac),g=n.geo||{},city=[g.city,g.region||g.country].filter(Boolean).join(', ')||'Location unknown',hasPos=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPos?n.lat:g.lat,lo=hasPos?n.lon:g.lon,hasGeo=typeof la==='number'&&typeof lo==='number'&&(la||lo),map=hasGeo?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'',full=n.max_users>0&&n.active_users>=n.max_users;
   const loc=map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer" title="${esc(T(hasPos?'openMap':'openMapApprox'))}">${hasPos?'':'≈ '}${esc(city)} ↗</a>`:esc(city);
-  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(n.name||'Unnamed device')}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':esc(T('unmeasured'))}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div>${ispCell(g.isp)}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
+  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(boardName(n))}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${capacityLabel(n)}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div>${ispCell(g.isp)}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="assign-board" data-act="assign-board" data-mac="${mac}">Assign</button><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
 }
 async function viewDevices(){
   if(activeView!=='devices')return;const epoch=routeEpoch;
@@ -728,11 +805,23 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('button[data-act]');if(e.target.closest('[data-ota-all]')){otaAll();return;}if(!b||!b.closest('#utbl,#dtbl,#ddrawer'))return;
   const act=b.dataset.act,name=b.dataset.user,mac=b.dataset.mac;
   if(name){const person=usersByName.get(name)||{};if(act==='copy')openCreds(name);else if(act==='edit')openUser(person);else if(act==='assign')openAssign(name);else if(act==='more')openRowMenu(b,[{label:person.enabled?T('disable'):T('enable'),act:person.enabled?'disable':'enable'},...[7,30,90].map(days=>({label:'Extend '+days+' days',act:'extend-'+days})),{sep:true},{label:T('del'),act:'delete',danger:true}],a=>a==='delete'?delUser(name):userAction(name,a));}
-  else if(mac){const n=window._devs?.[mac]||{};if(act==='edit')openDevice(mac,b);else if(act==='measure')measureDevice(mac,b);else if(act==='reveal')revealWifi(mac,b);else if(act==='ota')otaDevice(mac);else if(act==='more')openRowMenu(b,[{label:'View details',act:'details'},{label:T('measure'),act:'measure'},{label:T('updateFw'),act:'ota'},{label:n.blocked?T('allow'):T('block'),act:n.blocked?'allow':'block'},{sep:true},{label:T('forget'),act:'forget',danger:true}],a=>a==='details'?route('devices/'+encodeURIComponent(mac)):a==='measure'?measureDevice(mac,b):a==='ota'?otaDevice(mac):safeDevAction(mac,a));else safeDevAction(mac,act);}
+  else if(mac){const n=window._devs?.[mac]||{};if(act==='assign-board')openBoardAssign(mac,b);else if(act==='edit')openDevice(mac,b);else if(act==='measure')measureDevice(mac,b);else if(act==='reveal')revealWifi(mac,b);else if(act==='ota')otaDevice(mac);else if(act==='more')openRowMenu(b,[{label:'View details',act:'details'},{label:'Device settings',act:'edit'},{label:'Assign slot / user',act:'assign-board'},{label:T('measure'),act:'measure'},{label:T('updateFw'),act:'ota'},{label:n.blocked?T('allow'):T('block'),act:n.blocked?'allow':'block'},{sep:true},{label:T('forget'),act:'forget',danger:true}],a=>a==='details'?route('devices/'+encodeURIComponent(mac)):a==='edit'?openDevice(mac,b):a==='assign-board'?openBoardAssign(mac,b):a==='measure'?measureDevice(mac,b):a==='ota'?otaDevice(mac):safeDevAction(mac,a));else safeDevAction(mac,act);}
 });
 async function safeDevAction(mac,action){try{await devAction(mac,action);}catch(e){showToast(e.message,true);}}
 /* ---- Device detail sheet: stable sections, hash navigation, history ---- */
-let drawerMAC='',drawerOpener=null,drawerRequest=0;
+let drawerMAC='',drawerOpener=null,drawerRequest=0,drawerTab='ddHealth',drawerEvents=[],drawerEventPage=0,drawerHistory=null;
+const drawerSections=[['ddHealth','Health'],['ddHistory','History'],['ddCapacity','Capacity'],['ddRouting','Routing'],['ddLocation','Location'],['ddWifi','WiFi'],['ddUsers','Users'],['ddNotes','Notes'],['ddActivity','Activity'],['ddDanger','Danger']];
+function selectDrawerTab(id,focus=false){
+  drawerTab=id;$('#ddTabs').querySelectorAll('[role="tab"]').forEach(b=>{const active=b.dataset.panel===id;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});
+  $('#ddBody').querySelectorAll('.drawer-section').forEach(el=>{el.hidden=el.id!==id;});$('#ddBody').scrollTop=0;
+  if(id==='ddHistory'&&drawerHistory&&$('#ddHistory .history-content'))renderChart($('#ddHistory .history-content'),drawerHistory,'Device traffic, last 24 hours');
+  if(focus)$('#ddTabs [data-panel="'+id+'"]')?.focus();
+}
+function tabsKeyboard(e,buttons,select){const keys=['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Home','End'];if(!keys.includes(e.key))return;e.preventDefault();const i=buttons.indexOf(e.target),next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(['ArrowLeft','ArrowUp'].includes(e.key)?-1:1)+buttons.length)%buttons.length;select(buttons[next]);}
+$('#ddTabs').addEventListener('click',e=>{const b=e.target.closest('[data-panel]');if(b)selectDrawerTab(b.dataset.panel);});
+$('#ddTabs').addEventListener('keydown',e=>tabsKeyboard(e,[...$('#ddTabs').querySelectorAll('[role="tab"]')],b=>selectDrawerTab(b.dataset.panel,true)));
+function renderDrawerActivity(){const size=4,total=drawerEvents.length;drawerEventPage=Math.min(drawerEventPage,Math.max(0,Math.ceil(total/size)-1));const from=drawerEventPage*size;$('#ddActivity').innerHTML='<h3>Activity</h3>'+feedHTML(drawerEvents.slice(from,from+size),size)+(total>size?`<div class="pager"><button type="button" class="sec" data-activity-page="-1"${!from?' disabled':''}>Previous</button><span>${from+1}–${Math.min(total,from+size)} of ${total}</span><button type="button" class="sec" data-activity-page="1"${from+size>=total?' disabled':''}>Next</button></div>`:'');}
+$('#ddBody').addEventListener('click',e=>{const b=e.target.closest('[data-activity-page]');if(b){drawerEventPage+=+b.dataset.activityPage;renderDrawerActivity();$('#ddBody').scrollTop=0;$('#ddBody').focus();}});
 function hideDrawer(refocus=true){if(!$('#ddrawer')||$('#ddrawer').hidden)return;drawerMAC='';drawerRequest++;$('#ddrawer').hidden=true;$('#ddrawer').inert=false;$('#ddBody').innerHTML='';Object.keys(revealTimers).forEach(k=>{clearTimeout(revealTimers[k]);delete revealTimers[k];});$('#app').inert=false;if(refocus&&drawerOpener?.isConnected)drawerOpener.focus();drawerOpener=null;}
 function closeDrawer(){const opener=drawerOpener;hideDrawer(true);if(routeParts()[1])history.replaceState(null,'','#/devices');if(opener?.isConnected)opener.focus();}
 function drawerSection(id,title,content,extra=''){return `<section class="drawer-section ${extra}" id="${id}"><h3>${esc(title)}</h3>${content}</section>`;}
@@ -740,19 +829,22 @@ function facts(pairs){return '<dl class="facts">'+pairs.map(([k,v])=>`<dt>${esc(
 async function openDrawer(mac){
   if(drawerMAC===mac&&!$('#ddrawer').hidden){updateDrawer();return;}
   drawerOpener=document.activeElement;drawerMAC=mac;$('#ddrawer').hidden=false;$('#app').inert=true;
+  drawerTab='ddHealth';drawerEvents=[];drawerEventPage=0;drawerHistory=null;
+  $('#ddTabs').innerHTML=drawerSections.map(([id,label])=>`<button type="button" role="tab" id="tab-${id}" data-panel="${id}" aria-controls="${id}" aria-selected="${id===drawerTab}" tabindex="${id===drawerTab?0:-1}">${label}</button>`).join('');
   $('#ddBody').innerHTML=drawerSection('ddHealth','Health','')+drawerSection('ddHistory','Traffic · last 24 hours','<div class="skeleton"></div>')+drawerSection('ddCapacity','Capacity','')+drawerSection('ddRouting','Routing','')+drawerSection('ddLocation','Location','')+drawerSection('ddWifi','WiFi','')+drawerSection('ddUsers','Bound users','')+drawerSection('ddNotes','Notes','')+drawerSection('ddActivity','Activity','<div class="skeleton"></div>')+drawerSection('ddDanger','Danger zone','','danger-zone');
+  $('#ddBody').querySelectorAll('.drawer-section').forEach(el=>{el.setAttribute('role','tabpanel');el.setAttribute('aria-labelledby','tab-'+el.id);});selectDrawerTab(drawerTab);
   updateDrawer(true);$('#ddClose').focus();const request=++drawerRequest;
   const results=await Promise.allSettled([api('/api/metrics?entity=node&id='+encodeURIComponent(mac)+'&range=24h&fields=bytes_down,bytes_up'),api('/api/events?subject='+encodeURIComponent(mac)+'&limit=50')]);
   if(request!==drawerRequest||drawerMAC!==mac||!TOKEN)return;
-  const h=$('#ddHistory');if(!h)return;h.innerHTML='<h3>Traffic · last 24 hours</h3><div class="history-content"></div>';if(results[0].status==='fulfilled')renderChart(h.querySelector('div'),results[0].value,'Device traffic, last 24 hours');else h.querySelector('div').innerHTML=empty('History unavailable','Close and reopen details to retry.');
-  $('#ddActivity').innerHTML='<h3>Activity</h3>'+(results[1].status==='fulfilled'?feedHTML(results[1].value.events,12):empty('Activity unavailable','Close and reopen details to retry.'));
+  const h=$('#ddHistory');if(!h)return;h.innerHTML='<h3>Traffic · last 24 hours</h3><div class="history-content"></div>';if(results[0].status==='fulfilled'){drawerHistory=results[0].value;renderChart(h.querySelector('div'),drawerHistory,'Device traffic, last 24 hours');}else h.querySelector('div').innerHTML=empty('History unavailable','Close and reopen details to retry.');
+  if(results[1].status==='fulfilled'){drawerEvents=results[1].value.events||[];renderDrawerActivity();}else $('#ddActivity').innerHTML='<h3>Activity</h3>'+empty('Activity unavailable','Close and reopen details to retry.');
 }
 function updateDrawer(initial=false){
   if(!drawerMAC)return;const n=window._devs?.[drawerMAC];if(!n){$('#ddTitle').textContent='Device unavailable';$('#ddBody').innerHTML=empty('Device is no longer listed','Close details and refresh the device list.');return;}
   const mac=esc(n.mac),g=n.geo||{},section=(id,title,html)=>{const el=$('#'+id);if(el&&!el.contains(document.activeElement)&&!(menuOpener&&el.contains(menuOpener)))el.innerHTML='<h3>'+esc(title)+'</h3>'+html;};
-  $('#ddTitle').textContent=n.name||'Unnamed device';$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3');
+  $('#ddTitle').textContent=boardName(n);$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3');
   section('ddHealth','Health',nodeState(n)+`<div class="drawer-health">${healthCell(n)}</div><ul class="reason-list">${(n.health?.reasons||[]).map(r=>'<li>'+esc(r)+'</li>').join('')}</ul>`);
-  section('ddCapacity','Capacity',facts([['Measured capacity',n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':esc(T('unmeasured'))],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Measure speed tests the internet connection through this board. Assign a proxy slot first. RAM and CPU arrive separately in health reports.</p><p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
+  section('ddCapacity','Capacity',facts([['Measured capacity',capacityLabel(n)],['Source',n.capacity_source==='manual'?'Set manually':n.capacity_mbps>0?'Speed test':'Not measured'],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Measure speed tests the internet connection through this board. Assign a proxy slot first. RAM and CPU arrive separately in health reports.</p><p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
   section('ddRouting','Routing',facts([['Mode',esc(n.kind||'shared')],['Slot / port',n.slot?esc(n.slot)+' / :'+esc(slotPort(n.slot)):'Not assigned'],['Exit IP','<span class="mono">'+esc(n.remote_ip||'Unknown')+'</span>'],['IP group',esc(n.ip_group_size||1)+' board(s)'],['Streams',esc(n.active_dials||0)+(n.max_streams?' / '+esc(n.max_streams):'')],['Relayed traffic','↑ '+esc(fmtBytes(n.bytes_up))+' · ↓ '+esc(fmtBytes(n.bytes_down))]])+(n.slot_mismatch?`<div class="drawer-actions"><button type="button" class="sec" data-repush="${mac}">Re-push routing to broker</button></div>`:''));
   const hasPin=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPin?n.lat:g.lat,lo=hasPin?n.lon:g.lon,map=typeof la==='number'&&typeof lo==='number'&&(la||lo)?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'';
   section('ddLocation','Location',facts([['Location',esc([g.city,g.region,g.country].filter(Boolean).join(', ')||'Unknown')],['ISP',ispCell(g.isp)],['Coordinates',hasPin?esc(n.lat.toFixed(6)+', '+n.lon.toFixed(6)):'Approximate geo-IP only']])+`<div class="drawer-actions">${map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:''}</div>`);
@@ -761,7 +853,7 @@ function updateDrawer(initial=false){
   section('ddNotes','Notes','<p style="white-space:pre-wrap;font-size:13px">'+esc(n.notes||'No notes')+'</p>');
   section('ddDanger','Danger zone',`<p class="subline">Blocking stops new traffic. Forget removes this board from the broker registry.</p><div class="drawer-actions"><button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow device':'Block device'}</button><button type="button" class="danger drawer-forget" data-act="forget" data-mac="${mac}">Forget device</button></div>`);
 }
-$('#ddClose').addEventListener('click',closeDrawer);$('#ddEdit').addEventListener('click',()=>openDevice(drawerMAC,$('#ddEdit')));$('#ddrawer').addEventListener('click',e=>{if(e.target===$('#ddrawer'))closeDrawer();});
+$('#ddClose').addEventListener('click',closeDrawer);$('#ddEdit').addEventListener('click',()=>openDevice(drawerMAC,$('#ddEdit')));$('#ddAssign').addEventListener('click',()=>openBoardAssign(drawerMAC,$('#ddAssign')));$('#ddrawer').addEventListener('click',e=>{if(e.target===$('#ddrawer'))closeDrawer();});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-repush]');if(!b)return;const n=window._devs?.[b.dataset.repush];if(!n)return;b.disabled=true;try{await api('/api/devices/'+encodeURIComponent(n.mac),{method:'PUT',body:JSON.stringify({slot:n.slot,kind:n.kind})});showToast('Routing sent to broker');await viewDevices();}catch(error){showToast(error.message,true);}finally{b.disabled=false;}});
 
 const measuring = new Set();
@@ -861,11 +953,15 @@ async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))re
 
 /* ---- Device editor ---- */
 let editDev=null, dmOpener=null, clearPosition=false;
+function selectEditorTab(name,focus=false){$('#dmodal').querySelectorAll('[data-editor-tab]').forEach(b=>{const active=b.dataset.editorTab===name;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;$('#'+b.getAttribute('aria-controls')).hidden=!active;if(active&&focus)b.focus();});$('#dmodal .modal').scrollTop=0;}
+$('#dmodal .editor-tabs').addEventListener('click',e=>{const b=e.target.closest('[data-editor-tab]');if(b)selectEditorTab(b.dataset.editorTab);});
+$('#dmodal .editor-tabs').addEventListener('keydown',e=>tabsKeyboard(e,[...$('#dmodal').querySelectorAll('[data-editor-tab]')],b=>selectEditorTab(b.dataset.editorTab,true)));
 function openDevice(mac, opener){
   const d = (window._devs||{})[mac]; if(!d) return;
   clearPosition=false; editDev = d; dmOpener = opener||document.activeElement;
-  $('#dmTitle').textContent = T('editDevice')+' '+d.mac;
+  $('#dmTitle').textContent = 'Settings · '+boardName(d);
   $('#dmName').value = d.name||'';
+  $('#dmName').placeholder=boardName({mac:d.mac});$('#dmCapacity').value=d.capacity_mbps||0;
   $('#dmKind').value = d.kind==='dedicated'?'dedicated':'shared';
   $('#dmLat').value = typeof d.lat==='number'?d.lat:''; $('#dmLon').value = typeof d.lon==='number'?d.lon:'';
   $('#dmMaps').value = d.maps_url||''; $('#dmMapsHint').textContent=T('mapsHint'); $('#dmMapsGo').textContent=T('mapsFind'); $('#dmMapsMsg').textContent='';
@@ -877,6 +973,7 @@ function openDevice(mac, opener){
   $('#dmCancel').textContent=T('cancel'); $('#dmSave').textContent=T('save');
   $('#dmCoordHint').textContent=T('coordHint');
   $('#dmErr').textContent=''; $('#dmodal').style.display='flex';
+  selectEditorTab('General');
   $('#app').inert = true; $('#ddrawer').inert=!$('#ddrawer').hidden;
   $('#dmName').focus();
 }
@@ -900,6 +997,9 @@ $('#dmSave').addEventListener('click', async ()=>{
   if(name!==(d.name||'')) body.name = name;
   if(kind!==(d.kind==='dedicated'?'dedicated':'shared')) body.kind = kind;
   if(notes!==(d.notes||'')) body.notes = notes;
+  const capacity=$('#dmCapacity').value.trim(),capacityMbps=Number(capacity);
+  if($('#dmCapacity').validity.badInput||capacity===''||!Number.isFinite(capacityMbps)||capacityMbps<0||capacityMbps>100000){selectEditorTab('General');$('#dmErr').textContent='Measured speed must be a number from 0 to 100000 Mbps.';$('#dmCapacity').focus();return;}
+  if(capacityMbps!==(d.capacity_mbps||0))body.capacity_mbps=capacityMbps;
   const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
   if(clearPosition){body.lat=null;body.lon=null;body.maps_url='';}
   if(!clearPosition && lat!=='' && +lat!==d.lat) body.lat = +lat;
@@ -917,7 +1017,7 @@ $('#dmSave').addEventListener('click', async ()=>{
   $('#dmErr').textContent=''; $('#dmSave').disabled=true;
   try{
     await api('/api/devices/'+encodeURIComponent(editDev.mac),{method:'PUT',body:JSON.stringify(body)});
-    const mac = editDev.mac;
+    const mac = d.mac;
     closeDevice(true);
     await viewDevices();
     // The table was re-rendered, so the original opener is gone: focus its replacement.
@@ -1006,7 +1106,7 @@ $('#dmClearPos').addEventListener('click',()=>{clearPosition=true;$('#dmLat').va
 $('#dmGeo').addEventListener('click',()=>{const g=editDev?.geo;if(typeof g?.lat!=='number'||typeof g?.lon!=='number'||!(g.lat||g.lon)){showToast('No geo-IP position available',true);return;}clearPosition=false;$('#dmLat').value=g.lat;$('#dmLon').value=g.lon;$('#dmMaps').value='';$('#dmMapsMsg').textContent='Approximate geo-IP position selected. Save to keep it.';});
 ['dmLat','dmLon','dmMaps'].forEach(id=>$('#'+id).addEventListener('input',()=>{clearPosition=false;}));
 /* Protect the active overlay, including an editor opened above the drawer. */
-const modalNames={umodal:['umTitle',closeModal],dmodal:['dmTitle',closeDevice],cmodal:['cmTitle',closeCreds],amodal:['amTitle',closeAssign],fwmodal:['fwTitle',closeFw]};
+const modalNames={umodal:['umTitle',closeModal],dmodal:['dmTitle',closeDevice],cmodal:['cmTitle',closeCreds],amodal:['amTitle',closeAssign],fwmodal:['fwTitle',closeFw],bamodal:['baTitle',closeBoardAssign]};
 let overlayTrigger=null,previousModal=null;
 document.addEventListener('click',e=>{if(!modalOpen())overlayTrigger=e.target.closest('button,a,input')||document.activeElement;},true);
 function topModal(){return [...document.querySelectorAll('.modal-bg')].filter(el=>el.style.display==='flex').at(-1);}

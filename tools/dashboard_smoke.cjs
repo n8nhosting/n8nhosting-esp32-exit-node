@@ -139,8 +139,10 @@ async function noPageOverflow(page) {
   ok('real background tick preserves keyed row, menu and focused menu item');
   await first.locator('.device-title').click();
   await page.locator('#ddrawer:not([hidden])').waitFor();
+  await page.locator('#tab-ddHistory').click();
   await page.locator('#ddHistory .chart').waitFor();
-  await page.locator('#ddDanger button').last().focus();
+  await page.locator('#tab-ddDanger').click();
+  await page.locator('#ddAssign').focus();
   await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'ddEdit');
   await snapshot(page, 'drawer-desktop');
@@ -154,6 +156,7 @@ async function noPageOverflow(page) {
   assert.equal(await page.locator('#ddrawer').isVisible(), true);
   assert.equal(await page.evaluate(() => document.activeElement.id), 'ddEdit');
   await page.locator('#ddEdit').click();
+  await page.locator('#dmTabLocation').click();
   await page.locator('#dmClearPos').click();
   await page.locator('#dmSave').click();
   await page.locator('#dmodal').waitFor({state:'hidden'});
@@ -174,6 +177,7 @@ async function noPageOverflow(page) {
   await page.goForward();
   await page.waitForFunction(() => !document.querySelector('#ddrawer').hidden);
   await page.reload();
+  await page.locator('#tab-ddHistory').click();
   await page.locator('#ddHistory .chart').waitFor();
   ok('Thai search, hash Back/Forward and deep-link reload');
   await page.locator('#ddClose').click();
@@ -189,6 +193,7 @@ async function noPageOverflow(page) {
   assert.ok(menu.x >= 0 && menu.x + menu.width <= 376 && menu.y >= 0 && menu.y + menu.height <= 813, JSON.stringify(menu));
   await page.keyboard.press('Escape');
   await page.locator('#dtbl .device-title').first().click();
+  await page.locator('#tab-ddHistory').click();
   await page.locator('#ddHistory .chart').waitFor();
   await noPageOverflow(page);
   await page.screenshot({path: path.join(out, 'drawer-mobile.png')});
