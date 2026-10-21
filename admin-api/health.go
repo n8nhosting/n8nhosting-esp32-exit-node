@@ -18,22 +18,27 @@ type deviceHealth struct {
 
 func deviceStatus(v deviceView, now time.Time) (string, []string) {
 	at, err := time.Parse(time.RFC3339, v.OTAAt)
+	tags := []string{}
+	sentActive := v.OTAStatus == "sent" && err == nil && now.Sub(at) >= 0 && now.Sub(at) <= 15*time.Minute
+	otaFailed := v.OTAStatus == "failed" || v.OTAStatus == "timeout" || (v.OTAStatus == "sent" && !sentActive)
+	if v.OTAStatus == "failed" {
+		tags = append(tags, "ota_failed")
+	}
+	if v.OTAStatus == "timeout" || (v.OTAStatus == "sent" && !sentActive) {
+		tags = append(tags, "ota_stalled")
+	}
 	switch {
 	case v.Blocked:
-		return "blocked", nil
-	case v.OTAStatus == "sent" && err == nil && now.Sub(at) >= 0 && now.Sub(at) <= 15*time.Minute:
+		return "blocked", tags
+	case sentActive:
 		return "updating", nil
 	case !v.Online:
-		if v.OTAStatus == "sent" {
-			return "offline", []string{"ota_stalled"}
-		}
-		return "offline", nil
-	case v.OTAStatus == "failed":
-		return "rolled_back", nil
+		return "offline", tags
+	case otaFailed:
+		return "ota_failed", tags
 	case v.Kind != "dedicated" && v.CapacityMbps <= 0:
-		return "unmeasured", nil
+		return "unmeasured", tags
 	}
-	tags := []string{}
 	if v.OTAStatus == "queued" {
 		tags = append(tags, "ota_queued")
 	}
@@ -133,6 +138,9 @@ func (s *server) healthFor(v deviceView, now time.Time) deviceHealth {
 	}
 	if len(h.Reasons) == 0 {
 		h.Reasons = append(h.Reasons, "Available telemetry is healthy")
+	}
+	if v.Status == "ota_failed" {
+		h.Reasons = append(h.Reasons, "Firmware update was not confirmed")
 	}
 	return h
 }

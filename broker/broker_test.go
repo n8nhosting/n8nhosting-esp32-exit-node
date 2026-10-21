@@ -475,7 +475,7 @@ func TestOTAStatusTracking(t *testing.T) {
 	if n.OTAStatus != "queued" {
 		t.Fatalf("status %q, want queued", n.OTAStatus)
 	}
-	if u := r.takeOTA(n); u != "https://flash.example/2.0.bin" || n.OTAStatus != "sent" {
+	if u := testSendOTA(r, n); u != "https://flash.example/2.0.bin" || n.OTAStatus != "sent" {
 		t.Fatalf("take: %q %q", u, n.OTAStatus)
 	}
 	// still downloading on the old firmware, no reboot yet: stays "sent"
@@ -491,7 +491,7 @@ func TestOTAStatusTracking(t *testing.T) {
 
 	// next update: the board reboots but is back on 2.0 (image rolled back)
 	r.setOTA(mac, "https://flash.example/3.0.bin", "3.0")
-	r.takeOTA(n)
+	testSendOTA(r, n)
 	r.touch(mac, "2.0", "1.2.3.4", 60, "", "")
 	r.touch(mac, "2.0", "1.2.3.4", 5, "", "")
 	if n.OTAStatus != "failed" {
@@ -503,7 +503,7 @@ func TestOTAStatusTracking(t *testing.T) {
 	// without a reboot means it failed (older firmware keeps the link while
 	// downloading, so for it "same version, no reboot" stays "sent")
 	r.setOTA(mac, "https://flash.example/4.0.bin", "4.0")
-	r.takeOTA(n)
+	testSendOTA(r, n)
 	r.touch(mac, "2.0", "1.2.3.4", 100, "", "esp32c3")
 	if n.OTAStatus != "failed" {
 		t.Fatalf("status %q after a 2.4.22+ node came back on its old firmware, want failed", n.OTAStatus)

@@ -263,11 +263,22 @@ func (b *broker) handlePoolConn(c net.Conn) {
 	}
 	c.SetReadDeadline(time.Time{})
 
-	if url := b.reg.takeOTA(n); url != "" {
-		log.Printf("ota: pushing %s to %s", url, mac)
+	if claim, ok := b.reg.claimOTA(n, 0); ok {
+		log.Printf("ota: writing command to %s (legacy)", mac)
 		c.SetDeadline(time.Now().Add(10 * time.Second))
-		c.Write([]byte("OTA " + url + "\n"))
-		br.ReadString('\n') // OK
+		command := []byte("OTA " + claim.URL + "\n")
+		count, err := c.Write(command)
+		written := count == len(command)
+		b.reg.completeOTA(n, claim, written)
+		if !written {
+			log.Printf("ota: command write failed for %s (%d/%d bytes): %v", mac, count, len(command), err)
+		} else {
+			ack, ackErr := br.ReadString('\n')
+			if ackErr != nil || strings.TrimSpace(ack) != "OK" {
+				b.reg.noteOTAUnconfirmed(n, claim)
+				log.Printf("ota: command written to %s; acceptance unconfirmed", mac)
+			}
+		}
 		c.Close()
 		return
 	}
@@ -290,14 +301,24 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	}
 	c.SetReadDeadline(time.Time{})
 	s := newMuxSession(c, br, n, o)
-	b.reg.muxUp(n, s.maxStreams)
+	generation := b.reg.muxUp(n, s.maxStreams)
 	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
-	s.pollOTA = func() string { return b.reg.takeOTA(n) }
-	s.onStats = func(st nodeStats) { b.reg.stats(n, st) }
-	if url := b.reg.takeOTA(n); url != "" {
-		log.Printf("ota: pushing %s to %s (mux)", url, n.MAC)
-		s.writeFrame(frameOTA, 0, []byte(url))
+	s.pollOTA = func() error {
+		claim, ok := b.reg.claimOTA(n, generation)
+		if !ok {
+			return nil
+		}
+		written, err := s.writeFrameResult(frameOTA, 0, []byte(claim.URL))
+		b.reg.completeOTA(n, claim, written)
+		if err != nil {
+			log.Printf("ota: command write for %s complete=%v: %v", n.MAC, written, err)
+		} else {
+			log.Printf("ota: command written to %s; awaiting firmware confirmation", n.MAC)
+		}
+		return err
 	}
+	s.onStats = func(st nodeStats) { b.reg.stats(n, st) }
+	_ = s.pollOTA()
 	b.muxMu.Lock()
 	b.muxes = append(b.muxes, s)
 	b.muxMu.Unlock()
@@ -844,7 +865,7 @@ func (b *broker) statusMux() *http.ServeMux {
 				http.Error(w, "https url required (images are unsigned; set OTA_ALLOW_HTTP=1 only on a test broker)", http.StatusBadRequest)
 				return
 			}
-			if len(body.URL) >= 256 || len(body.Version) > 32 || len(body.Target) > 16 {
+			if len(body.URL) > otaMaxURLBytes || len(body.Version) > 32 || len(body.Target) > 16 {
 				http.Error(w, "url, version or target too long", http.StatusBadRequest)
 				return
 			}

@@ -483,7 +483,12 @@ func TestMuxOTAAndBlock(t *testing.T) {
 	go b.servePool(poolLn)
 	go b.serveSocks(socksLn)
 	stop := make(chan struct{})
-	defer func() { close(stop); poolLn.Close(); socksLn.Close() }()
+	defer func() {
+		close(stop)
+		poolLn.Close()
+		socksLn.Close()
+		waitFor(t, func() bool { return b.muxCount() == 0 })
+	}()
 
 	mac := "aa:bb:cc:dd:ee:52"
 	b.reg.touch(mac, "", "", 0, "", "")

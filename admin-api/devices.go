@@ -77,6 +77,7 @@ type brokerNode struct {
 	OTATarget          string     `json:"ota_target,omitempty"`
 	OTAStatus          string     `json:"ota_status,omitempty"`
 	OTAAt              string     `json:"ota_at,omitempty"`
+	OTAError           string     `json:"ota_error,omitempty"`
 	Stats              *nodeStats `json:"stats,omitempty"` // board health; nil before firmware 2.4.23
 	// routing the broker holds for the board; a device view's own "slot" (the
 	// record's) shadows Slot in JSON

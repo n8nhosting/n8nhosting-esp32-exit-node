@@ -54,14 +54,20 @@ type node struct {
 	PendingOTA string     `json:"pending_ota,omitempty"` // firmware URL to push on next connection
 	Slot       int        `json:"slot"`                  // gost slot pinned to this board (SOCKS user "slot-N"), 0 = none
 	Pool       bool       `json:"pool"`                  // also serves the shared pool; false for a dedicated board
-	// OTA tracking: queued -> sent -> ok | failed. "failed" means the node came
-	// back after a reboot still on its old firmware (download failed, or the new
-	// image did not confirm itself and the bootloader rolled it back).
-	OTATarget string `json:"ota_target,omitempty"` // firmware version expected after the update
-	OTAStatus string `json:"ota_status,omitempty"`
-	OTAAt     string `json:"ota_at,omitempty"`
-	otaFromFW string // firmware when the OTA was delivered
-	otaUptime uint64 // uptime when the OTA was delivered
+	// Sent means written to the connection, not acknowledged or applied.
+	// A failure/timeout does not prove a firmware rollback.
+	OTATarget       string `json:"ota_target,omitempty"` // firmware version expected after the update
+	OTAStatus       string `json:"ota_status,omitempty"`
+	OTAAt           string `json:"ota_at,omitempty"`
+	OTAError        string `json:"ota_error,omitempty"`
+	otaFromFW       string // firmware when the OTA was delivered
+	otaUptime       uint64 // uptime when the OTA was delivered
+	otaRevision     uint64 // changes for each queued/replaced/cancelled request
+	otaClaimID      uint64 // unique live claim token; never persisted
+	otaClaimActive  uint64
+	otaDispatching  bool   // durable ambiguous-delivery marker across broker restart
+	muxGeneration   uint64 // newest accepted mux link owns new OTA deliveries
+	helloGeneration uint64
 
 	// live counters (atomic)
 	Idle               int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
@@ -125,7 +131,7 @@ func (n *node) snapshot() *node {
 		Stats:      n.Stats,
 		MaxStreams: n.MaxStreams, LinkSince: n.LinkSince,
 		PendingOTA: n.PendingOTA, Slot: n.Slot, Pool: n.Pool,
-		OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt,
+		OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt, OTAError: n.OTAError,
 		lastSeenT: n.lastSeenT,
 		Idle:      atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
@@ -162,6 +168,7 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *
 		r.saveLocked()
 	}
 	n.lastSeenT = now
+	n.helloGeneration++
 	n.LastSeen = now.UTC().Format(time.RFC3339)
 	n.Stats = nil // a new link reports afresh (and a board rolled back below 2.4.23 never will)
 	if fw != "" {
@@ -182,24 +189,9 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *
 	if chip != "" {
 		n.Chip = chip
 	}
-	if n.OTAStatus == "sent" {
-		done := n.Firmware != n.otaFromFW
-		if n.OTATarget != "" {
-			done = n.Firmware == n.OTATarget
-		}
-		// Firmware up to 2.4.21 keeps the link while it downloads, so a HELLO
-		// on the old version is only a failure once the board has rebooted.
-		// Firmware 2.4.22+ (it sends chip=) closes the link for the download
-		// and HELLOs again only when it is over: the old version without a
-		// reboot means the download failed.
-		switch {
-		case done:
-			n.OTAStatus, n.OTAAt = "ok", n.LastSeen
-			r.saveLocked()
-		case rebooted || uptime < n.otaUptime || chip != "":
-			n.OTAStatus, n.OTAAt = "failed", n.LastSeen
-			r.saveLocked()
-		}
+	changed := expireOTALocked(n, now)
+	if resolveOTALocked(n, now, rebooted || uptime < n.otaUptime, chip != "") || changed {
+		r.saveLocked()
 	}
 	return n
 }
@@ -208,8 +200,13 @@ func (r *registry) list() []nodeView {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]nodeView, 0, len(r.nodes))
+	changed := false
 	for _, n := range r.nodes {
+		changed = expireOTALocked(n, timeNow()) || changed
 		out = append(out, nodeView{node: n.snapshot(), Online: n.online()})
+	}
+	if changed {
+		r.saveLocked()
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].MAC < out[j].MAC })
 	return out
@@ -257,12 +254,16 @@ func (r *registry) setOTA(mac, url, target string) bool {
 		return false
 	}
 	n.PendingOTA = url
+	n.otaRevision++
+	n.otaClaimActive = 0
+	n.otaDispatching = false
+	n.OTAError = ""
 	if url == "" {
 		if n.OTAStatus == "queued" {
 			n.OTATarget, n.OTAStatus, n.OTAAt = "", "", ""
 		}
 	} else {
-		n.OTATarget, n.OTAStatus, n.OTAAt = target, "queued", time.Now().UTC().Format(time.RFC3339)
+		n.OTATarget, n.OTAStatus, n.OTAAt = target, "queued", timeNow().UTC().Format(time.RFC3339)
 	}
 	r.saveLocked()
 	return true
@@ -283,21 +284,6 @@ func (r *registry) chipOf(mac string) (chip string, ok bool) {
 	return n.Chip, true
 }
 
-// takeOTA returns and clears a pending OTA URL for the node.
-func (r *registry) takeOTA(n *node) string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	u := n.PendingOTA
-	n.PendingOTA = ""
-	if u != "" {
-		now := timeNow()
-		n.OTAStatus, n.OTAAt = "sent", now.UTC().Format(time.RFC3339)
-		n.otaFromFW, n.otaUptime = n.Firmware, n.runningUptime(now)
-		r.saveLocked()
-	}
-	return u
-}
-
 // stats stores a STATS sample; the uptime it carries restarts the running
 // clock (and proves the link is up).
 func (r *registry) stats(n *node, st nodeStats) {
@@ -314,13 +300,15 @@ func (r *registry) stats(n *node, st nodeStats) {
 // muxUp publishes only successfully accepted mux links. The count and metadata
 // share the registry lock with linkDown, so closing an older link cannot clear
 // the new link's timestamp or freeze its uptime.
-func (r *registry) muxUp(n *node, maxStreams int) {
+func (r *registry) muxUp(n *node, maxStreams int) uint64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n.MaxStreams = maxStreams
 	n.LinkSince = timeNow().UTC().Format(time.RFC3339)
 	n.offAt = time.Time{}
 	n.addMux(1)
+	n.muxGeneration++
+	return n.muxGeneration
 }
 
 // linkDown records that one of the node's links closed. With no link left
@@ -416,21 +404,26 @@ func (r *registry) forget(mac string) bool {
 
 // Persist only identity + policy (not live counters).
 type persistedNode struct {
-	MAC       string `json:"mac"`
-	Firmware  string `json:"firmware,omitempty"`
-	FirstSeen string `json:"first_seen"`
-	LastSeen  string `json:"last_seen"`
-	UptimeSec uint64 `json:"uptime_sec"`
-	SSID      string `json:"ssid,omitempty"`
-	Chip      string `json:"chip,omitempty"` // esp32s3 / esp32c3; "" before 2.4.22 firmware
-	Blocked   bool   `json:"blocked"`
-	Note      string `json:"note,omitempty"`
-	Slot      int    `json:"slot,omitempty"`
-	Pool      *bool  `json:"pool,omitempty"` // nil (stored before the flag existed) = true
-	OTATarget string `json:"ota_target,omitempty"`
-	OTAStatus string `json:"ota_status,omitempty"`
-	OTAAt     string `json:"ota_at,omitempty"`
-	OTAFromFW string `json:"ota_from_fw,omitempty"`
+	MAC            string `json:"mac"`
+	Firmware       string `json:"firmware,omitempty"`
+	FirstSeen      string `json:"first_seen"`
+	LastSeen       string `json:"last_seen"`
+	UptimeSec      uint64 `json:"uptime_sec"`
+	SSID           string `json:"ssid,omitempty"`
+	Chip           string `json:"chip,omitempty"` // esp32s3 / esp32c3; "" before 2.4.22 firmware
+	Blocked        bool   `json:"blocked"`
+	Note           string `json:"note,omitempty"`
+	Slot           int    `json:"slot,omitempty"`
+	Pool           *bool  `json:"pool,omitempty"` // nil (stored before the flag existed) = true
+	OTATarget      string `json:"ota_target,omitempty"`
+	OTAStatus      string `json:"ota_status,omitempty"`
+	OTAAt          string `json:"ota_at,omitempty"`
+	OTAFromFW      string `json:"ota_from_fw,omitempty"`
+	PendingOTA     string `json:"pending_ota,omitempty"`
+	OTAUptime      uint64 `json:"ota_uptime,omitempty"`
+	OTARevision    uint64 `json:"ota_revision,omitempty"`
+	OTAError       string `json:"ota_error,omitempty"`
+	OTADispatching bool   `json:"ota_dispatching,omitempty"`
 }
 
 func (r *registry) saveLocked() {
@@ -442,7 +435,8 @@ func (r *registry) saveLocked() {
 		pool := n.Pool
 		list = append(list, persistedNode{MAC: n.MAC, Firmware: n.Firmware, FirstSeen: n.FirstSeen, LastSeen: n.LastSeen,
 			UptimeSec: n.UptimeSec, SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note, Slot: n.Slot, Pool: &pool,
-			OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt, OTAFromFW: n.otaFromFW})
+			OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt, OTAFromFW: n.otaFromFW,
+			PendingOTA: n.PendingOTA, OTAUptime: n.otaUptime, OTARevision: n.otaRevision, OTAError: n.OTAError, OTADispatching: n.otaDispatching})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
 	os.MkdirAll(filepath.Dir(r.file), 0o755)
@@ -464,6 +458,7 @@ func (r *registry) load() {
 	if json.Unmarshal(data, &list) != nil {
 		return
 	}
+	changed := false
 	for _, p := range list {
 		if p.Slot > 0 && r.bySlotLocked(p.Slot) != nil {
 			log.Printf("nodes: slot %d listed twice, cleared on %s", p.Slot, p.MAC)
@@ -472,8 +467,25 @@ func (r *registry) load() {
 		pool := p.Pool == nil || *p.Pool
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
 			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Chip: p.Chip, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot, Pool: pool,
-			OTATarget: p.OTATarget, OTAStatus: p.OTAStatus, OTAAt: p.OTAAt, otaFromFW: p.OTAFromFW}
+			OTATarget: p.OTATarget, OTAStatus: p.OTAStatus, OTAAt: p.OTAAt, otaFromFW: p.OTAFromFW,
+			PendingOTA: p.PendingOTA, otaUptime: p.OTAUptime, otaRevision: p.OTARevision, OTAError: p.OTAError}
+		n := r.nodes[p.MAC]
+		if p.OTADispatching && n.OTAStatus == "queued" {
+			// The process died between claiming and recording the write result.
+			// The board may have received the command; never blindly send twice.
+			n.PendingOTA, n.OTAStatus, n.OTAError = "", "sent", "delivery_unconfirmed"
+			changed = true
+		}
+		if n.OTAStatus == "queued" && n.PendingOTA == "" {
+			// Older broker versions persisted the status without its URL.
+			n.OTAStatus, n.OTAError = "failed", "request_missing"
+			changed = true
+		}
+		changed = expireOTALocked(n, timeNow()) || changed
 		r.nodes[p.MAC].blk.Store(p.Blocked)
 		r.nodes[p.MAC].noPool.Store(!pool)
+	}
+	if changed {
+		r.saveLocked()
 	}
 }

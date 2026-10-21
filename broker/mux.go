@@ -104,7 +104,7 @@ type muxSession struct {
 
 	evicted, idleClosed *int64 // broker-wide counters (nil = don't count)
 
-	pollOTA func() string   // returns a queued OTA URL to push on the live link (nil = none)
+	pollOTA func() error    // claims/writes/completes a queued OTA on this live link
 	onStats func(nodeStats) // receives each parsed STATS sample (nil = drop)
 }
 
@@ -146,6 +146,13 @@ func newMuxSession(c net.Conn, br *bufio.Reader, n *node, o helloOpts) *muxSessi
 }
 
 func (s *muxSession) writeFrame(typ byte, sid uint32, payload []byte) error {
+	_, err := s.writeFrameResult(typ, sid, payload)
+	return err
+}
+
+// Keep the full-write bit for OTA: a transport error after all bytes were
+// written is ambiguous and must not trigger an automatic duplicate command.
+func (s *muxSession) writeFrameResult(typ byte, sid uint32, payload []byte) (bool, error) {
 	var hdr [muxHeaderLen]byte
 	hdr[0] = typ
 	binary.BigEndian.PutUint16(hdr[2:4], uint16(len(payload)))
@@ -153,11 +160,16 @@ func (s *muxSession) writeFrame(typ byte, sid uint32, payload []byte) error {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	s.conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-	if _, err := s.conn.Write(append(hdr[:], payload...)); err != nil {
-		s.conn.Close()
-		return err
+	frame := append(hdr[:], payload...)
+	n, err := s.conn.Write(frame)
+	written := n == len(frame)
+	if err == nil && !written {
+		err = io.ErrShortWrite
 	}
-	return nil
+	if err != nil {
+		s.conn.Close()
+	}
+	return written, err
 }
 
 func (s *muxSession) active() int {
@@ -279,9 +291,8 @@ func (s *muxSession) keepalive() {
 		case <-reap.C:
 			s.reapIdle()
 			if s.pollOTA != nil {
-				if url := s.pollOTA(); url != "" {
-					log.Printf("ota: pushing %s to %s (mux, live)", url, s.node.MAC)
-					s.writeFrame(frameOTA, 0, []byte(url))
+				if s.pollOTA() != nil {
+					return
 				}
 			}
 		case <-t.C:

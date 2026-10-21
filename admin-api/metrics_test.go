@@ -289,7 +289,7 @@ func TestDeviceStatusPrecedenceAndC3Capacity(t *testing.T) {
 	v.Blocked = false
 	want("updating")
 	v.OTAAt = now.Add(time.Hour).Format(time.RFC3339)
-	want("unmeasured")
+	want("ota_failed")
 	v.Online = false
 	v.OTAAt = now.Add(-16 * time.Minute).Format(time.RFC3339)
 	want("offline")
@@ -299,7 +299,7 @@ func TestDeviceStatusPrecedenceAndC3Capacity(t *testing.T) {
 	}
 	v.Online = true
 	v.OTAStatus = "failed"
-	want("rolled_back")
+	want("ota_failed")
 	v.OTAStatus = ""
 	want("unmeasured")
 	v.CapacityMbps = 2.6

@@ -477,8 +477,8 @@ func TestRegistryPersistsSlotPoolAndOTAStatus(t *testing.T) {
 	if !r.setOTA(mac, "https://flash.example/next.bin", "") {
 		t.Fatal("setOTA")
 	}
-	if u := r.takeOTA(r.nodes[mac]); u == "" {
-		t.Fatal("takeOTA returned no URL")
+	if u := testSendOTA(r, r.nodes[mac]); u == "" {
+		t.Fatal("OTA delivery returned no URL")
 	}
 	r2 := newRegistry(file) // restart
 	n := r2.nodes[mac]

@@ -164,9 +164,9 @@ func (s *server) observeActivity(nodes []brokerNode, brokerOK bool, now time.Tim
 			if known && old.Firmware != n.Firmware {
 				emitNode("node.firmware_changed", "info", "Device firmware changed")
 			}
-			if (!known || old.OTA != n.OTAStatus) && (n.OTAStatus == "sent" || n.OTAStatus == "ok" || n.OTAStatus == "failed") {
+			if (!known || old.OTA != n.OTAStatus) && (n.OTAStatus == "sent" || n.OTAStatus == "ok" || n.OTAStatus == "failed" || n.OTAStatus == "timeout") {
 				sev := "info"
-				if n.OTAStatus == "failed" {
+				if n.OTAStatus == "failed" || n.OTAStatus == "timeout" {
 					sev = "error"
 				}
 				emitNode("node.ota_"+n.OTAStatus, sev, "Device OTA "+n.OTAStatus)
@@ -203,8 +203,8 @@ func (s *server) observeActivity(nodes []brokerNode, brokerOK bool, now time.Tim
 			if n.OTAStatus == "failed" {
 				add("node.ota_failed", "warn", "node", n.MAC, name+" OTA failed", nil)
 			}
-			if n.OTAStatus == "sent" && !otaAt.IsZero() && now.Sub(otaAt) > 15*time.Minute {
-				add("node.ota_stalled", "warn", "node", n.MAC, name+" OTA has stalled", nil)
+			if n.OTAStatus == "timeout" || (n.OTAStatus == "sent" && !otaAt.IsZero() && now.Sub(otaAt) > 15*time.Minute) {
+				add("node.ota_stalled", "warn", "node", n.MAC, name+" firmware update was not confirmed within 15 minutes", nil)
 			}
 			changed, _ := time.Parse(time.RFC3339, cur.IPChangedAt)
 			if !changed.IsZero() && now.Sub(changed) < 24*time.Hour {
