@@ -396,7 +396,7 @@ Screenshots under `output/playwright/`:
 `production-per-board-seats-picker.jpg`, `production-per-board-seats-devices.jpg`
 and `production-per-board-seats-mobile.jpg`. No firmware update was initiated.
 
-## OTA confirmation and real C3 checks (2026-10-22, in progress)
+## OTA confirmation and bounded real C3 verification (2026-10-22)
 
 The operator approved fixing OTA tracking and testing actual C3 transfers,
 parallel connections and reconnection. This section supersedes the earlier
@@ -423,7 +423,8 @@ Both remain at 1/1 board seats. These real measurements replace their previous
 increased by 8 MiB; RAM/CPU reports now appear. Screenshots and sanitized broker
 chronology are under `output/playwright/ota-*`.
 
-Open observations: Board 1 still runs `2.4.21-mux1.4`; its previous S3 OTA was
+Initial observations at 03:55 +07, resolved later below: Board 1 ran
+`2.4.21-mux1.4`; its previous S3 OTA was
 sent at 03:33:37 but has not confirmed the target. The old dashboard incorrectly
 keeps its firmware pill at “updating” after 15 minutes. AEC0 reports 100% CPU
 even in a later zero-stream sample, while 7EB0 returns to 1% after load; this
@@ -431,9 +432,9 @@ is recorded telemetry, not yet an established firmware fault. Separately,
 7EB0's uptime reset around 03:53:05–03:53:07 before its measurement. The agent
 did not initiate that reset or open serial; the cause is unconfirmed.
 
-OTA reliability changes and bounded diagnostics are being validated locally;
-they are not yet claimed deployed by this section. Parallel and longer-duration
-hardware acceptance remains open until actual results below are recorded.
+OTA reliability changes and bounded diagnostics were first validated locally.
+Their separate production deployment and actual parallel/longer-duration
+hardware results are recorded below.
 
 Local verification completed before deployment: broker full tests/vet plus
 targeted OTA/storage/race cases; admin full tests (5.878s)/vet plus targeted
@@ -551,14 +552,14 @@ and actual production screenshots are in `production-{aec0,7eb0}-{2,4}x30.*`.
 Capacity remains 2.4/1.6 Mbps and both customer occupancies remain 1/1.
 Four connections are stream slots, not four seats/users.
 
-A longer 4-stream/300-second diagnostic on each C3 is running internally to avoid
+A longer 4-stream/300-second diagnostic on each C3 was started internally to avoid
 the public HTTP proxy deadline. The first raw-netcat runner closed its request
 connection at stdin EOF, causing both requests to cancel before traffic
 (zero bytes, microsecond duration); that runner result is not a board failure or
 soak result. Its evidence is retained in
 `diagnostic-runner-cancelled-before-traffic.txt`. The corrected runner holds
-stdin open, and both board drawers confirm 4/4 active streams. Long-run results
-will be recorded after the actual request durations finish.
+stdin open, and both board drawers confirmed 4/4 active streams. Long-run
+results follow after the actual request durations finished.
 
 The corrected run completed at 04:27:02 +07 with actual aggregate durations
 300.0009/300.0006 seconds. It is **partial, not passed**:
@@ -578,9 +579,8 @@ claiming sustained four-connection acceptance. Raw results and broker evidence
 are in `production-c3-4x300-{results,broker-log}.txt`.
 
 The same run also exposed close-time broker byte accounting: Overview showed
-0.00 Mbps while streams were carrying data. Incremental payload accounting and
-open-stream regression tests are in progress; live verification must follow
-their deployment.
+0.00 Mbps while streams were carrying data. Incremental payload accounting,
+open-stream regression tests and postdeployment live verification follow below.
 
 Both C3s subsequently returned to idle CPU 1%, 0/4 streams and free heap
 141 KiB (AEC0) / 137 KiB (7EB0), with continuing uptime. Actual production
@@ -659,3 +659,46 @@ coinciding with a deadline, while accepting genuine deadline partial reads.
 The final object may have fewer than 64 KiB if prior objects already made the
 worker meaningful; its typed deadline cause is retained for that decision.
 A standalone short measurement still fails the minimum-data requirement.
+
+Production deployment `us4vqlsa1utkwkflwybr2i4d` imported
+`184726f4e81ba0d4fabcaacacdc701785be0e2e2` (including `574514b`) at 04:41:10
++07, and all four services started by 04:42:26. The deployment finished
+successfully. This is the final runtime deployment for the follow-up; later
+handoff-only commits do not change runtime code. Its actual deploy evidence is
+`production-deadline-deployment.txt`.
+
+Final real-hardware checks used the production **Connection test** menu, not
+mock responses, with four streams / 30 seconds / `persist:false` on each C3:
+
+| Board | Aggregate | Displayed data | Actual elapsed | Result |
+|---|---:|---:|---:|---|
+| AEC0 / 3134 | 2.36 Mbps | 8.4 MiB | 30.0 s | 4/4 completed at the intended deadline |
+| 7EB0 / 3133 | 2.45 Mbps | 8.8 MiB | 30.0 s | 4/4 completed at the intended deadline |
+
+Both modals show “Test complete. Measured speed and seats are unchanged.”
+Evidence: `production-final-{aec0,7eb0}-4x30.{txt,jpg}`. Final broker logs show
+all three boards reconnecting at 04:42:26–04:42:27 after the deliberate deploy,
+with no subsequent link down during these checks. Once the 30-second STATS
+window returned to idle, all three show CPU 1%; C3 free heap is 137/141 KiB.
+Slots 1/3/4, capacities 5.3/1.6/2.4 Mbps, occupancies 0/1, 1/1, 1/1, customer
+bindings and all firmware 2.4.24 reports remain intact.
+
+Final production screenshots are `production-final-devices-1440.jpg` and
+`production-final-devices-375.jpg`; mobile page width equals client width
+(360 CSS px plus the vertical gutter), with no horizontal overflow. All
+temporary viewport overrides were reset, and the dashboard was left open.
+
+### Acceptance boundary at handoff
+
+- Local validation, production deployment, actual OTA confirmation, bounded
+  concurrency/transfer results and reconnect evidence are recorded separately.
+- Final runtime source is `184726f`; later changes to this handoff are docs only.
+- Firmware 2.4.24 remains **testing**, and stable/latest remains
+  `2.4.21-mux1.2`. The bounded five-minute run does not prove a 24-hour soak.
+- The old S3 HTTPS OTA failure's exact runtime cause and the independent
+  7EB0 reset before testing remain unconfirmed. The current S3 image was
+  recovered without erasing NVS and then passed two broker OTA confirmations.
+- An overall firmware OTA deadline remains a future hardening item; the old
+  per-read timeout is not an overall deadline. See the source-analysis artifact.
+- Billing/orders, external notifications and firmware RSSI remain outside this
+  Dashboard Phase 2 follow-up. No customer assignment or old archive was removed.
