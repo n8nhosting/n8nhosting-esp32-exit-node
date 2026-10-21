@@ -10,3 +10,4 @@ firmware/sdkconfig
 # local tooling
 .worktrees/
 .superpowers/
+__pycache__/
