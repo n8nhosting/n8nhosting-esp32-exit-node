@@ -32,6 +32,10 @@
     "settings_groups": 10,
     "commerce_groups": 13,
     "screenshots": 16,
-    "external_provider_requests": 0
-  }
+    "external_provider_requests": 0,
+    "connection_groups": 5,
+    "final_settings_repeat": "10 groups passed after inline reservation layout correction"
+  },
+  "final_ui_source": "f8ab42d17748f9f6212286136ac0ad024bfb7878",
+  "final_ui_markers": "TestDashboardServesDeviceEditor pass, 1.699s"
 }

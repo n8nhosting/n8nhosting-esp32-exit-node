@@ -1,5 +1,18 @@
 # Read-only hardware soak recorder
 
+Live run (22 October 2026): production testing firmware 2.4.25 is being recorded
+from 06:11:17 +07 for 24 hours in container `exitnode-soak-20261022-v2425-main`.
+Expected finish: 23 October 2026, 06:11:17 +07.
+Private server output: `/root/exitnode-soak-20261022-0550/evidence/run-2/`.
+The earlier `run-1/` is retained as interrupted warm-up evidence (9 samples,
+0 polling errors, `completed:false`), stopped before the final S3 OTA cycle.
+This is not a completed acceptance result. See the
+[platform handoff](../docs/dashboard-review/06-platform-commerce-acceptance.md).
+The recorder shares the current broker container's network namespace; after a
+deployment replaces that broker, start a fresh recorder and new output directory
+and preserve the previous run as interrupted evidence. Do not promote firmware
+from elapsed time alone.
+
 Prepared for a reviewed, unattended 24-hour canary. Creating this tool does not
 start a soak, certify hardware, change firmware, or promote a release.
 

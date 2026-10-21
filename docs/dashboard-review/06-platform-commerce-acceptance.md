@@ -92,6 +92,11 @@ disabled; no mock payment or email is enabled in production. After configuration
 verify a real test-mode email/login, Stripe test payment/webhook and private slip
 review on the intended hostname before publishing plans. Real payment acceptance
 and merchant/bank setup remain operator-owned activation steps.
+Store secrets as runtime variables, not frontend code or build arguments. A
+non-browser probe from the VPS to the public config endpoint returned HTTP 403,
+while the actual browser loaded the public portal successfully. Internal service
+checks establish application readiness only: verify external provider/webhook
+reachability on the intended hostname during activation.
 
 The current Checkout contract follows Stripe's
 [Endive payment-method migration](https://support.stripe.com/questions/fix-the-payment-method-types-error):
@@ -130,6 +135,10 @@ is promoted merely because a recorder finishes.
   now share the existing Board seats row; no information was removed. The final
   10-group settings run passes, including all ten sections inside the desktop
   frame, all 50 activity entries, mobile layout and both assignment pickers.
+- Connection/OTA UI regression: 5 groups passed against the final integrated
+  API, covering `persist:false`, per-stream errors, stop/abort, stale replies and
+  mobile focus restoration. Diagnostic responses in these browser cases are
+  explicitly simulated; real hardware results are separate below.
 - Commerce/portal browser verification: **13 groups passed**, 16 screenshots,
   zero uncaught JavaScript errors and zero external provider requests. Admin
   plan CRUD, approvals/download, order retry/cancel, email log and user history
@@ -161,7 +170,93 @@ or secret was copied into the repository.
 
 ### Production and activation state
 
-Pending this release's final integration and deployment evidence. The prior
-runtime was `184726f`, with three boards reporting testing firmware 2.4.24.
-Do not infer that 2.4.25, commerce or public payments are live from the local
-results above. A full 24-hour hardware result has not yet been collected.
+Final runtime source is **`f8ab42d17748f9f6212286136ac0ad024bfb7878`**. Coolify
+deployment **`ccrimsfsr8peebgowx7epsfe`** imported that commit at 05:56:33 +07
+and started all four services by 05:57:59 on 22 October 2026. The deployment
+reports Success. Initial migration/catalog deployment `o9xdpejqe3pcjro2yjtbthrj`
+used `77b65e7`; the final source adds the independently tested drawer alignment.
+Later evidence-only commits do not imply another runtime deployment.
+
+Actual production checks:
+
+- SQLite integrity check passed, schema is v7, 4 existing users and 4 saved
+  device records remain. A direct comparison against the private v6 backup found
+  **0 changed existing user contracts and 0 changed board settings** (including
+  bindings, expiry/rate/quota, name/kind/slot/capacity). No old record was removed.
+- The three researched plans exist at 7900/13900/24900 satang, 33 total days,
+  3 bonus days, all inactive. Customers/subscriptions/orders remain 0; no real
+  customer purchase or email/payment provider transaction was created.
+- The public `/portal/` loads in the real browser. Desktop 1440x900 and mobile
+  375x812 have no horizontal overflow; missing setup is stated honestly.
+  Internal config reports login/Stripe/manual payments disabled, with portal
+  URL, email, Turnstile, Stripe and bank configuration still absent.
+- Both C3 boards and the S3 now report testing firmware 2.4.25 and OTA `ok`.
+  Actual RSSI is present. After the initial boot window all three report CPU 1%.
+  At the first recorder sample, C3 free heap was 140012/144332 bytes and S3
+  free internal heap 101851 bytes with 8 MiB PSRAM reported.
+- Deployed release metadata still selects `2.4.21-mux1.2` as latest; 2.4.25
+  remains testing and the older 2.4.24 archive remains available. Build/archive
+  verification also checked that all older files were preserved.
+
+The firmware canary proves successful OTA/rollback confirmation and real RSSI
+on the new images. A further S3 2.4.25 → 2.4.24 OTA was confirmed at
+06:10:05 +07, exercising the new 2.4.25 transfer adapter itself, rather than
+only installing it through the older firmware's OTA implementation. The board
+reported 2.4.24, OTA `ok` and reset uptime. It was then restored to 2.4.25
+with OTA `ok` at 06:10:52 +07 before the full-duration collection.
+Negative overall-timeout/cleanup cases are host tests; no
+production fault was deliberately injected to claim a hardware deadline test.
+
+### Real transfer diagnostics
+
+On production testing firmware 2.4.25, each board completed four simultaneous
+streams for 30 seconds through the actual admin diagnostic endpoint. All twelve
+streams ended normally, with zero retries and zero CONNECT 503 responses.
+`persist:false` preserved every configured capacity and existing user binding.
+
+| Board suffix | Aggregate Mbps | Downloaded bytes | Actual seconds |
+|---|---:|---:|---:|
+| C3 AEC0 | 2.464223 | 9,241,196 | 30.001168 |
+| C3 7EB0 | 2.484611 | 9,317,392 | 30.000322 |
+| S3 86BC | 7.893194 | 29,600,433 | 30.000968 |
+
+Private detailed results are `diagnostic-{AEC0,7EB0,S3}-4x30.json` under
+`/root/exitnode-soak-20261022-0550/`. These bounded transfers are real hardware
+evidence, not a sustained load, guaranteed speed or a completed 24-hour pass.
+After the transfers, C3 heap low-water values were 31,964/31,220 bytes and both
+boards returned to idle CPU 1%; collection retains these resource bounds.
+
+### Running 24-hour collection
+
+A real read-only recorder started **22 October 2026, 06:11:17 +07** and is
+scheduled to finish **23 October 2026, 06:11:17 +07**. Container
+`exitnode-soak-20261022-v2425-main` runs independently of this chat/browser, without
+an admin token or published ports, using an unprivileged UID, read-only code,
+limited resources and a private evidence mount. It shares the current broker's
+network namespace and only GETs `/nodes` and `/status` every 60 seconds for the
+three approved boards.
+
+Server evidence is in
+`/root/exitnode-soak-20261022-0550/evidence/run-2/` (`run.json`,
+`samples.jsonl`, eventual `result.json`). The first persisted sample has all
+three boards online on 2.4.25 with OTA `ok`, RSSI -58/-56/-44 dBm, and no
+polling errors. C3 CPU is 1%; S3's first sample retains its initial boot CPU 13%.
+**This is running evidence collection, not a completed 24-hour pass.**
+
+The earlier `run-1/` and container `exitnode-soak-20261022-v2425` are retained
+as an intentionally interrupted warm-up: 06:01:11–06:09:32 +07, 9 samples,
+0 polling failures, `completed:false`. All three boards were online in every
+sample. The bounded transfer diagnostics ran during this warm-up; it was stopped
+before the S3 positive OTA adapter check. Neither warm-up nor OTA time is counted
+towards the new full-duration run.
+
+Do not reuse or overwrite this evidence directory. A deployment/broker container
+replacement interrupts this collection's endpoint; after any such change start
+a fresh recorder/container and new output directory, retaining the earlier
+samples as interrupted evidence. Configuring providers may require such a
+redeployment. `completed:true` alone does not certify hardware: review errors,
+gaps, uptime resets and resource bounds before accepting or promoting firmware.
+
+Public payment/email activation and the completed soak remain open gates.
+Reseller/affiliate features, a public status page and automatic abuse detection
+remain later roadmap work, outside these seven approved follow-ups.

@@ -1,0 +1,57 @@
+{
+  "scope": "Actual production checks; provider activation and completed soak remain pending",
+  "runtime_source": "f8ab42d17748f9f6212286136ac0ad024bfb7878",
+  "coolify_deployment": "ccrimsfsr8peebgowx7epsfe",
+  "deployment_status": "success",
+  "services_started_by": "2026-10-22T05:57:59+07:00",
+  "database": {
+    "schema_version": 7,
+    "integrity_check": "ok",
+    "counts": {"users": 4, "devices": 4, "plans": 3, "customers": 0, "subscriptions": 0, "orders": 0},
+    "changed_existing_user_contracts": 0,
+    "changed_existing_board_settings": 0,
+    "comparison": "Read-only SQL comparison against private online v6 backup; repeated after hardware diagnostics"
+  },
+  "catalog": {
+    "price_satang": [7900, 13900, 24900],
+    "total_days": 33,
+    "bonus_days": 3,
+    "all_inactive": true
+  },
+  "providers": {"login_ready": false, "stripe_ready": false, "manual_ready": false, "real_transactions": 0},
+  "public_portal": {"actual_browser_loaded": true, "viewports": ["1440x900", "375x812"], "horizontal_overflow": false},
+  "firmware": {
+    "version": "2.4.25",
+    "status": "testing",
+    "all_three_online_with_ota_ok": true,
+    "rssi_present": true,
+    "stable_latest_preserved": "2.4.21-mux1.2",
+    "s3_new_adapter_positive_cycle": {"from": "2.4.25-s3", "to": "2.4.24-s3", "confirmed_at": "2026-10-22T06:10:05+07:00", "restored_to": "2.4.25-s3", "restored_at": "2026-10-22T06:10:52+07:00"},
+    "hardware_negative_timeout_injection": false
+  },
+  "transfers": {
+    "parallel_per_board": 4,
+    "requested_seconds": 30,
+    "persisted_capacity": false,
+    "all_streams_complete": true,
+    "retries": 0,
+    "connect_503s": 0,
+    "results": [
+      {"board_suffix": "C3 AEC0", "mbps": 2.464223005074503, "bytes": 9241196, "seconds": 30.001167852},
+      {"board_suffix": "C3 7EB0", "mbps": 2.4846111926262857, "bytes": 9317392, "seconds": 30.000322071},
+      {"board_suffix": "S3 86BC", "mbps": 7.89319411056874, "bytes": 29600433, "seconds": 30.000968009}
+    ]
+  },
+  "soak": {
+    "status": "running, not accepted",
+    "container": "exitnode-soak-20261022-v2425-main",
+    "started_at": "2026-10-22T06:11:17.040+07:00",
+    "expected_finish": "2026-10-23T06:11:17.040+07:00",
+    "hours": 24,
+    "interval_seconds": 60,
+    "output_directory": "/root/exitnode-soak-20261022-0550/evidence/run-2/",
+    "initial_sample_poll_failures": 0,
+    "warmup": {"directory": "run-1", "samples": 9, "poll_failures": 0, "completed": false},
+    "caveat": "A broker replacement interrupts the recorder endpoint; retain old evidence and begin a new run. Elapsed time is not a hardware acceptance verdict."
+  }
+}
