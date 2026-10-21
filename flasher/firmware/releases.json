@@ -2,6 +2,37 @@
   "latest": "2.4.21-mux1.2",
   "releases": [
     {
+      "version": "2.4.24",
+      "reports": "2.4.24-s3",
+      "protocol": "mux1",
+      "built": "Oct 22 2026 04:04:31",
+      "added": "2026-10-22",
+      "size": 1265744,
+      "sha256": "6b25ef65e3174586a06e8da846c0218a67675ae4d4365e4bfed6a1bc5494b952",
+      "url": "firmware/releases/2.4.24/esp32s3/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.24/manifest.json",
+      "targets": {
+        "esp32c3": {
+          "url": "firmware/releases/2.4.24/esp32c3/esp32_nat_router.bin",
+          "size": 1217232,
+          "sha256": "b415712c0e25821b71fe52e6654b6c041be2889961cba3a4346a98e72074c058",
+          "built": "Oct 22 2026 04:00:32",
+          "reports": "2.4.24-c3"
+        },
+        "esp32s3": {
+          "url": "firmware/releases/2.4.24/esp32s3/esp32_nat_router.bin",
+          "size": 1265744,
+          "sha256": "6b25ef65e3174586a06e8da846c0218a67675ae4d4365e4bfed6a1bc5494b952",
+          "built": "Oct 22 2026 04:04:31",
+          "reports": "2.4.24-s3"
+        }
+      },
+      "title": "ลด CPU เมื่อไม่มี USB host: พัก console เมื่ออ่านไม่ได้",
+      "notes": "เพิ่มพัก 100 ms เมื่อ console คืน NULL/EOF เพื่อหยุด busy loop ขณะ USB-Serial/JTAG ไม่มี host โดยยังกลับมาใช้ console ได้เมื่อเชื่อมต่อใหม่ ไม่เปลี่ยนสูตร CPU, mux limits, provisioning หรือ partition เป็นรุ่นทดสอบ รอตรวจ CPU และ console recovery บนบอร์ดจริง",
+      "status": "testing",
+      "commit": "7d9d75a"
+    },
+    {
       "version": "2.4.23",
       "reports": "2.4.23-s3",
       "protocol": "mux1",
