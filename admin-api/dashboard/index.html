@@ -715,7 +715,7 @@ async function measureDevice(mac, btn){
     if(errEl && errEl.isConnected){ errEl.textContent=''; const p=document.createElement('span'); p.className='pill bad'; p.textContent=e.message; errEl.appendChild(p); }
   }
 }
-function fmtUptime(s){ s=+s||0; if(!s) return '—'; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
+function fmtUptime(s){ s=+s||0; if(!s) return '—'; if(s<60) return `${s}s`; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return d?`${d}d ${h}h`:(h?`${h}h ${m}m`:`${m}m`); }
 /* ---- Firmware versions / OTA ---- */
 function otaPill(n){
   const t = n.ota_target ? ' → '+n.ota_target : '';
