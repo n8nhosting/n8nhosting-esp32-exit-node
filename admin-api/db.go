@@ -70,6 +70,30 @@ var migrations = []string{
 	// v6: legacy unassigned boards are eligible for automatic slot reservation;
 	// an explicit operator slot:0 disables automatic assignment from now on.
 	`ALTER TABLE devices ADD COLUMN slot_auto INTEGER NOT NULL DEFAULT 1`,
+	// v7: commerce, customer identity and durable provider/outbox deduplication.
+	`ALTER TABLE users ADD COLUMN subscription_id TEXT NOT NULL DEFAULT '';
+ CREATE TABLE usage_monthly (month TEXT NOT NULL,username TEXT NOT NULL,bytes INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(month,username));
+ INSERT INTO usage_monthly(month,username,bytes) SELECT usage_month,username,usage_bytes FROM users WHERE usage_month=strftime('%Y-%m','now') AND usage_bytes>0 AND substr(username,1,9)<>'_measure-';
+ CREATE TABLE customers (id TEXT PRIMARY KEY,email TEXT NOT NULL UNIQUE,verified_at TEXT NOT NULL DEFAULT '',name TEXT NOT NULL DEFAULT '',aup_version TEXT NOT NULL DEFAULT '',aup_accepted_at TEXT NOT NULL DEFAULT '',max_subscriptions INTEGER NOT NULL DEFAULT 3,created_at TEXT NOT NULL,last_login_at TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '');
+ CREATE TABLE plans (id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',bonus_days INTEGER NOT NULL DEFAULT 0,days INTEGER NOT NULL,quota_gb REAL NOT NULL,rate_mbps REAL NOT NULL,kind TEXT NOT NULL,price_satang INTEGER NOT NULL,active INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE subscriptions (id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,plan_id TEXT NOT NULL,username TEXT NOT NULL UNIQUE,device_mac TEXT NOT NULL,slot INTEGER NOT NULL,period_start TEXT NOT NULL,period_end TEXT NOT NULL,quota_bytes INTEGER NOT NULL,used_bytes INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,last_notified TEXT NOT NULL DEFAULT '{}');
+ CREATE INDEX subscriptions_customer ON subscriptions(customer_id,status);
+ CREATE TABLE subscription_periods (order_id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL,plan_id TEXT NOT NULL,period_start TEXT NOT NULL,period_end TEXT NOT NULL,quota_bytes INTEGER NOT NULL,rate_mbps REAL NOT NULL,status TEXT NOT NULL);
+ CREATE INDEX subscription_periods_due ON subscription_periods(subscription_id,status,period_start);
+ CREATE TABLE orders (id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,subscription_id TEXT NOT NULL DEFAULT '',plan_id TEXT NOT NULL,plan_snapshot TEXT NOT NULL,amount_satang INTEGER NOT NULL,method TEXT NOT NULL,status TEXT NOT NULL,device_mac TEXT NOT NULL DEFAULT '',reservation_expires_at TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,paid_at TEXT NOT NULL DEFAULT '',stripe_session_id TEXT NOT NULL DEFAULT '',last_attempt_at TEXT NOT NULL DEFAULT '');
+ CREATE INDEX orders_reservation ON orders(device_mac,status,reservation_expires_at);
+ CREATE INDEX orders_customer ON orders(customer_id,created_at);
+ CREATE INDEX orders_waiting ON orders(status,last_attempt_at,paid_at,id);
+ CREATE TABLE slips (order_id TEXT PRIMARY KEY,file TEXT NOT NULL,mime TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL,verifier_result TEXT NOT NULL DEFAULT '{}',reviewed_by TEXT NOT NULL DEFAULT '',reviewed_at TEXT NOT NULL DEFAULT '',reason TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
+ CREATE UNIQUE INDEX slips_unique_sha ON slips(sha256);
+ CREATE TABLE stripe_checkout_requests (order_id TEXT PRIMARY KEY,expires_at INTEGER NOT NULL);
+ CREATE TABLE payment_events (id TEXT PRIMARY KEY,order_id TEXT NOT NULL,created_at TEXT NOT NULL);
+ CREATE TABLE portal_tokens (hash TEXT PRIMARY KEY,customer_id TEXT NOT NULL,expires_at TEXT NOT NULL,used_at TEXT NOT NULL DEFAULT '',aup_version TEXT NOT NULL DEFAULT '',aup_accepted_at TEXT NOT NULL DEFAULT '');
+ CREATE TABLE portal_sessions (hash TEXT PRIMARY KEY,customer_id TEXT NOT NULL,csrf_hash TEXT NOT NULL,expires_at TEXT NOT NULL);
+ CREATE TABLE portal_rate_limits (key TEXT PRIMARY KEY,window_start INTEGER NOT NULL,count INTEGER NOT NULL);
+ CREATE TABLE ops_email_cursor (id INTEGER PRIMARY KEY CHECK(id=1),last_event_id INTEGER NOT NULL DEFAULT -1);
+ INSERT INTO ops_email_cursor(id,last_event_id) VALUES(1,-1);
+ CREATE TABLE email_outbox (id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,kind TEXT NOT NULL,to_email TEXT NOT NULL,subject TEXT NOT NULL,body_enc TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_at TEXT NOT NULL,claim_token TEXT NOT NULL DEFAULT '',claimed_until TEXT NOT NULL DEFAULT '',provider_id TEXT NOT NULL DEFAULT '',last_error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,first_attempt_at TEXT NOT NULL DEFAULT '',sent_at TEXT NOT NULL DEFAULT '');`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

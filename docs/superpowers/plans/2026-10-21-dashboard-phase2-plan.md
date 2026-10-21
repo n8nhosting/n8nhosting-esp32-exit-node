@@ -1,5 +1,10 @@
 # Dashboard phase 2 — implementation plan
 
+> Approved platform follow-up (2026-10-22): commerce, Stripe + manual slips,
+> customer portal, email outbox, RSSI and bounded firmware OTA are tracked in
+> [the platform acceptance report](../../dashboard-review/06-platform-commerce-acceptance.md).
+> Its local/production/activation gates supersede the older out-of-scope notes.
+
 > Latest seat-rule revision (2026-10-22): the operator approved independent
 > seats per board/MAC, including the same public IP. This supersedes the older
 > shared-IP/dedicated-IP admission rules in this plan. See

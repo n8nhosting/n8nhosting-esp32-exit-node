@@ -1,5 +1,10 @@
 # Dashboard redesign — สรุปจาก mockup 3 ภาพ (2026-10-21)
 
+> งานต่อเนื่องระบบขาย/Portal/RSSI/OTA วันที่ 22 ต.ค. 2026:
+> [รายงานตรวจรับ Platform](06-platform-commerce-acceptance.md) และ
+> [การศึกษาราคาในไทย](05-thai-pricing-research.html)
+> แยกผล local, production และการตั้งค่ารับเงินจริงไว้ชัดเจน
+
 > อัปเดต 2026-10-22: Dashboard Phase 2 deploy production แล้ว รวม Seat แยกต่อบอร์ด
 > ดู [ผลการตรวจรับและวิธีทดสอบ](04-phase2-acceptance.md) สำหรับ contracts,
 > automated checks และ screenshot artifacts เอกสารด้านล่างเป็น design review

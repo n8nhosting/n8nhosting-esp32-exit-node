@@ -34,6 +34,24 @@ type userInput struct {
 	// quota_gb_add: GB to add to this month's quota headroom (used by /extend)
 }
 
+func changesManagedFinancialFields(u *User, in userInput) bool {
+	if u.SubscriptionID == "" {
+		return false
+	}
+	if in.RateMbps != nil && *in.RateMbps != u.RateMbps {
+		return true
+	}
+	if in.QuotaGB != nil && *in.QuotaGB != u.QuotaGB {
+		return true
+	}
+	if in.ExpiresAt != "" && in.ExpiresAt != u.ExpiresAt {
+		a, ea := time.Parse(time.RFC3339, in.ExpiresAt)
+		b, eb := time.Parse(time.RFC3339, u.ExpiresAt)
+		return ea != nil || eb != nil || !a.Equal(b)
+	}
+	return false
+}
+
 func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -133,20 +151,39 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad body"})
 			return
 		}
-		if in.DeviceMAC != "" {
+		{
 			// a new binding passes the same capacity rule as /assign
 			s.admitMu.Lock()
 			defer s.admitMu.Unlock()
-			if cur, err := s.store.Get(name); err == nil && cur.DeviceMAC != in.DeviceMAC {
-				if code, body := s.admit(name, in.DeviceMAC); code != 0 {
-					s.emit("user.binding_refused", "warn", "user", name, "admin", "Device binding refused", map[string]any{"mac": in.DeviceMAC, "reason": body})
-					writeJSON(w, code, body)
+			if cur, err := s.store.Get(name); err == nil {
+				if changesManagedFinancialFields(cur, in) {
+					writeCommerceError(w, commerceFail(409, "use Sales renewal to change subscription expiry, rate or quota"))
 					return
+				}
+				prospective := *cur
+				if in.DeviceMAC != "" {
+					prospective.DeviceMAC = in.DeviceMAC
+				}
+				if in.Enabled != nil {
+					prospective.Enabled = *in.Enabled
+				}
+				if in.ExpiresAt != "" {
+					prospective.ExpiresAt = in.ExpiresAt
+				}
+				if prospective.DeviceMAC != "" && (cur.DeviceMAC != prospective.DeviceMAC || (!takesSeat(cur, time.Now()) && takesSeat(&prospective, time.Now()))) {
+					if code, body := s.admit(name, prospective.DeviceMAC); code != 0 {
+						s.emit("user.binding_refused", "warn", "user", name, "admin", "Device binding refused", map[string]any{"mac": in.DeviceMAC, "reason": body})
+						writeJSON(w, code, body)
+						return
+					}
 				}
 			}
 		}
 		before, _ := s.store.Get(name)
 		err := s.store.Update(name, func(u *User) error {
+			if changesManagedFinancialFields(u, in) {
+				return commerceFail(409, "use Sales renewal to change subscription expiry, rate or quota")
+			}
 			if in.Password != "" {
 				u.PassHash = hashPassword(in.Password)
 				u.CredEnc = encryptCred(in.Password)
@@ -172,7 +209,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeCommerceError(w, err)
 			return
 		}
 		u, _ := s.store.Get(name)
@@ -193,7 +230,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.publicUser(u))
 	case http.MethodDelete:
 		if err := s.store.Delete(name); err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeCommerceError(w, err)
 			return
 		}
 		s.emit("user.deleted", "info", "user", name, "admin", "User deleted", nil)
@@ -206,6 +243,20 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action string) {
 	var err error
 	var eventData any
+	if action == "enable" || action == "extend" {
+		s.admitMu.Lock()
+		defer s.admitMu.Unlock()
+		if u, e := s.store.Get(name); e == nil && action == "extend" && u.SubscriptionID != "" {
+			writeCommerceError(w, commerceFail(409, "use Sales renewal to extend a subscription"))
+			return
+		}
+		if u, e := s.store.Get(name); e == nil && u.DeviceMAC != "" && !takesSeat(u, time.Now()) {
+			if code, body := s.admit(name, u.DeviceMAC); code != 0 {
+				writeJSON(w, code, body)
+				return
+			}
+		}
+	}
 	switch action {
 	case "enable":
 		err = s.store.Update(name, func(u *User) error { u.Enabled = true; return nil })
@@ -247,6 +298,9 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		}
 		eventData = map[string]any{"days": days}
 		err = s.store.Update(name, func(u *User) error {
+			if u.SubscriptionID != "" {
+				return commerceFail(409, "use Sales renewal to extend a subscription")
+			}
 			base := time.Now().UTC()
 			if u.ExpiresAt != "" {
 				if exp, e := time.Parse(time.RFC3339, u.ExpiresAt); e == nil && exp.After(base) {
@@ -262,7 +316,7 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		writeCommerceError(w, err)
 		return
 	}
 	u, _ := s.store.Get(name)

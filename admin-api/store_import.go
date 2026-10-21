@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"time"
 )
 
 // importLegacyJSON copies the users in the JSON file at path into the users
@@ -45,6 +46,9 @@ func importLegacyJSON(db *sql.DB, path string) error {
 		}
 		for _, u := range list {
 			if _, err := c.ExecContext(ctx, insertUser, userArgs(u)...); err != nil {
+				return err
+			}
+			if err := seedMonthlyUsageConn(ctx, c, u, time.Now()); err != nil {
 				return err
 			}
 		}

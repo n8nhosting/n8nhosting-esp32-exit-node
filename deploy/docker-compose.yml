@@ -75,6 +75,21 @@ services:
       - SLOT_COUNT=${SLOT_COUNT:-30}
       - SPEEDTEST_URL=${SPEEDTEST_URL:-https://flash.jbacteam.com/speedtest.bin}  # capacity measurement download
       - GOST_INTERNAL_HOST=${GOST_INTERNAL_HOST:-gost}  # gost service the slot ports run in
+      # Customer commerce is fail-closed until operator credentials are configured.
+      - PORTAL_BASE_URL=${PORTAL_BASE_URL:-}
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
+      - TURNSTILE_SECRET=${TURNSTILE_SECRET:-}
+      - PORTAL_TRUSTED_PROXY_CIDRS=${PORTAL_TRUSTED_PROXY_CIDRS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - OPS_ALERT_EMAIL=${OPS_ALERT_EMAIL:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - PAYMENT_BANK_NAME=${PAYMENT_BANK_NAME:-}
+      - PAYMENT_ACCOUNT_NUMBER=${PAYMENT_ACCOUNT_NUMBER:-}
+      - PAYMENT_ACCOUNT_NAME=${PAYMENT_ACCOUNT_NAME:-}
+      - SLIP_STORAGE_DIR=/data/slips
+      - SLIP_STORAGE_MAX_BYTES=${SLIP_STORAGE_MAX_BYTES:-536870912}
     expose:
       - "8088"                        # dashboard + REST (map to admin.<domain>)
     volumes:

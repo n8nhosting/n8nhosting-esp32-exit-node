@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T05:38:24+07:00",
+  "title": "Design System: Proxy Server",
+  "extensions": {
+    "shadows": [{"name":"transient-message","value":"0 8px 24px #0005","purpose":"Separates a temporary confirmation from live data."}],
+    "motion": [{"name":"control-state","value":"150ms ease-out","purpose":"Color changes only; disabled under reduced motion."}],
+    "breakpoints": [{"name":"device-cards","value":"720px"},{"name":"portal-single-column","value":"900px"}],
+    "typographyMeta": {"body":{"displayName":"Thai-capable system text","purpose":"Operational labels, forms and customer help."},"data":{"displayName":"Connection data","purpose":"MAC, host, port and username."}}
+  },
+  "components": [
+    {"name":"Primary action","kind":"button","refersTo":"button-primary","description":"Commit the clearly named action.","html":"<button class=\"ds-primary\">Save plan</button>","css":".ds-primary{background:var(--primary,#455ddc);color:var(--fg,#f2f5fa);padding:10px 18px;min-height:44px;border:0;border-radius:9px;font:600 15px 'Segoe UI',sans-serif;cursor:pointer}.ds-primary:hover{filter:brightness(1.08)}.ds-primary:focus-visible{outline:2px solid #8595e8;outline-offset:4px}.ds-primary:active{filter:brightness(.95)}"},
+    {"name":"Secondary action","kind":"button","description":"Review, cancel or inspect without implying success.","html":"<button class=\"ds-secondary\">ดูข้อมูลเชื่อมต่อ</button>","css":".ds-secondary{background:var(--input,#2f374c);color:var(--fg,#f2f5fa);padding:10px 18px;min-height:44px;border:0;border-radius:9px;font:600 15px 'Segoe UI',sans-serif;cursor:pointer}.ds-secondary:hover{filter:brightness(1.08)}.ds-secondary:focus-visible{outline:2px solid #8595e8;outline-offset:4px}"},
+    {"name":"Form field","kind":"input","refersTo":"input","description":"A visible label remains after typing.","html":"<label class=\"ds-label\" for=\"ds-email\">อีเมล</label><input class=\"ds-input\" id=\"ds-email\" type=\"email\" placeholder=\"you@example.com\">","css":".ds-label{display:block;color:#a0a9c0;font:13px 'Segoe UI',sans-serif;margin:0 0 6px}.ds-input{background:var(--input,#2f374c);color:var(--fg,#f2f5fa);min-height:44px;padding:11px 12px;border:1px solid #343c50;border-radius:9px;font:15px 'Segoe UI',sans-serif}.ds-input::placeholder{color:#a0a9c0}.ds-input:focus-visible{outline:2px solid #8595e8;outline-offset:4px}"},
+    {"name":"Section navigation","kind":"nav","description":"Current location uses a tonal background and text.","html":"<nav class=\"ds-nav\"><a aria-current=\"page\" href=\"#plans\">Plans</a><a href=\"#orders\">Orders</a></nav>","css":".ds-nav{display:flex;gap:8px;font:15px 'Segoe UI',sans-serif}.ds-nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;color:#a0a9c0;border-radius:9px;text-decoration:none}.ds-nav a[aria-current]{background:#2f374c;color:#f2f5fa}.ds-nav a:hover{color:#f2f5fa}.ds-nav a:focus-visible{outline:2px solid #8595e8;outline-offset:3px}"},
+    {"name":"Payment state","kind":"chip","description":"Text and color distinguish pending from payment recorded.","html":"<span class=\"ds-state\">รอตรวจสลิป</span>","css":".ds-state{display:inline-block;border-radius:20px;padding:3px 10px;background:#473121;color:#ffc090;font:12px/1.6 'Segoe UI',sans-serif}"},
+    {"name":"Subscription panel","kind":"card","description":"Endpoint, current usage and paid-through date belong together.","html":"<article class=\"ds-sub\"><h2>Thai Home Lite</h2><p class=\"ds-endpoint\">proxy.example.test:3131</p><p>1.2 GB / 10 GB · current period</p></article>","css":".ds-sub{background:#222631;color:#f2f5fa;padding:24px;border-radius:14px;font:15px/1.6 'Segoe UI',sans-serif}.ds-sub h2{font-size:20px;margin:0 0 12px}.ds-sub p{color:#a0a9c0}.ds-sub .ds-endpoint{background:#0e1116;padding:14px 16px;border-radius:9px;color:#f2f5fa;font:13px/1.6 ui-monospace,monospace;overflow-wrap:anywhere}"}
+  ],
+  "narrative": {
+    "northStar":"The established operations console",
+    "overview":"Extend the operator-approved visual language already implemented in admin-api/dashboard/index.html. Tonal panels and measured data carry the interface; primary actions are easy to locate without decorative effects.",
+    "keyCharacteristics":["Thai-capable system text","Measured data and explicit states","Visible actions with 44px controls"],
+    "rules":[],
+    "dos":["Keep forms inside the current context and preserve edits during refresh.","Use text with every status color."],
+    "donts":["Do not describe a slip upload or checkout redirect as payment confirmation.","Do not imply dedicated public IP from a dedicated board."]
+  }
+}

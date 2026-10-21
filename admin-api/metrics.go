@@ -132,6 +132,9 @@ func (s *server) connectedNow(now time.Time) int {
 }
 func (s *server) publicUser(u *User) PublicUser {
 	p := u.Public()
+	if u.SubscriptionID != "" {
+		_ = s.store.db.QueryRow(`SELECT period_start,period_end FROM subscriptions WHERE id=?`, u.SubscriptionID).Scan(&p.QuotaPeriodStart, &p.QuotaPeriodEnd)
+	}
 	now := time.Now()
 	s.telemetry.mu.Lock()
 	defer s.telemetry.mu.Unlock()
@@ -158,10 +161,18 @@ func (s *server) sampleTelemetry(now time.Time) {
 	t := &s.telemetry
 	t.sampleMu.Lock()
 	defer t.sampleMu.Unlock()
+	if err := s.maintainCommerce(context.Background(), now); err != nil {
+		log.Printf("commerce maintenance: %v", err)
+	}
 	var status brokerSnapshot
 	statusErr := s.brokerGET("/status", &status)
 	nodes, nodesErr := s.brokerNodesWithRouting()
 	brokerOK := statusErr == nil && nodesErr == nil
+	if nodesErr == nil {
+		if err := s.retryPaidCommerce(context.Background(), nodes, now); err != nil {
+			log.Printf("commerce capacity retry: %v", err)
+		}
+	}
 	// Activity owns its own lock and may read stores or emit events.
 	s.observeActivity(nodes, brokerOK, now)
 	users := s.store.List() // Never query a store from inside the write transaction.
@@ -246,6 +257,9 @@ func (s *server) sampleTelemetry(now time.Time) {
 			t.mu.Unlock()
 		}
 	}
+	// Provider work is bounded and runs only after the fresh fleet sample is
+	// published, so a slow email provider cannot delay this sample's live KPI.
+	s.runPortalMaintenance(context.Background(), now)
 }
 func (s *server) flushMetricsLocked(now time.Time) error {
 	t := &s.telemetry

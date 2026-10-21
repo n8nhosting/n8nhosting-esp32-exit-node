@@ -113,29 +113,33 @@ type User struct {
 	RateMbps       float64 `json:"rate_mbps"`            // 0 = unlimited
 	QuotaGB        float64 `json:"quota_gb"`             // 0 = unlimited (per calendar month)
 	// usage (reset each calendar month)
-	UsageBytes int64  `json:"usage_bytes"`
-	UsageMonth string `json:"usage_month"` // "2026-10"
-	CreatedAt  string `json:"created_at"`
-	Note       string `json:"note,omitempty"`
-	DeviceMAC  string `json:"device_mac,omitempty"` // bound exit device (informational)
-	CredEnc    string `json:"cred_enc,omitempty"`   // AES-GCM(password) for display; never returned by the API
+	UsageBytes     int64  `json:"usage_bytes"`
+	UsageMonth     string `json:"usage_month"` // "2026-10"
+	CreatedAt      string `json:"created_at"`
+	Note           string `json:"note,omitempty"`
+	DeviceMAC      string `json:"device_mac,omitempty"` // bound exit device (informational)
+	SubscriptionID string `json:"subscription_id,omitempty"`
+	CredEnc        string `json:"cred_enc,omitempty"` // AES-GCM(password) for display; never returned by the API
 }
 
 // PublicUser is what the API returns — never the password hash.
 type PublicUser struct {
-	Status     string  `json:"status"`
-	LiveBPS    float64 `json:"live_bps"`
-	Username   string  `json:"username"`
-	Enabled    bool    `json:"enabled"`
-	ExpiresAt  string  `json:"expires_at,omitempty"`
-	RateMbps   float64 `json:"rate_mbps"`
-	QuotaGB    float64 `json:"quota_gb"`
-	UsageBytes int64   `json:"usage_bytes"`
-	UsageGB    float64 `json:"usage_gb"`
-	UsageMonth string  `json:"usage_month"`
-	CreatedAt  string  `json:"created_at"`
-	Note       string  `json:"note,omitempty"`
-	DeviceMAC  string  `json:"device_mac,omitempty"`
+	Status           string  `json:"status"`
+	LiveBPS          float64 `json:"live_bps"`
+	Username         string  `json:"username"`
+	Enabled          bool    `json:"enabled"`
+	ExpiresAt        string  `json:"expires_at,omitempty"`
+	RateMbps         float64 `json:"rate_mbps"`
+	QuotaGB          float64 `json:"quota_gb"`
+	UsageBytes       int64   `json:"usage_bytes"`
+	UsageGB          float64 `json:"usage_gb"`
+	UsageMonth       string  `json:"usage_month"`
+	CreatedAt        string  `json:"created_at"`
+	Note             string  `json:"note,omitempty"`
+	DeviceMAC        string  `json:"device_mac,omitempty"`
+	SubscriptionID   string  `json:"subscription_id,omitempty"`
+	QuotaPeriodStart string  `json:"quota_period_start,omitempty"`
+	QuotaPeriodEnd   string  `json:"quota_period_end,omitempty"`
 }
 
 func (u *User) Public() PublicUser {
@@ -145,7 +149,7 @@ func (u *User) Public() PublicUser {
 		Username: u.Username, Enabled: u.Enabled, ExpiresAt: u.ExpiresAt,
 		RateMbps: u.RateMbps, QuotaGB: u.QuotaGB, UsageBytes: u.UsageBytes,
 		UsageGB:    float64(u.UsageBytes) / (1024 * 1024 * 1024),
-		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note, DeviceMAC: u.DeviceMAC,
+		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note, DeviceMAC: u.DeviceMAC, SubscriptionID: u.SubscriptionID,
 	}
 }
 
@@ -206,28 +210,28 @@ func (s *Store) DB() *sql.DB { return s.db }
 
 // userCols and userArgs list the users columns in one fixed order.
 const userCols = `username, pass_hash, cred_enc, enabled, expires_at, rate_mbps,
-	quota_gb, usage_bytes, usage_month, created_at, note, device_mac`
+	quota_gb, usage_bytes, usage_month, created_at, note, device_mac, subscription_id`
 
 func userArgs(u *User) []any {
 	return []any{u.Username, u.PassHash, u.CredEnc, u.Enabled, u.ExpiresAt, u.RateMbps,
-		u.QuotaGB, u.UsageBytes, u.UsageMonth, u.CreatedAt, u.Note, u.DeviceMAC}
+		u.QuotaGB, u.UsageBytes, u.UsageMonth, u.CreatedAt, u.Note, u.DeviceMAC, u.SubscriptionID}
 }
 
 const (
 	selectUser = `SELECT ` + userCols + ` FROM users WHERE username = ?`
-	insertUser = `INSERT INTO users (` + userCols + `) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+	insertUser = `INSERT INTO users (` + userCols + `) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (username) DO NOTHING`
 	// updateUser takes userArgs minus the username, then the username.
 	updateUser = `UPDATE users SET pass_hash = ?, cred_enc = ?, enabled = ?, expires_at = ?,
 		rate_mbps = ?, quota_gb = ?, usage_bytes = ?, usage_month = ?, created_at = ?,
-		note = ?, device_mac = ? WHERE username = ?`
+		note = ?, device_mac = ?, subscription_id = ? WHERE username = ?`
 )
 
 // scanUser reads one userCols row; no row is ErrNotFound.
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
 	err := row.Scan(&u.Username, &u.PassHash, &u.CredEnc, &u.Enabled, &u.ExpiresAt, &u.RateMbps,
-		&u.QuotaGB, &u.UsageBytes, &u.UsageMonth, &u.CreatedAt, &u.Note, &u.DeviceMAC)
+		&u.QuotaGB, &u.UsageBytes, &u.UsageMonth, &u.CreatedAt, &u.Note, &u.DeviceMAC, &u.SubscriptionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -241,6 +245,9 @@ func monthKey(t time.Time) string { return t.UTC().Format("2006-01") }
 
 // rollMonth zeroes usage if we have crossed into a new calendar month.
 func (u *User) rollMonth(now time.Time) {
+	if u.SubscriptionID != "" {
+		return
+	}
 	mk := monthKey(now)
 	if u.UsageMonth != mk {
 		u.UsageMonth = mk
@@ -279,14 +286,25 @@ func (s *Store) Create(u *User) error {
 		u.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	u.UsageMonth = monthKey(time.Now())
-	res, err := s.db.Exec(insertUser, userArgs(u)...)
-	if err != nil {
-		return err
+	ctx := context.Background()
+	return inTx(ctx, s.db, func(c *sql.Conn) error {
+		res, err := c.ExecContext(ctx, insertUser, userArgs(u)...)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrExists
+		}
+		return seedMonthlyUsageConn(ctx, c, u, time.Now())
+	})
+}
+
+func seedMonthlyUsageConn(ctx context.Context, c *sql.Conn, u *User, now time.Time) error {
+	if u.UsageMonth != monthKey(now) || u.UsageBytes <= 0 || isReservedUsername(u.Username) {
+		return nil
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrExists
-	}
-	return nil
+	_, err := c.ExecContext(ctx, `INSERT INTO usage_monthly(month,username,bytes) VALUES(?,?,?) ON CONFLICT(month,username) DO UPDATE SET bytes=MAX(bytes,excluded.bytes)`, u.UsageMonth, u.Username, u.UsageBytes)
+	return err
 }
 
 // Update applies a mutator to the stored user and persists it, all inside one
@@ -303,28 +321,55 @@ func (s *Store) Update(username string, fn func(*User) error) error {
 			return err
 		}
 		_, err = c.ExecContext(ctx, updateUser, append(userArgs(u)[1:], username)...)
+		if err == nil && u.SubscriptionID != "" {
+			_, err = c.ExecContext(ctx, `UPDATE subscriptions SET used_bytes=?,device_mac=?,slot=COALESCE((SELECT slot FROM devices WHERE mac=?),0),status=CASE WHEN ?=0 THEN 'suspended' WHEN status='suspended' THEN CASE WHEN period_end>? THEN 'active' ELSE 'expired' END ELSE status END WHERE id=?`, u.UsageBytes, u.DeviceMAC, u.DeviceMAC, u.Enabled, portalTime(time.Now()), u.SubscriptionID)
+		}
 		return err
 	})
 }
 
 func (s *Store) Delete(username string) error {
-	res, err := s.db.Exec(`DELETE FROM users WHERE username = ?`, username)
-	if err != nil {
+	ctx := context.Background()
+	return inTx(ctx, s.db, func(c *sql.Conn) error {
+		u, err := scanUser(c.QueryRowContext(ctx, selectUser, username))
+		if err != nil {
+			return err
+		}
+		if u.SubscriptionID != "" {
+			return commerceFail(409, "subscription credentials cannot be deleted; disable access instead")
+		}
+		_, err = c.ExecContext(ctx, `DELETE FROM users WHERE username=?`, username)
 		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
+	})
 }
 
 // AddUsage records additional bytes for a user, rolling the month if needed.
 // Unknown users are ignored.
 func (s *Store) AddUsage(username string, bytes int64, now time.Time) {
-	err := s.Update(username, func(u *User) error {
+	if bytes <= 0 {
+		return
+	}
+	ctx := context.Background()
+	err := inTx(ctx, s.db, func(c *sql.Conn) error {
+		if err := refreshCommerceUser(ctx, c, username, now); err != nil {
+			return err
+		}
+		u, err := scanUser(c.QueryRowContext(ctx, selectUser, username))
+		if err != nil {
+			return err
+		}
 		u.rollMonth(now)
 		u.UsageBytes += bytes
-		return nil
+		if _, err = c.ExecContext(ctx, updateUser, append(userArgs(u)[1:], username)...); err != nil {
+			return err
+		}
+		if u.SubscriptionID != "" {
+			_, err = c.ExecContext(ctx, `UPDATE subscriptions SET used_bytes=? WHERE id=?`, u.UsageBytes, u.SubscriptionID)
+		}
+		if err == nil && !isReservedUsername(username) {
+			_, err = c.ExecContext(ctx, `INSERT INTO usage_monthly(month,username,bytes) VALUES(?,?,?) ON CONFLICT(month,username) DO UPDATE SET bytes=bytes+excluded.bytes`, monthKey(now), username, bytes)
+		}
+		return err
 	})
 	if err != nil && err != ErrNotFound {
 		log.Printf("store: add usage user=%q: %v", username, err)
@@ -333,6 +378,9 @@ func (s *Store) AddUsage(username string, bytes int64, now time.Time) {
 
 // Authorize reports whether the user may open a new connection now, and why not.
 func (s *Store) Authorize(username, password string, now time.Time) (bool, string) {
+	if err := inTx(context.Background(), s.db, func(c *sql.Conn) error { return refreshCommerceUser(context.Background(), c, username, now) }); err != nil {
+		return false, "store unavailable"
+	}
 	u, err := s.Get(username)
 	if err == ErrNotFound {
 		return false, "unknown user"
@@ -345,6 +393,12 @@ func (s *Store) Authorize(username, password string, now time.Time) (bool, strin
 	}
 	if !u.Enabled {
 		return false, "disabled"
+	}
+	if u.SubscriptionID != "" {
+		var status string
+		if err := s.db.QueryRow(`SELECT status FROM subscriptions WHERE id=?`, u.SubscriptionID).Scan(&status); err != nil || status != "active" {
+			return false, "subscription inactive"
+		}
 	}
 	if u.ExpiresAt != "" {
 		if exp, err := time.Parse(time.RFC3339, u.ExpiresAt); err == nil && now.After(exp) {

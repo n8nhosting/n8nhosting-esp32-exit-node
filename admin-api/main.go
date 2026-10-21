@@ -117,6 +117,8 @@ func main() {
 	mux.HandleFunc("/api/slots", s.requireAdmin(s.handleSlots))
 	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
 	mux.HandleFunc("/api/geo/resolve", s.requireAdmin(s.handleGeoResolve))
+	registerCommerceRoutes(mux, s)
+	registerPortalRoutes(mux, s)
 
 	// payment webhook
 	mux.HandleFunc("/webhook/payment", s.handlePayment)

@@ -91,7 +91,7 @@ func (s *server) admit(username, mac string) (int, map[string]string) {
 			v = dv
 		}
 	}
-	taken := v.Seats
+	taken := v.Seats + v.ReservedSeats
 	if u.DeviceMAC == mac && takesSeat(u, time.Now()) {
 		taken-- // self-reassignment does not consume a second seat
 	}

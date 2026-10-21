@@ -44,7 +44,8 @@ type nodeStats struct {
 	HeapTotal  uint32 `json:"heap_total"`
 	PSRAMFree  uint32 `json:"psram_free,omitempty"`
 	PSRAMTotal uint32 `json:"psram_total,omitempty"`
-	CPUPct     int    `json:"cpu_pct"` // -1 = unknown
+	CPUPct     int    `json:"cpu_pct"`        // -1 = unknown
+	RSSI       *int   `json:"rssi,omitempty"` // dBm; absent on older firmware
 	AppBytes   uint32 `json:"app_bytes"`
 	SlotBytes  uint32 `json:"slot_bytes"`
 	FlashBytes uint32 `json:"flash_bytes"`
@@ -115,11 +116,12 @@ type deviceView struct {
 	SlotMismatch bool `json:"slot_mismatch"`
 
 	// Public IP grouping is informational; seat limits belong to each MAC.
-	IPGroup     string `json:"ip_group"`
-	IPGroupSize int    `json:"ip_group_size"`
-	MaxUsers    int    `json:"max_users"`
-	ActiveUsers int    `json:"active_users"` // seats taken on this MAC, independent of public IP
-	Seats       int    `json:"-"`            // seats taken on this board alone (admission)
+	IPGroup       string `json:"ip_group"`
+	IPGroupSize   int    `json:"ip_group_size"`
+	MaxUsers      int    `json:"max_users"`
+	ActiveUsers   int    `json:"active_users"` // seats taken on this MAC, independent of public IP
+	ReservedSeats int    `json:"reserved_seats"`
+	Seats         int    `json:"-"` // seats taken on this board alone (admission)
 }
 
 // maxUsers is how many users a device may take: one for a dedicated board,
@@ -197,6 +199,7 @@ func (s *server) buildDeviceViewsWithHealth(nodes []brokerNode, rich bool) []dev
 	activeByMAC := map[string]int{}
 	nextExpiry := map[string]string{}
 	now := time.Now()
+	reservations := s.reservedCommerceSeats(now)
 	for _, u := range s.store.List() {
 		if u.DeviceMAC == "" || isReservedUsername(u.Username) {
 			continue
@@ -236,6 +239,7 @@ func (s *server) buildDeviceViewsWithHealth(nodes []brokerNode, rich bool) []dev
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
 		v.Seats = activeByMAC[n.MAC]
 		v.ActiveUsers = v.Seats
+		v.ReservedSeats = reservations[n.MAC]
 		v.NextExpiry = nextExpiry[n.MAC]
 		if macs := group[n.RemoteIP]; len(macs) > 0 {
 			v.IPGroupSize = len(macs)
@@ -583,6 +587,10 @@ func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	active, over, expired, expiring, occupied := 0, 0, 0, 0, 0
 	statusCounts := map[string]int{"active": 0, "disabled": 0, "expired": 0, "over_quota": 0}
 	var monthBytes int64
+	if err := s.store.db.QueryRowContext(r.Context(), `SELECT COALESCE(SUM(bytes),0) FROM usage_monthly WHERE month=?`, monthKey(now)).Scan(&monthBytes); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "monthly traffic unavailable"})
+		return
+	}
 	for _, original := range s.store.List() {
 		if isReservedUsername(original.Username) {
 			continue
@@ -603,7 +611,6 @@ func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		if u.QuotaGB > 0 && u.UsageBytes >= int64(u.QuotaGB*1024*1024*1024) {
 			over++
 		}
-		monthBytes += u.UsageBytes
 		if u.DeviceMAC != "" && takesSeat(u, now) {
 			occupied++
 		}
@@ -648,7 +655,7 @@ func availableSeats(views []deviceView) int {
 		if v.Kind != "dedicated" && v.CapacityMbps <= 0 {
 			continue
 		}
-		if n := v.MaxUsers - v.Seats; n > 0 {
+		if n := v.MaxUsers - v.Seats - v.ReservedSeats; n > 0 {
 			free += n
 		}
 	}

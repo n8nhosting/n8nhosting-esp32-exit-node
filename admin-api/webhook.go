@@ -68,6 +68,19 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the user if new, then extend/activate.
+	// Reactivation must not take a seat held by a checkout reservation.
+	s.admitMu.Lock()
+	defer s.admitMu.Unlock()
+	if cur, err := s.store.Get(req.Username); err == nil && cur.SubscriptionID != "" {
+		writeCommerceError(w, commerceFail(409, "use Sales renewal for subscription payments"))
+		return
+	}
+	if cur, err := s.store.Get(req.Username); err == nil && cur.DeviceMAC != "" && !takesSeat(cur, time.Now()) {
+		if code, body := s.admit(cur.Username, cur.DeviceMAC); code != 0 {
+			writeJSON(w, code, body)
+			return
+		}
+	}
 	if _, err := s.store.Get(req.Username); err == ErrNotFound {
 		pw := req.Password
 		if pw == "" {
@@ -77,6 +90,9 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 			QuotaGB: req.QuotaGB, RateMbps: req.RateMbps})
 	}
 	err := s.store.Update(req.Username, func(u *User) error {
+		if u.SubscriptionID != "" {
+			return commerceFail(409, "use Sales renewal for subscription payments")
+		}
 		base := time.Now().UTC()
 		if u.ExpiresAt != "" {
 			if exp, e := time.Parse(time.RFC3339, u.ExpiresAt); e == nil && exp.After(base) {
@@ -94,7 +110,7 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeCommerceError(w, err)
 		return
 	}
 	log.Printf("payment: activated user=%q +%dd quota=%.0fGB rate=%.0fMbps", req.Username, days, req.QuotaGB, req.RateMbps)
