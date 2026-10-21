@@ -1361,16 +1361,27 @@ void app_main(void)
     load_acl_rules();
 
     // Load LED GPIO setting from NVS (default -1 = disabled)
-    int led_gpio_setting = -1;
+    // Board defaults (menu "Exit node build") apply until the operator sets
+    // led_gpio / led_lowactive from the console; -1 keeps the LED off.
+    int led_gpio_setting = CONFIG_LED_GPIO_DEFAULT;
     if (get_config_param_int("led_gpio", &led_gpio_setting) == ESP_OK) {
         led_gpio = led_gpio_setting;
+    } else {
+        led_gpio = CONFIG_LED_GPIO_DEFAULT;
     }
-    // led_gpio remains -1 (disabled) if not set in NVS
 
-    // Load LED low-active setting from NVS (default 0 = active-high)
-    int led_lowactive_setting = 0;
+    // Load LED low-active setting from NVS (default from the board overlay;
+    // a bool Kconfig set to n is simply undefined, hence #if not a value)
+#if CONFIG_LED_LOWACTIVE_DEFAULT
+    const int led_lowactive_default = 1;
+#else
+    const int led_lowactive_default = 0;
+#endif
+    int led_lowactive_setting = led_lowactive_default;
     if (get_config_param_int("led_low", &led_lowactive_setting) == ESP_OK) {
         led_lowactive = (led_lowactive_setting != 0) ? 1 : 0;
+    } else {
+        led_lowactive = led_lowactive_default;
     }
     if (led_lowactive) {
         ESP_LOGI(TAG, "LED low-active mode enabled");

@@ -66,13 +66,19 @@ All numbers from the throwaway spike builds of 2026-10-21 (firmware code of
 `2.4.21-mux1.4`, IDF v5.5.2, 6 streams configured), flashed on the real board
 (COM30, MAC `ac:a7:04:ba:ae:c0`), uplink `IokWireless_2.4Ghz`.
 
-| Measurement | S3 config applied to C3 as-is | Config-only RAM diet (spike v2) |
-|---|---|---|
-| App binary | 1,509 KB (4% of 1,536 KB slot free) | 1,351 KB (14% free) |
-| Code pinned in IRAM | 110 KB | 70 KB |
-| Heap available at boot | 239 KB | 279 KB |
-| Free heap, idle, no uplink | **1.3–1.8 KB** (board rebooted once) | 76 KB |
-| Free heap, TLS mux link up, 0 streams | not reachable | **54 KB** (min 45 KB during handshake) |
+| Measurement | S3 config applied to C3 as-is | Config-only RAM diet (spike v2) | **2.4.22 `c3mini` build (this design, measured 2026-10-21)** |
+|---|---|---|---|
+| App binary | 1,509 KB (4% of 1,536 KB slot free) | 1,351 KB (14% free) | **1,215 KB (40% of the 1,984 KB slot free)** |
+| Code pinned in IRAM | 110 KB | 70 KB | 68 KB |
+| Heap available at boot | 239 KB | 279 KB | 283 KB |
+| Free heap, idle, no uplink | **1.3–1.8 KB** (board rebooted once) | 76 KB | not measured separately (higher than below) |
+| Free heap, TLS mux link up, 0 streams | not reachable | **54 KB** (min 45 KB during handshake) | **143 KB** (min 128 KB); 171 KB on a plain-TCP link |
+
+The 2.4.22 column has the feature gates, no web server after the uplink is
+up, 4 streams / 8 KB window / 4 KB frames / 1 dialer, link buffers only while
+a link exists, and the diet config. The old production broker (no token
+support) still accepts its HELLO; a broker from this branch logs
+`max 4 streams, win 8192, frame 4096, chip "esp32c3"`.
 
 Spike v2 = `-Os` instead of `-O2` globally, WiFi/lwIP IRAM optimisation off,
 WiFi pools static-RX 6 / dynamic-RX 16 / dynamic-TX 16, TX/RX BA window 6,
