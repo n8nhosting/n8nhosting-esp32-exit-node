@@ -39,7 +39,7 @@ function row(page,mac){return page.locator('#dtbl tbody tr').filter({has:page.lo
 async function edit(page,mac){await row(page,mac).locator('[data-act="edit"]').click();await page.locator('#dmCapacity').waitFor();}
 async function openDrawer(page,mac){await row(page,mac).locator('.device-title').click();await page.locator('#ddrawer:not([hidden])').waitFor();await page.waitForFunction(expected=>drawerMAC===expected,mac);}
 async function saveEditor(page){await page.locator('#dmSave').click();await page.locator('#dmodal').waitFor({state:'hidden'});await page.waitForFunction(()=>!document.querySelector('#dmSave').disabled);}
-async function tab(page,id){await page.locator('#ddTabs [data-panel="'+id+'"]').click();await page.locator('#'+id).waitFor();}
+async function section(page,id){await page.locator('#'+id).waitFor();await page.locator('#'+id).scrollIntoViewIfNeeded();}
 async function drawerFrame(page){
   const size=await page.locator('.drawer-sheet').boundingBox();
   const viewport=page.viewportSize();assert.ok(size.x>=-1&&size.y>=-1&&size.x+size.width<=viewport.width+1&&size.y+size.height<=viewport.height+1,JSON.stringify(size));
@@ -74,7 +74,7 @@ async function drawerFrame(page){
   await edit(page,mac);assert.equal(await page.locator('#dmCapacity').inputValue(),'17.25');await page.locator('#dmCapacity').fill('0');await saveEditor(page);
   assert.equal((await node(mac)).capacity_mbps,0);assert.equal((await node(mac)).capacity_source,'unmeasured');
   await edit(page,mac);await page.locator('#dmCapacity').fill('15');await saveEditor(page);
-  await openDrawer(page,mac);await tab(page,'ddCapacity');assert.match(await page.locator('#ddCapacity').innerText(),/15 Mbps.*manual/s);assert.match(await page.locator('#ddCapacity').innerText(),/Set manually/);await page.locator('#ddClose').click();
+  await openDrawer(page,mac);await section(page,'ddCapacity');assert.match(await page.locator('#ddCapacity').innerText(),/15 Mbps.*manual/s);assert.match(await page.locator('#ddCapacity').innerText(),/Set manually/);await page.locator('#ddClose').click();
   ok('manual speed rejects invalid input, persists positive values and source, and zero resets capacity');
 
   await edit(page,emptyMAC);await page.locator('#dmName').fill('');await saveEditor(page);
@@ -116,19 +116,36 @@ async function drawerFrame(page){
   await page.unroute(devicePattern);page.off('request',countAssignments);await page.locator('#baCancel').click();
   ok('cancelling a delayed slot save preserves the newly opened board modal and does not submit the cancelled user assignment');
 
+  await edit(page,mac);await page.locator('#dmCapacity').fill('16');
+  let releaseSettings,observeSettings;
+  const heldSettings=new Promise(resolve=>{releaseSettings=resolve;}),settingsObserved=new Promise(resolve=>{observeSettings=resolve;});
+  await page.route(devicePattern,async route=>{if(route.request().method()!=='PUT')return route.continue();observeSettings();await heldSettings;await route.continue();});
+  const savedSettingsResponse=page.waitForResponse(response=>response.request().method()==='PUT'&&new URL(response.url()).pathname==='/api/devices/'+encodeURIComponent(mac));
+  await page.locator('#dmSave').click();await settingsObserved;await page.keyboard.press('Escape');await edit(page,emptyMAC);await page.locator('#dmName').fill('Draft B must stay editable');
+  releaseSettings();assert.equal((await savedSettingsResponse).ok(),true);assert.equal((await node(mac)).capacity_mbps,16);
+  assert.equal(await page.locator('#dmodal').isVisible(),true);assert.equal(await page.locator('#dmName').inputValue(),'Draft B must stay editable');assert.equal(await page.locator('#dmSave').isDisabled(),false);assert.equal(await page.locator('#dmErr').innerText(),'');
+  await page.unroute(devicePattern);await page.locator('#dmCancel').click();
+  ok('a delayed Settings save cannot close or overwrite a newly opened board editor and its unsaved draft');
+
   const events=Array.from({length:50},(_,i)=>({id:1000+i,ts:new Date(Date.now()-i*1000).toISOString(),kind:'device.updated',severity:'info',actor:'local browser fixture',message:'Preserved activity '+String(i+1).padStart(2,'0')}));
   const eventRoute='**/api/events?subject=*';await page.route(eventRoute,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({events})}));
   await openDrawer(page,mac);await page.waitForFunction(()=>document.querySelector('#ddActivity').textContent.includes('Preserved activity'));
   const panels=['ddHealth','ddHistory','ddCapacity','ddRouting','ddLocation','ddWifi','ddUsers','ddNotes','ddActivity','ddDanger'];
-  assert.equal(await page.locator('#ddTabs [role="tab"]').count(),10);
-  for(const id of panels){await tab(page,id);assert.equal(await page.locator('#ddBody [role="tabpanel"]:visible').count(),1);assert.equal(await page.locator('#ddTabs [data-panel="'+id+'"]').getAttribute('aria-selected'),'true');assert.equal(await page.locator('#'+id).getAttribute('aria-labelledby'),'tab-'+id);await drawerFrame(page);}
-  await page.locator('#tab-ddDanger').focus();await page.keyboard.press('Home');assert.equal(await page.evaluate(()=>document.activeElement.id),'tab-ddHealth');await page.keyboard.press('ArrowRight');assert.equal(await page.evaluate(()=>document.activeElement.id),'tab-ddHistory');await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.id),'tab-ddDanger');
-  await tab(page,'ddActivity');const seen=[];
+  assert.equal(await page.locator('#ddrawer [role="tab"]').count(),0);
+  assert.equal(await page.locator('#ddBody .drawer-section:visible').count(),10);
+  assert.match(await row(page,mac).locator('.device-routing').innerText(),/Slot 11.*Port 3141/);
+  assert.match(await page.locator('#ddIdentity').innerText(),/Slot 11.*Port 3141/);
+  const layout=await page.locator('#ddBody').evaluate(body=>{const frame=body.getBoundingClientRect();return [...body.querySelectorAll('.drawer-section')].map(el=>{const r=el.getBoundingClientRect();return {id:el.id,top:r.top,bottom:r.bottom,height:r.height,frameBottom:frame.bottom,inside:r.left>=frame.left-1&&r.right<=frame.right+1&&r.top>=frame.top-1&&r.bottom<=frame.bottom+1};});});
+  if(!layout.every(panel=>panel.inside))await page.screenshot({path:path.join(out,'settings-drawer-fit-debug.png')});
+  assert.ok(layout.every(panel=>panel.inside),'Desktop should show all ten sections in the frame: '+JSON.stringify(layout));await drawerFrame(page);
+  await page.locator('#ddDanger button').last().focus();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'ddAssign');await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.classList.contains('drawer-forget')),true);
+  await section(page,'ddActivity');const seen=[];
   for(;;){seen.push(...await page.locator('#ddActivity .msg').evaluateAll(items=>items.map(el=>el.firstChild.textContent)));const next=page.locator('#ddActivity [data-activity-page="1"]');if(await next.isDisabled())break;await next.click();}
   assert.deepEqual(seen,events.map(e=>e.message));
-  await tab(page,'ddRouting');await page.locator('#ddBody').focus();await pause(11000);assert.equal(await page.locator('#tab-ddRouting').getAttribute('aria-selected'),'true');assert.equal(await page.locator('#ddRouting').isVisible(),true);assert.equal(await page.evaluate(()=>document.activeElement.id),'ddBody');
+  while(!await page.locator('#ddActivity [data-activity-page="-1"]').isDisabled())await page.locator('#ddActivity [data-activity-page="-1"]').click();
+  await page.locator('#ddBody').focus();await page.keyboard.press('PageDown');await pause(250);const previousScroll=await page.locator('#ddBody').evaluate(el=>el.scrollTop);await pause(11000);assert.equal(await page.locator('#ddBody .drawer-section:visible').count(),10);assert.equal(await page.evaluate(()=>document.activeElement.id),'ddBody');assert.equal(await page.locator('#ddBody').evaluate(el=>el.scrollTop),previousScroll);await page.locator('#ddBody').evaluate(el=>{el.scrollTop=0;});
   await screenshot(page,'drawer-desktop');await page.locator('#ddClose').click();await screenshot(page,'devices-desktop');
-  ok('all ten drawer sections stay contained with hidden inactive panels, keyboard tabs, preserved refresh state and all 50 activities accessible');
+  ok('all ten drawer sections appear together without tabs, with explicit routing, focus trap, preserved refresh state and all 50 activities accessible');
 
   for(const width of [1024,800]){
     await page.setViewportSize({width,height:900});await noOverflow(page);
@@ -142,12 +159,21 @@ async function drawerFrame(page){
   await page.setViewportSize({width:375,height:812});await noOverflow(page);await screenshot(page,'devices-mobile');
   await row(page,mac).locator('[data-act="assign-board"]').click();await page.locator('#baSlot option[value="11"]').waitFor({state:'attached'});await noOverflow(page);await screenshot(page,'assign-mobile');await page.keyboard.press('Escape');
   await openDrawer(page,mac);
-  for(const id of panels){await tab(page,id);await drawerFrame(page);}
-  await tab(page,'ddCapacity');await screenshot(page,'drawer-mobile');await page.locator('#ddEdit').click();await noOverflow(page);await screenshot(page,'editor-mobile');
+  assert.equal(await page.locator('#ddBody .drawer-section:visible').count(),10);
+  for(const id of panels){await section(page,id);await drawerFrame(page);}
+  await page.locator('#ddBody').evaluate(el=>{el.scrollTop=0;});await page.locator('#ddBody').focus();await page.keyboard.press('PageDown');await page.waitForFunction(()=>document.querySelector('#ddBody').scrollTop>0);await pause(250);await page.locator('#ddBody').evaluate(el=>{el.scrollTop=0;});
+  await screenshot(page,'drawer-mobile');await section(page,'ddDanger');await screenshot(page,'drawer-mobile-bottom');await page.locator('#ddEdit').click();await noOverflow(page);await screenshot(page,'editor-mobile');
   for(const name of ['General','Location','WiFi','Notes']){await page.locator('[data-editor-tab="'+name+'"]').click();assert.equal(await page.locator('#dmodal .editor-panel:visible').count(),1);await noOverflow(page);}
   await page.keyboard.press('Escape');assert.equal(await page.locator('#ddrawer').isVisible(),true);await page.keyboard.press('Escape');assert.equal(await page.locator('#ddrawer').isVisible(),false);
   assert.deepEqual(errors,[]);
   ok('375x812 mobile Devices, Assign, settings and all drawer panels have no horizontal overflow or uncaught browser exceptions');
+  await getJSON('/api/devices/'+encodeURIComponent('aa:bb:cc:dd:ee:ff'),{method:'PUT',body:JSON.stringify({slot:12})});
+  assert.ok(!(await getJSON('/api/devices')).some(board=>board.mac==='aa:bb:cc:dd:ee:ff'),'The reserved offline record must be absent from the live fixture list');
+  const slots=await getJSON('/api/slots?mac='+encodeURIComponent(mac));
+  assert.equal(slots.current_slot,11);assert.ok(slots.available.some(option=>option.slot===11));assert.ok(!slots.available.some(option=>option.slot===12),'SQL-only offline records must reserve their slot');
+  await row(page,mac).locator('[data-act="assign-board"]').click();await page.locator('#baSlot option[value="11"]').waitFor({state:'attached'});assert.equal(await page.locator('#baSlot option[value="12"]').count(),0);assert.equal(await page.locator('#baSlot').inputValue(),'11');await page.locator('#baCancel').click();
+  assert.deepEqual(errors,[]);
+  ok('Assign uses authoritative slot availability, retaining the current slot and excluding offline records absent from the live Devices list');
   fs.writeFileSync(path.join(out,'settings-acceptance.json'),JSON.stringify({passed:checks,browser:await browser.version(),fixture:'real admin API + isolated seeded SQLite + fake broker/geo; simulated 409 and 50-event activity response',screenshots},null,2));
 })().catch(error=>{console.error(error.stack||error);fs.writeFileSync(path.join(out,'settings-failure.txt'),String(error.stack||error));process.exitCode=1;}).finally(async()=>{
   if(browser)await browser.close();
