@@ -4,7 +4,7 @@
 # sdkconfig.prov.example) its values are baked in: broker host/port/token, TLS,
 # minimal UI, AP auto-off — so flashed devices self-provision.
 set -e
-DEFS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.s3n16r8"
+DEFS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.s3n16r8;sdkconfig.defaults.exitnode"
 [ -f sdkconfig.prov ] && DEFS="$DEFS;sdkconfig.prov" && echo "Using provisioning overlay sdkconfig.prov"
 rm -rf build_s3n16r8
 idf.py -B build_s3n16r8 -DSDKCONFIG=build_s3n16r8/sdkconfig -DSDKCONFIG_DEFAULTS="$DEFS" set-target esp32s3

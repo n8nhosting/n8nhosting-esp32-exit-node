@@ -63,13 +63,17 @@
 #include "lwip/ip_addr.h"
 #include "esp_netif.h"
 #include "client_stats.h"
+#if CONFIG_FEATURE_PCAP
 #include "pcap_capture.h"
+#endif
 #include "remote_console.h"
 #include "rproxy.h"
 #include "syslog_client.h"
+#if CONFIG_FEATURE_OLED
 #include "oled_display.h"
+#endif
 #include "led_strip_status.h"
-#if !defined(CONFIG_IDF_TARGET_ESP32C5)
+#if CONFIG_FEATURE_MDNS
 #include "mdns.h"
 #endif
 #if CONFIG_MQTT_HOMEASSISTANT
@@ -1666,8 +1670,8 @@ void app_main(void)
         start_webserver((uint16_t)web_port_setting);
     }
 
-    // mDNS is disabled on ESP32-C5 to keep the image inside the app partition.
-#if !defined(CONFIG_IDF_TARGET_ESP32C5)
+    // mDNS responder (CONFIG_FEATURE_MDNS: off on ESP32-C5 and in exit-node builds).
+#if CONFIG_FEATURE_MDNS
     // Initialize mDNS responder. The espressif/mdns component, with the
     // default predefined-netif config (STA/AP/ETH all enabled), automatically
     // answers queries on whichever interface received them and replies with
@@ -1693,7 +1697,7 @@ void app_main(void)
     free(web_disabled);
 
     // Initialize PCAP capture (TCP server on port 19000)
-#if !CONFIG_RPROXY_MINIMAL_UI
+#if CONFIG_FEATURE_PCAP && !CONFIG_RPROXY_MINIMAL_UI
     pcap_init();
 #endif
 
@@ -1707,7 +1711,9 @@ void app_main(void)
     syslog_init();
 
     // Initialize OLED display (ESP32-S3 defaults to enabled on GPIO17/18)
+#if CONFIG_FEATURE_OLED
     oled_display_init();
+#endif
 
     initialize_console();
 

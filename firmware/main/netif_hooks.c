@@ -20,7 +20,13 @@
 #include "lwip/inet_chksum.h"
 #include "acl.h"
 #include "client_stats.h"
+#if CONFIG_FEATURE_PCAP
 #include "pcap_capture.h"
+#else
+/* No capture component in this build: every capture site below folds away. */
+#define pcap_should_capture(acl_monitored, is_ap) false
+#define pcap_capture_packet(p) ((void)0)
+#endif
 #include "router_config.h"
 #include "wifi_config.h"
 #include "vpn_config.h"

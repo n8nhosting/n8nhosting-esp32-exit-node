@@ -1,0 +1,17 @@
+# Exit-node feature set, shared by every exit-node board (ESP32-S3 N16R8,
+# ESP32-C3 Super Mini). Apply after sdkconfig.defaults and the target/board
+# overlays, before sdkconfig.prov. See menu "Exit node build" in
+# main/Kconfig.projbuild and docs/superpowers/specs/2026-10-21-esp32c3-exit-node-design.md.
+
+# No display on either board; nothing resolves <hostname>.local; and an exit
+# node must never capture customer traffic.
+CONFIG_FEATURE_OLED=n
+CONFIG_FEATURE_PCAP=n
+CONFIG_FEATURE_MDNS=n
+
+# The web UI is only the WiFi setup portal while the setup AP is up. The
+# dashboard (admin.*) is the management surface; the console stays for the
+# operator. MQTT and WireGuard stay compiled but off until Phase 2.
+CONFIG_WEB_SETUP_PORTAL_ONLY=y
+CONFIG_RPROXY_MINIMAL_UI=y
+CONFIG_RPROXY_AP_AUTO_OFF=y

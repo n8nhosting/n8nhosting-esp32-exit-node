@@ -42,14 +42,18 @@
 #endif
 #include "router_globals.h"
 #include "cmd_router.h"
+#if CONFIG_FEATURE_PCAP
 #include "pcap_capture.h"
+#endif
 #include "acl.h"
 #include "remote_console.h"
 /* web UI bind API */
 extern uint8_t web_ui_get_bind(void);
 extern void    web_ui_set_bind(uint8_t bind);
 #include "syslog_client.h"
+#if CONFIG_FEATURE_OLED
 #include "oled_display.h"
+#endif
 #include "esp_ota_ops.h"
 #include "esp_app_desc.h"
 
@@ -83,7 +87,9 @@ static void register_dhcp_reserve(void);
 static void register_set_router_password(void);
 static void register_web_ui(void);
 static void register_bytes(void);
+#if CONFIG_FEATURE_PCAP
 static void register_pcap(void);
+#endif
 static void register_set_led_gpio(void);
 static void register_set_led_lowactive(void);
 static void register_set_led_strip(void);
@@ -100,7 +106,7 @@ static void register_set_rf_switch(void);
 static void register_acl(void);
 static void register_remote_console_cmd(void);
 static void register_syslog_cmd(void);
-#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#if CONFIG_FEATURE_OLED && (defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3))
 static void register_set_oled(void);
 static void register_set_oled_gpio(void);
 #endif
@@ -433,7 +439,9 @@ void register_router(void)
     register_portmap();
     register_acl();
     register_bytes();
+#if CONFIG_FEATURE_PCAP
     register_pcap();
+#endif
     register_web_ui();
     register_set_router_password();
     register_set_led_gpio();
@@ -464,7 +472,7 @@ void register_router(void)
     register_syslog_cmd();
     register_set_tz();
     register_set_vpn();
-#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#if CONFIG_FEATURE_OLED && (defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3))
     register_set_oled();
     register_set_oled_gpio();
 #endif
@@ -1989,6 +1997,7 @@ static void register_bytes(void)
     ESP_ERROR_CHECK( esp_console_cmd_register(&cmd) );
 }
 
+#if CONFIG_FEATURE_PCAP
 /* 'pcap' command arguments */
 static struct {
     struct arg_str* action;
@@ -2115,6 +2124,7 @@ static void register_pcap(void)
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&cmd) );
 }
+#endif /* CONFIG_FEATURE_PCAP */
 
 /* 'set_led_gpio' command */
 static int set_led_gpio_cmd(int argc, char **argv)
@@ -3616,7 +3626,7 @@ static void register_set_tz(void)
     ESP_ERROR_CHECK( esp_console_cmd_register(&cmd) );
 }
 
-#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#if CONFIG_FEATURE_OLED && (defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3))
 
 /* 'set_oled' command - enable/disable OLED display */
 static int set_oled_cmd(int argc, char **argv)

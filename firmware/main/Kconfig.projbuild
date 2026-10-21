@@ -74,3 +74,49 @@ menu "MQTT Home Assistant"
         range 5 3600
 
 endmenu
+
+menu "Exit node build"
+
+    # Every gate defaults to today's behaviour so the other upstream targets
+    # build unchanged; firmware/sdkconfig.defaults.exitnode flips them for the
+    # exit-node boards (ESP32-S3 N16R8, ESP32-C3 Super Mini).
+
+    config FEATURE_OLED
+        bool "Build the OLED status display driver and set_oled commands"
+        default y
+
+    config FEATURE_PCAP
+        bool "Build PCAP packet capture (TCP 19000, pcap command, web settings)"
+        default y
+        help
+            An exit node must not capture customer traffic, and the capture
+            hooks sit on the packet path; exit-node builds turn this off.
+
+    config FEATURE_MDNS
+        bool "Build the mDNS responder (<hostname>.local)"
+        default y
+        depends on !IDF_TARGET_ESP32C5
+        help
+            Disabled on ESP32-C5 to keep the image inside the app partition,
+            and in exit-node builds to save RAM (nothing resolves the name).
+
+    config WEB_SETUP_PORTAL_ONLY
+        bool "Web UI is only the WiFi setup portal, alive while the setup AP is up"
+        default n
+        help
+            Registers just the Getting Started page (/, /setup, /scan) and
+            stops the HTTP server and captive DNS once the uplink is up (the
+            rproxy AP policy restarts them when the AP comes back). The
+            management pages (config, mappings, firewall, VPN, OTA upload,
+            config import/export) are not built.
+
+    config LED_GPIO_DEFAULT
+        int "Status LED GPIO when NVS has no led_gpio (-1 = none)"
+        default -1
+        range -1 48
+
+    config LED_LOWACTIVE_DEFAULT
+        bool "Status LED is active-low when NVS has no led_lowactive"
+        default n
+
+endmenu
