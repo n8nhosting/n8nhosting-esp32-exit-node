@@ -75,7 +75,10 @@ Every "growth" feature below is secondary to that.
 
 9. **Fleet health & alerting**
    - Device offline > N min → alert. Low pool / high no-node rate → alert.
-     Firmware version drift → bulk OTA. (Device page shows uptime/SSID/geo now.)
+     Firmware version drift → bulk OTA. (Device page shows uptime/SSID/geo,
+     and from firmware 2.4.23 a 30 s health sample: internal RAM free and
+     low-water, CPU load, image/flash sizes — the inputs an alert rule needs;
+     thresholds and history are still to do.)
 
 10. **Status page & support**
     - Public status (proxy up/down, incidents). Support inbox / ticketing.

@@ -11,7 +11,11 @@ NAT and dials **out** to the VPS, so no port-forwarding at home is needed.
 | ESP32-C3 Super Mini (4 MB flash, no PSRAM) | 4, 8 KB window | cheaper node from firmware 2.4.22; single core, less RAM |
 
 Both boards run the same firmware tree (`firmware/`), built with a per-board
-sdkconfig overlay; the broker learns a board's limits from its HELLO.
+sdkconfig overlay; the broker learns a board's limits from its HELLO. From
+2.4.23 a board also reports its health every 30 s (a `STATS` frame on the
+link: internal RAM free / lowest, CPU load, image and flash sizes), which the
+dashboard shows in the Devices table's **Health** cell; uptime is carried by
+the broker between reports, so it is right for older firmware too.
 
 ```
  customer abroad                         VPS (Coolify)                         home
@@ -133,8 +137,9 @@ Open `flash.<domain>` in Chrome/Edge: flash → join home WiFi (STA) on the
 board's one-page setup portal. That's it — the firmware carries the broker
 address, token and CA, so the device connects on its own (TLS), turns its setup
 AP and portal off, and appears in the dashboard under **Devices** by MAC with
-its chip. Admins can block/allow a device or push a firmware update (**Update
-FW**, which picks the image built for that board's chip) from there. Since
+its chip, uptime and (from firmware 2.4.23) RAM / CPU / flash. Admins can
+block/allow a device or push a firmware update (**Update FW**, which picks
+the image built for that board's chip) from the row's **⋯** menu. Since
 2.4.22 the board has no management web UI; the dashboard and the serial
 console are the operator's tools, and the portal returns whenever the uplink is
 down for more than 90 s.

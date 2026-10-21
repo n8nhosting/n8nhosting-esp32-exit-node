@@ -28,6 +28,13 @@ the build directory's target (a C3 bin in the S3 folder). The dashboard sends
 the per-chip string as the OTA target version, so a push is only "ok" when the
 board comes back reporting exactly that.
 
+**2.4.23** adds the board health report: a `STATS` frame on the mux link
+every 30 s (internal heap free / low-water / total, PSRAM, CPU load, image /
+OTA slot / flash sizes, open streams) that the dashboard shows in the Health
+cell. Older brokers ignore the frame; older firmware simply has no sample. The
+broker from the same release keeps every board's uptime running between
+reports, so 2.4.21/2.4.22 boards stop showing `0m` without an update.
+
 The flasher page (`flash.<domain>`) has a version picker for USB flashing and
 ESP Web Tools picks the build matching the chip it detects; the dashboard's
 **Update FW** lists the same releases and sends each board the image for its
