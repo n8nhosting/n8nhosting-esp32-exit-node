@@ -40,6 +40,7 @@ async function edit(page,mac){await row(page,mac).locator('[data-act="edit"]').c
 async function openDrawer(page,mac){await row(page,mac).locator('.device-title').click();await page.locator('#ddrawer:not([hidden])').waitFor();await page.waitForFunction(expected=>drawerMAC===expected,mac);}
 async function saveEditor(page){await page.locator('#dmSave').click();await page.locator('#dmodal').waitFor({state:'hidden'});await page.waitForFunction(()=>!document.querySelector('#dmSave').disabled);}
 async function section(page,id){await page.locator('#'+id).waitFor();await page.locator('#'+id).scrollIntoViewIfNeeded();}
+async function userAssign(page,username){await page.locator('#utbl [data-act="assign"][data-user="'+username+'"]').click();await page.locator('#amodal').waitFor({state:'visible'});await page.waitForFunction(name=>document.querySelector('#amTitle').textContent.endsWith(name),username);}
 async function drawerFrame(page){
   const size=await page.locator('.drawer-sheet').boundingBox();
   const viewport=page.viewportSize();assert.ok(size.x>=-1&&size.y>=-1&&size.x+size.width<=viewport.width+1&&size.y+size.height<=viewport.height+1,JSON.stringify(size));
@@ -174,6 +175,37 @@ async function drawerFrame(page){
   await row(page,mac).locator('[data-act="assign-board"]').click();await page.locator('#baSlot option[value="11"]').waitFor({state:'attached'});assert.equal(await page.locator('#baSlot option[value="12"]').count(),0);assert.equal(await page.locator('#baSlot').inputValue(),'11');await page.locator('#baCancel').click();
   assert.deepEqual(errors,[]);
   ok('Assign uses authoritative slot availability, retaining the current slot and excluding offline records absent from the live Devices list');
+
+  await getJSON('/__fixture/control?sameIP=1');await page.setViewportSize({width:1440,height:900});
+  const sameIPBoards=await getJSON('/api/devices');assert.equal(new Set(sameIPBoards.map(board=>board.remote_ip)).size,1);
+  const fullBoard=sameIPBoards.find(board=>board.mac===mac),unmeasuredC3=sameIPBoards.find(board=>board.mac===emptyMAC);
+  assert.equal(fullBoard.active_users,3);assert.equal(fullBoard.max_users,3);assert.equal(unmeasuredC3.chip,'esp32c3');assert.equal(unmeasuredC3.active_users,0);assert.equal(unmeasuredC3.max_users,0);
+  const firstUser='same-ip-user-first',boardUser='same-ip-board-first',blockedUser='same-ip-rejected';
+  for(const username of [firstUser,boardUser,blockedUser])await getJSON('/api/users',{method:'POST',body:JSON.stringify({username,password:'isolated-fixture-password',quota_gb:0,rate_mbps:0})});
+  async function rejectedAssignment(username){const response=await fetch(meta.url+'/api/users/'+encodeURIComponent(username)+'/assign',{method:'POST',headers:{Authorization:'Bearer '+meta.token,'Content-Type':'application/json'},body:JSON.stringify({device_mac:emptyMAC})});assert.equal(response.status,409);const result=await response.json();assert.equal(result.error,'capacity');return result;}
+  assert.match((await rejectedAssignment(firstUser)).reason,/not measured/);
+  await page.locator('[data-refresh]').click();await page.waitForFunction(target=>window._devs?.[target]?.max_users===0,emptyMAC);assert.equal(await row(page,emptyMAC).locator('td').nth(2).locator('strong').innerText(),'0 / 0');
+  await row(page,emptyMAC).locator('[data-act="assign-board"]').click();await page.locator('#baUser option[value="'+firstUser+'"]').waitFor({state:'attached'});await page.locator('#baUser').selectOption(firstUser);assert.equal(await page.locator('#baSave').isDisabled(),true);assert.match(await page.locator('#baHint').innerText(),/not measured/);await page.locator('#baCancel').click();
+  await getJSON('/api/devices/'+encodeURIComponent(emptyMAC),{method:'PUT',body:JSON.stringify({capacity_mbps:2.6})});
+  assert.equal((await node(emptyMAC)).max_users,1);assert.equal((await node(emptyMAC)).active_users,0);
+  await page.locator('[data-refresh]').click();await page.waitForFunction(target=>window._devs?.[target]?.capacity_mbps===2.6&&window._devs[target].max_users===1,emptyMAC);await page.locator('#devicesSearch').fill('บอร์ดทดสอบ');assert.equal(await row(page,emptyMAC).locator('td').nth(2).locator('strong').innerText(),'0 / 1');await noOverflow(page);await screenshot(page,'same-ip-c3-available-desktop');await page.locator('#devicesSearch').fill('');
+  await page.locator('nav a[data-view="users"]').click();await page.locator('#utbl[data-loaded="true"]').waitFor();await userAssign(page,firstUser);
+  const c3Option=page.locator('#amList .pick[data-mac="'+emptyMAC+'"]');await c3Option.waitFor();assert.equal(await c3Option.getAttribute('aria-disabled'),'false');
+  await page.locator('#amShowAll').check();assert.equal(await page.locator('#amList .pick[data-mac="'+mac+'"]').getAttribute('aria-disabled'),'true');assert.equal(await c3Option.getAttribute('aria-disabled'),'false');
+  await c3Option.click();await page.locator('#amGo').click();await page.locator('#amodal').waitFor({state:'hidden'});assert.equal((await getJSON('/api/users')).find(person=>person.username===firstUser).device_mac,emptyMAC);assert.equal((await node(emptyMAC)).active_users,1);assert.equal((await node(mac)).active_users,3);
+  await getJSON('/api/users/'+firstUser+'/unassign',{method:'POST',body:'{}'});
+  await page.locator('nav a[data-view="devices"]').click();await page.locator('#dtbl[data-loaded="true"]').waitFor();await row(page,emptyMAC).locator('[data-act="assign-board"]').click();await page.locator('#baUser option[value="'+boardUser+'"]').waitFor({state:'attached'});await page.locator('#baUser').selectOption(boardUser);assert.equal(await page.locator('#baSave').isDisabled(),false);await page.locator('#baSave').click();await page.locator('#bamodal').waitFor({state:'hidden'});
+  assert.equal((await getJSON('/api/users')).find(person=>person.username===boardUser).device_mac,emptyMAC);assert.equal((await node(emptyMAC)).active_users,1);assert.equal((await node(emptyMAC)).max_users,1);assert.equal((await node(mac)).active_users,3);
+  assert.match((await rejectedAssignment(blockedUser)).reason,/full|capacity|seat/i);
+  await row(page,emptyMAC).locator('[data-act="assign-board"]').click();await page.locator('#baUser option[value="'+blockedUser+'"]').waitFor({state:'attached'});await page.locator('#baUser').selectOption(blockedUser);assert.equal(await page.locator('#baSave').isDisabled(),true);assert.match(await page.locator('#baHint').innerText(),/full|1\/1/i);
+  await page.locator('#baUser').selectOption('customer-office');assert.equal(await page.locator('#baSave').isDisabled(),true,'A customer on another same-IP board must not bypass the full target board');assert.match(await page.locator('#baHint').innerText(),/full|1\/1/i);assert.equal((await getJSON('/api/users')).find(person=>person.username==='customer-office').device_mac,mac);await page.locator('#baCancel').click();
+  await page.locator('#devicesSearch').fill('บอร์ดทดสอบ');await noOverflow(page);await screenshot(page,'same-ip-c3-desktop');await page.locator('#devicesSearch').fill('');
+  await page.locator('nav a[data-view="users"]').click();await page.locator('#utbl[data-loaded="true"]').waitFor();await userAssign(page,blockedUser);await page.locator('#amShowAll').check();assert.equal(await c3Option.getAttribute('aria-disabled'),'true');await page.locator('#amCancel').click();
+  await getJSON('/api/devices/'+encodeURIComponent(emptyMAC),{method:'PUT',body:JSON.stringify({capacity_mbps:10})});assert.equal((await node(emptyMAC)).active_users,1);assert.equal((await node(emptyMAC)).max_users,2);
+  await userAssign(page,blockedUser);assert.equal(await page.locator('#amShowAll').isChecked(),false);await c3Option.waitFor();assert.equal(await c3Option.getAttribute('aria-disabled'),'false');assert.match(await c3Option.innerText(),/1\/2/);await page.locator('#amCancel').click();
+  await page.locator('nav a[data-view="devices"]').click();await page.locator('#dtbl[data-loaded="true"]').waitFor();await page.locator('#devicesSearch').fill('บอร์ดทดสอบ');assert.equal(await row(page,emptyMAC).locator('td').nth(2).locator('strong').innerText(),'1 / 2');await screenshot(page,'same-ip-c3-partial-desktop');await page.locator('#devicesSearch').fill('');
+  assert.ok(!(await getJSON('/api/users')).find(person=>person.username===blockedUser).device_mac);assert.deepEqual(errors,[]);
+  ok('same-IP boards keep separate seats: full Board 1 permits measured C3 assignment through both pickers, while unmeasured and full target boards remain blocked');
   fs.writeFileSync(path.join(out,'settings-acceptance.json'),JSON.stringify({passed:checks,browser:await browser.version(),fixture:'real admin API + isolated seeded SQLite + fake broker/geo; simulated 409 and 50-event activity response',screenshots},null,2));
 })().catch(error=>{console.error(error.stack||error);fs.writeFileSync(path.join(out,'settings-failure.txt'),String(error.stack||error));process.exitCode=1;}).finally(async()=>{
   if(browser)await browser.close();

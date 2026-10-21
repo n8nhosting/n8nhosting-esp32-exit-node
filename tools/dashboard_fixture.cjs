@@ -13,9 +13,9 @@ const token='dashboard-fixture-local-only';
 const created=Date.now();
 const iso=age=>new Date(Date.now()-age).toISOString();
 const macs=Array.from({length:8},(_,i)=>`aa:bb:cc:dd:ee:${String(i+1).padStart(2,'0')}`);
-let unauthorized=false, apiRequests=0, apiFailures=false;
+let unauthorized=false, apiRequests=0, apiFailures=false, sameIP=false;
 let admin;
-function nodes(){return macs.map((mac,i)=>({mac,online:i!==2,blocked:i===3,remote_ip:`198.51.100.${i+10}`,firmware:i===6?'2.4.22-c3':`2.4.23-${i===1?'c3':'s3'}`,ssid:i===1?'Cafe guest':'Office WiFi',chip:(i===1||i===6)?'esp32c3':'esp32s3',uptime_sec:3600+i*43200,first_seen:iso(30*86400000),last_seen:iso(i===2?900000:0),idle_conns:0,mux_links:i===2?0:1,max_streams:(i===1||i===6)?4:40,link_since:i===2?'':iso(400000),slot:i+1,pool:true,active_dials:i===1?3:2,dials_ok:1200+i*13,dials_err:3,bytes_up:10000000+Math.floor((Date.now()-created)*25),bytes_down:70000000+Math.floor((Date.now()-created)*80),ota_status:i===4?'sent':i===5?'failed':i===7?'queued':'',ota_at:iso(20000),ota_target:'2.4.24-s3',stats:i===6?null:{at:iso(i===7?600000:0),uptime_sec:3000,heap_total:i===1?292000:320000,heap_free:i===1?26000:210000,heap_min:i===1?18000:180000,cpu_pct:i===1?91:12,psram_total:i===1?0:8388608,psram_free:i===1?0:7500000,app_bytes:1200000,slot_bytes:2031616,flash_bytes:i===1?4194304:16777216,streams:2}}));}
+function nodes(){return macs.map((mac,i)=>({mac,online:i!==2,blocked:i===3,remote_ip:sameIP?'198.51.100.10':`198.51.100.${i+10}`,firmware:i===6?'2.4.22-c3':`2.4.23-${i===1?'c3':'s3'}`,ssid:i===1?'Cafe guest':'Office WiFi',chip:(i===1||i===6)?'esp32c3':'esp32s3',uptime_sec:3600+i*43200,first_seen:iso(30*86400000),last_seen:iso(i===2?900000:0),idle_conns:0,mux_links:i===2?0:1,max_streams:(i===1||i===6)?4:40,link_since:i===2?'':iso(400000),slot:i+1,pool:true,active_dials:i===1?3:2,dials_ok:1200+i*13,dials_err:3,bytes_up:10000000+Math.floor((Date.now()-created)*25),bytes_down:70000000+Math.floor((Date.now()-created)*80),ota_status:i===4?'sent':i===5?'failed':i===7?'queued':'',ota_at:iso(20000),ota_target:'2.4.24-s3',stats:i===6?null:{at:iso(i===7?600000:0),uptime_sec:3000,heap_total:i===1?292000:320000,heap_free:i===1?26000:210000,heap_min:i===1?18000:180000,cpu_pct:i===1?91:12,psram_total:i===1?0:8388608,psram_free:i===1?0:7500000,app_bytes:1200000,slot_bytes:2031616,flash_bytes:i===1?4194304:16777216,streams:2}}));}
 const json=(res,data,status=200)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(data));};
 const backend=http.createServer((req,res)=>{
  const p=new URL(req.url,'http://localhost').pathname;
@@ -57,7 +57,8 @@ async function stop(){if(!admin||admin.exitCode!==null)return;await new Promise(
    const u=new URL(req.url,'http://localhost');
    if(u.searchParams.has('unauthorized'))unauthorized=u.searchParams.get('unauthorized')==='1';
    if(u.searchParams.has('apiFailures'))apiFailures=u.searchParams.get('apiFailures')==='1';
-   return json(res,{unauthorized,apiRequests,apiFailures});
+   if(u.searchParams.has('sameIP'))sameIP=u.searchParams.get('sameIP')==='1';
+   return json(res,{unauthorized,apiRequests,apiFailures,sameIP});
   }
   if(p.startsWith('/api/')){apiRequests++;if(unauthorized)return json(res,{error:'unauthorized'},401);if(apiFailures)return json(res,{error:'simulated temporary API failure'},503);}
   if(p==='/'||p==='/index.html'){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});return fs.createReadStream(path.join(root,'admin-api','dashboard','index.html')).pipe(res);}
