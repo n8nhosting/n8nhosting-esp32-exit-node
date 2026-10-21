@@ -35,6 +35,15 @@ cell. Older brokers ignore the frame; older firmware simply has no sample. The
 broker from the same release keeps every board's uptime running between
 reports, so 2.4.21/2.4.22 boards stop showing `0m` without an update.
 
+The dashboard phase 2 broker changes add `/nodes` fields `max_streams`,
+`link_since`, and per-node `dials_pinned_offline` without a firmware update
+or a new wire frame. The stream limit is the one accepted by the live mux
+session (24 when older firmware omits it), and the link timestamp starts
+only after `READY mux1` succeeds. Older firmware still connects, and nodes
+without `STATS` continue to have unknown RAM/CPU rather than zero readings.
+These API additions are development changes until the broker/admin stack
+is deployed; they do not change archived firmware or the latest/stable release.
+
 The flasher page (`flash.<domain>`) has a version picker for USB flashing and
 ESP Web Tools picks the build matching the chip it detects; the dashboard's
 **Update FW** lists the same releases and sends each board the image for its

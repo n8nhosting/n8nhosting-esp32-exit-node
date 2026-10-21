@@ -80,6 +80,22 @@ Every "growth" feature below is secondary to that.
      low-water, CPU load, image/flash sizes — the inputs an alert rule needs;
      thresholds and history are still to do.)
 
+   Dashboard phase 2 is implemented and locally verified; see
+   `docs/superpowers/plans/2026-10-21-dashboard-phase2-plan.md` for task
+   status and evidence. Final acceptance is in
+   `docs/dashboard-review/04-phase2-acceptance.md`. Production deployment
+   remains a separate operation. The broker now exposes the accepted `max_streams`,
+   latest successful mux `link_since`, and per-node `dials_pinned_offline`.
+   These are live-only observations and survive neither a broker restart
+   nor a node-file reload. Losing an older overlapping link does not clear
+   the surviving link's timestamp. Destination dial failures remain
+   `dials_err`; a pin with no usable link is counted as pinned-offline.
+
+   The chosen shared-seat policy is 0 until positively measured, then
+   `min(3, max(1, floor(capacity_mbps / 5)))`; dedicated boards stay at 1.
+   This admits a measured C3 at about 2.6 Mbps as one shared seat without
+   increasing the ceiling for other boards or promising 5 Mbps of service.
+
 10. **Status page & support**
     - Public status (proxy up/down, incidents). Support inbox / ticketing.
       SLA by plan.

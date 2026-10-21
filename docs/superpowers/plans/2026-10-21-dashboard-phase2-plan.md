@@ -1,5 +1,11 @@
 # Dashboard phase 2 — implementation plan
 
+> Completed and locally verified 2026-10-22 (Asia/Bangkok).
+> Final behavior, validation evidence and screenshot locations:
+> [`04-phase2-acceptance.md`](../../dashboard-review/04-phase2-acceptance.md).
+> Production deployment and hardware acceptance remain separate.
+
+
 > **For agentic workers:** this plan sequences design work that already
 > exists in `docs/dashboard-review/` (`01-ux-ia.md`, `02-frontend-design-spec.md`,
 > `03-backend-api-plan.md`) into buildable tasks. Read those three files —
@@ -27,6 +33,37 @@ file (`admin-api/dashboard/index.html`) with no build step.
 **Tech stack:** Go 1.2x (`broker/`, `admin-api/`), vanilla HTML/CSS/JS
 dashboard, `modernc.org/sqlite` (check `admin-api/go.mod` for the exact
 driver already in use).
+
+## Current decisions and evidence (2026-10-21, local development)
+
+- The operator approved backend-spec counter-reset behavior: use the
+  current counter after a decrease, and establish a baseline with zero
+  delta on the first sample. Drawer API queries use the canonical
+  `entity=node&id=<mac>` and `subject=<mac>` parameters.
+- Health weights: availability / dial success / stream headroom / heap
+  headroom / CPU headroom = 40 / 30 / 10 / 10 / 10; missing components
+  renormalise away. Existing instrument meters remain visible.
+- The operator delegated the remaining decisions. Shared capacity keeps
+  0 seats without a positive measurement, then uses
+  `min(3, max(1, floor(capacity_mbps / 5)))`; dedicated stays at 1.
+- Broker additive fields and tests are implemented (commit `9ed2e47`):
+  `max_streams` is the accepted session limit (legacy default 24),
+  `link_since` starts only after a successful `READY mux1` and clears only
+  after the last mux link closes, and a known pinned board gets its own
+  `dials_pinned_offline` counter when no usable link remains. These are
+  live-only fields and are excluded from persistence.
+- Broker validation: `go test ./...` passed (14.253 s); `go vet ./...`
+  exited 0. Tests cover legacy HELLO/defaults and `/nodes` serialization,
+  failed READY, overlapping reconnects, concurrent snapshots/counters,
+  persistence exclusion, and refused pins. Go's telemetry upload-token
+  warning on Windows did not fail either command.
+- Targeted broker `go test -race` also passed (2.174 s) for accepted HELLO
+  capabilities, reconnect/concurrent snapshots, and offline/blocked/full/
+  closed/exhausted pin refusals.
+- This records local implementation evidence only. No deployment,
+  production acceptance, hardware soak, or firmware release is implied.
+  The checked items below record delivered behavior and passing validation;
+  the final acceptance report supersedes older interface examples in this plan.
 
 **Spec:** `docs/dashboard-review/01-ux-ia.md`,
 `docs/dashboard-review/02-frontend-design-spec.md`,
@@ -130,14 +167,14 @@ int`; `overview.broker.throughput_bps {up,down float64}` (two samples of
 `/status` cumulative bytes, taken a fixed interval apart — in-memory only,
 no persistence needed yet).
 
-- [ ] Write failing tests for `deviceStatus()`'s precedence order (blocked
+- [x] Write failing tests for `deviceStatus()`'s precedence order (blocked
       > updating > offline(+ota_stalled tag) > rolled_back > unmeasured >
       online(+ota_queued/slot_mismatch tags)) exactly as
       `03-backend-api-plan.md` §5 specifies, including a case with
       `deviceView.Stats == nil` (must not affect status at all — status is
       independent of the health score).
-- [ ] Implement; run `go test ./...`; commit.
-- [ ] Dashboard: replace `index.html`'s client-side online/offline
+- [x] Implement; run `go test ./...`; commit.
+- [x] Dashboard: replace `index.html`'s client-side online/offline
       derivation (`strings.Contains` search for where it currently builds
       the status pill from `n.online`/`n.blocked`) with `n.status`/`n.tags`
       from the server. Add `dashboard_test.go` markers for `n.status` and
@@ -158,16 +195,18 @@ writes 5-minute buckets, rolls up to hourly after retention age, and
 exposes a cached snapshot for Task 3's endpoint to read without hitting
 SQLite on every dashboard poll.
 
-- [ ] Tests first, per §2's own worked examples: a counter reset between
-      polls is treated as 0 delta not negative (Review focus #3); rollup
+- [x] Tests first, per §2's own worked examples: a counter reset between
+      polls contributes the current value, never a negative delta; a
+      first sample contributes zero while establishing its baseline
+      (Review focus #3); rollup
       merges 5-min buckets into hourly correctly; retention deletes rows
       older than its window; two overlapping ticks never run concurrently
       (Review focus #2 — test with a slow fake DB).
-- [ ] Implement against §2's schema and cost assumptions exactly (10
+- [x] Implement against §2's schema and cost assumptions exactly (10
       boards, 50 users — if the real fleet is bigger by the time this
       ships, recheck the cost table in §2 before shipping, it is sized for
       that assumption).
-- [ ] `go test ./...`; commit.
+- [x] `go test ./...`; commit.
 
 ### Task 3: `GET /api/metrics`
 
@@ -180,11 +219,11 @@ tests in `admin-api/metrics_test.go`.
 subsection: fleet/node/user series, `nodes`/`users` totals, `summary` with
 `last`/`prev`/`delta_pct`.
 
-- [ ] Test the endpoint against Task 2's fixtures (seeded buckets); test
+- [x] Test the endpoint against Task 2's fixtures (seeded buckets); test
       the `delta_pct` math at the summary boundary (0 previous value must
       not divide by zero).
-- [ ] Implement; `go test ./...`; commit.
-- [ ] Dashboard: KPI sparklines + delta pills on Overview (`02-frontend-design-spec.md`
+- [x] Implement; `go test ./...`; commit.
+- [x] Dashboard: KPI sparklines + delta pills on Overview (`02-frontend-design-spec.md`
       §2.8, §3.1), 30-day area chart (§3.2). Add `dashboard_test.go`
       markers for the new KPI card IDs. Verify in Chrome against the bench
       admin-api (`AGENTS.md` bench rig) with at least one board's worth of
@@ -206,11 +245,11 @@ subsection; poller-driven transition events (online/offline, OTA status
 changes) with last-event dedupe so a flapping board does not spam the feed
 (Review focus #4 applies here too — dedupe on the transition, not the tick).
 
-- [ ] Tests: emitters fire exactly once per real transition (not per
+- [x] Tests: emitters fire exactly once per real transition (not per
       poller tick while a state persists); keyset pagination returns
       stable pages under concurrent inserts; retention prunes old events.
-- [ ] Implement; `go test ./...`; commit.
-- [ ] Dashboard: Activity feed (`02-frontend-design-spec.md` §2.9). Add
+- [x] Implement; `go test ./...`; commit.
+- [x] Dashboard: Activity feed (`02-frontend-design-spec.md` §2.9). Add
       `dashboard_test.go` markers. Commit.
 
 ### Task 5: composite `deviceView.health`
@@ -231,14 +270,14 @@ absent (the firmware sends -1 for "unknown", e.g. right after a long link
 outage — see `rproxy.c`'s `cpu_load_pct()` baseline reset, do not treat -1
 as 0% load).
 
-- [ ] Tests: weights renormalise correctly across every combination of
+- [x] Tests: weights renormalise correctly across every combination of
       present/absent components (no `Stats`, `Stats` present but `cpu_pct
       == -1`, pre-Task-2 with no `metrics_node` rows yet, all present);
       `blocked`/`offline`/`updating` caps per §5; score is deterministic
       and documented (a human must be able to read `reasons` and believe
       the number).
-- [ ] Implement; `go test ./...`; commit.
-- [ ] Dashboard: 10-segment gauge (`02-frontend-design-spec.md` §2.5) on
+- [x] Implement; `go test ./...`; commit.
+- [x] Dashboard: 10-segment gauge (`02-frontend-design-spec.md` §2.5) on
       the status pill / device row, tooltip from `reasons`. This does
       **not** replace the existing per-board Health cell (uptime/RAM/CPU/
       flash meters) — both appear; see Reconciliation note. Add
@@ -257,11 +296,11 @@ emits `alert.raised`/`alert.cleared` events (via Task 4's `emit()`) only on
 the transition edge (Review focus #4); `overview.alerts.counts
 {critical,warning}`.
 
-- [ ] Tests: an alert condition held across N consecutive ticks emits
+- [x] Tests: an alert condition held across N consecutive ticks emits
       exactly one `raised` event, not N; clearing emits exactly one
       `cleared`; counts reflect current state, not event history.
-- [ ] Implement; `go test ./...`; commit.
-- [ ] Dashboard: alert tiles / attention list on Overview
+- [x] Implement; `go test ./...`; commit.
+- [x] Dashboard: alert tiles / attention list on Overview
       (`01-ux-ia.md` backlog item 5's "attention list" replacing a bell
       icon — build it here, it needs this endpoint). `dashboard_test.go`
       markers. Commit. **This is the natural point to also close
@@ -279,15 +318,15 @@ already shipped plus Tasks 1/3/4/5 once they land)
 `admin-api/dashboard_test.go`.
 
 **Interfaces (consumes):** `GET /api/devices` (existing), Task 3's
-`GET /api/metrics?node=<mac>` for a per-device sparkline/history panel,
-Task 4's `GET /api/events?target=<mac>` for a per-device activity log, Task
+`GET /api/metrics?entity=node&id=<mac>&range=24h` for a per-device sparkline/history panel,
+Task 4's `GET /api/events?subject=<mac>&limit=50` for a per-device activity log, Task
 5's `deviceView.health.reasons` for an explain panel.
 
-- [ ] Add the drawer (keyboard-accessible, `role="dialog"` like the
+- [x] Add the drawer (keyboard-accessible, `role="dialog"` like the
       existing `#dmodal`, closes on Escape, returns focus to the triggering
       row — follow the pattern `#rowmenu`/`#cmodal`/`#amodal` already use).
       `dashboard_test.go` markers (`id="ddrawer"` or similar, `role="dialog"`).
-- [ ] Verify in Chrome against the bench admin-api with a seeded board;
+- [x] Verify in Chrome against the bench admin-api with a seeded board;
       screenshot before calling it done. Commit.
 
 ### Task 8: auto-refresh (patch, not re-render) + mobile pass
@@ -303,11 +342,11 @@ interval instead of replacing `innerHTML` (so an open row menu or a focused
 input is not destroyed under the user), plus the responsive pass
 `02-frontend-design-spec.md` §5 specifies.
 
-- [ ] Verify the row menu (`#rowmenu`), device editor (`#dmodal`) and the
+- [x] Verify the row menu (`#rowmenu`), device editor (`#dmodal`) and the
       new drawer (Task 7) all survive a background auto-refresh tick while
       open — this is Review focus #5's point, test it explicitly, not just
       visually.
-- [ ] Test at a phone viewport width in Chrome DevTools (`resize_page`
+- [x] Test at a phone viewport width in Chrome DevTools (`resize_page`
       375×812 or similar) — table must not force horizontal page scroll;
       `02-frontend-design-spec.md` §5 has the exact breakpoint rules.
       Screenshot before/after. Commit.
@@ -326,25 +365,23 @@ for older brokers); `docs/FIRMWARE_RELEASES.md`, `docs/PLATFORM.md`,
 `AGENTS.md` (update the open-decision section if Task 5's health score or
 operator input resolves it — see below).
 
-- [ ] Broker tests: `max_streams`/`link_since` round-trip through `/nodes`;
+- [x] Broker tests: `max_streams`/`link_since` round-trip through `/nodes`;
       a node from an older HELLO (no `win=`/`frame=`/`chip=` tokens, see
       `broker/hello_test.go`'s legacy-defaults cases) still works.
-- [ ] Implement; `go test ./...` both modules; update docs; commit.
-- [ ] Before merging this plan's branch: resolve the C3 capacity-rule
-      decision in `AGENTS.md` (ask the operator if still unresolved) and
-      implement whichever option is chosen in `admin-api/devices.go`'s
-      `maxUsers()`, with a test. This was left open by the prior session
-      and blocks C3 boards from taking shared-pool users regardless of how
-      much of this plan has shipped.
+- [x] Implement; `go test ./...` both modules; update docs; commit.
+- [x] Verify the selected C3 capacity rule in `admin-api/devices.go`'s
+      `maxUsers()`, with tests: unmeasured = 0, positive measurement = at
+      least 1, ceiling = 3, dedicated = 1. The former open decision is
+      resolved above and in `AGENTS.md`; completion still requires
+      implementation and admin-api test evidence.
 
 ## Self-review notes for whoever picks this up
 
 - Items 1 (Maps) and the device-health round (uptime/STATS/Health cell/row
   menu) are **done and pushed** (`origin/main`, see `git log`). Do not
-  redo them. `AGENTS.md`'s "Open operator decision" is the one unresolved
-  thread from that round — Task 9's last step is where it must land before
-  this plan is "finished" in the sense the operator asked for, independent
-  of which other tasks are done first.
+  redo them. The former open C3 decision is now recorded in `AGENTS.md`'s
+  "Dashboard phase 2 decisions" section. Task 9 still requires verifying
+  the selected rule and its admin-api tests before claiming completion.
 - Tasks are ordered by dependency (2→3, 4 independent of 2/3, 5 depends on
   1 + partially 2, 6 depends on 2+4, 7 depends on 3+4+5, 8 depends on 7,
   9 is independent and can run anytime) but each is self-contained enough

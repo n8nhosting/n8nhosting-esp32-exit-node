@@ -156,16 +156,31 @@ in its NVS only (not in this repo).
 - S3 N16R8 (8 MB PSRAM, 40 streams, 32 KB window): about 9-12 Mbps per
   board on mux1.4-era firmware.
 
-## Open operator decision (unresolved as of 2026-10-21)
+## Dashboard phase 2 decisions (2026-10-21)
 
-The admission rule for a **shared** board (`admin-api/devices.go`,
-`maxUsers`) is `min(3, floor(capacity_mbps / 5))` — 0 seats until
-measured, capped at 3. A C3 only reaches ~2.6-2.7 Mbps aggregate, so it
-gets **0 seats under this rule even once measured**. Needs a decision
-before C3 boards can take paying/shared users (a `dedicated` board is
-unaffected — it always gets exactly 1 seat regardless of measured
-capacity). Options on the table, no lean recorded:
-1. Floor of 1 seat for any shared board with a nonzero measurement.
-2. Lower the per-seat Mbps threshold (changes S3 capacity too — it would
-   go from 3 seats to more).
-3. Sell the C3 as dedicated-only (no shared-pool admission at all).
+The operator delegated remaining design choices. The chosen shared-board
+admission rule is **0 seats without a positive capacity measurement**, then
+`min(3, max(1, floor(capacity_mbps / 5)))`. A measured C3 at 2.6 Mbps gets
+1 seat; the existing ceiling of 3 remains. Dedicated boards retain 1 seat.
+This is an admission allowance, not a promise of 5 Mbps on a C3.
+
+Metrics follow the backend spec: a decreased cumulative counter contributes
+its current value after reset; a first sample only establishes a baseline.
+Drawer queries use `entity=node&id=<mac>` for `/api/metrics` and
+`subject=<mac>` for `/api/events`, never `node=` or `target=` aliases.
+Health component weights are availability/dial success/stream headroom/
+heap headroom/CPU headroom = **40/30/10/10/10**, with absent components
+excluded and the remaining weights renormalised.
+
+Broker `/nodes` now adds live-only `max_streams` (accepted mux limit,
+including the legacy default 24), `link_since` (latest successful
+`READY mux1`, cleared when the last mux link closes), and per-node
+`dials_pinned_offline`. A previous link closing after a reconnect must not
+clear the new link's timestamp. Unknown/unassigned slot refusals affect
+only the broker-wide counter; known pinned boards get their own count
+when no usable link remains (including blocked/full/exhausted links).
+These fields and counters are never persisted to the node file.
+
+Local tests/builds are development evidence. Coolify deployment, production
+checks, and hardware soak are separate gates; do not infer any of them from
+the phase 2 implementation or fixture screenshots.

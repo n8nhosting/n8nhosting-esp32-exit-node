@@ -1,5 +1,10 @@
 # Dashboard redesign — สรุปจาก mockup 3 ภาพ (2026-10-21)
 
+> อัปเดต 2026-10-22: Dashboard Phase 2 ทำและตรวจรับในเครื่องแล้ว
+> ดู [ผลการตรวจรับและวิธีทดสอบ](04-phase2-acceptance.md) สำหรับ contracts,
+> automated checks และ screenshot artifacts เอกสารด้านล่างเป็น design review
+> ตั้งต้น; สถานะและการตัดสินใจล่าสุดอยู่ในรายงานตรวจรับ ยังไม่ได้ deploy production
+
 operator ส่ง mockup 3 ภาพ (ตาราง "Active Services", ชุด component IoT สีเข้ม,
 หน้า admin "Aura Store") และขอคำแนะนำว่าควรเอาส่วนไหนมาใช้กับ dashboard ของ
 แพลตฟอร์มนี้ รายงานเต็ม 3 ฉบับอยู่ในโฟลเดอร์นี้:
