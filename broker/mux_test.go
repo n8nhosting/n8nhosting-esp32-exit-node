@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -530,5 +531,53 @@ func TestMuxAndLegacyCoexist(t *testing.T) {
 		if body, err := fetchVia(socksLn.Addr().String(), oh, op, "/hello"); err != nil || !strings.Contains(body, "HELLO-ORIGIN") {
 			t.Fatalf("mixed fetch %d failed: %v", i, err)
 		}
+	}
+}
+
+// A node reports health in STATS frames (sid 0): the broker keeps the latest
+// sample and the uptime it carries. An unknown sid-0 frame type is ignored
+// rather than dropping the link, so newer firmware keeps working on an older
+// broker and vice versa.
+func TestMuxStatsFrame(t *testing.T) {
+	b := newBroker(config{token: "tok", dialWait: 2 * time.Second}, 64)
+	poolLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer poolLn.Close()
+	go b.servePool(poolLn)
+	c, err := net.Dial("tcp", poolLn.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	br := bufio.NewReader(c)
+	fmt.Fprintf(c, "HELLO tok aa:bb:cc:dd:ee:60 2.4.23-c3 7 - mux1 4 chip=esp32c3\n")
+	if line, _ := br.ReadString('\n'); strings.TrimSpace(line) != "READY mux1" {
+		t.Fatalf("hello: %q", line)
+	}
+	n := &testMuxNode{c: c}
+	n.send(0x7F, 0, []byte("a control frame from the future"))
+	n.send(frameStats, 0, []byte("up=600 heap=140000 heapmin=26000 heaptot=320000 cpu=12 app=1245184 slot=2031616 flash=4194304 streams=0"))
+	waitFor(t, func() bool { l := b.reg.list(); return len(l) == 1 && l[0].Stats != nil })
+	v := b.reg.list()[0]
+	if v.Stats.HeapFree != 140000 || v.Stats.CPUPct != 12 || v.Stats.FlashBytes != 4194304 || v.Stats.At == "" {
+		t.Fatalf("stats = %+v", v.Stats)
+	}
+	if v.UptimeSec < 600 || v.UptimeSec > 605 {
+		t.Fatalf("uptime from STATS: %d", v.UptimeSec)
+	}
+	if b.muxCount() != 1 {
+		t.Fatal("the unknown sid-0 frame dropped the link")
+	}
+	// the JSON the dashboard reads carries the sample
+	data, _ := json.Marshal(v)
+	if !strings.Contains(string(data), `"heap_free":140000`) || !strings.Contains(string(data), `"uptime_sec":60`) {
+		t.Fatalf("json: %s", data)
+	}
+	// the link closing freezes the uptime and stamps last_seen
+	c.Close()
+	waitFor(t, func() bool { return b.muxCount() == 0 })
+	v1 := b.reg.list()[0]
+	time.Sleep(1100 * time.Millisecond)
+	if v2 := b.reg.list()[0]; v2.UptimeSec != v1.UptimeSec || v2.LastSeen < v1.Stats.At {
+		t.Fatalf("after link down: %d -> %d, last_seen %s", v1.UptimeSec, v2.UptimeSec, v2.LastSeen)
 	}
 }

@@ -66,3 +66,57 @@ func parseHelloOpts(f []string) helloOpts {
 	}
 	return o
 }
+
+// parseStats reads a STATS payload (node -> broker on sid 0, firmware
+// 2.4.23+): "key=value" tokens like HELLO's options, so new keys never need
+// a new frame type. Unknown keys are ignored, a bad value leaves its field
+// unset, and ok is false when nothing was recognised. cpu is -1 (unknown)
+// unless the node gave 0..100.
+//
+//	up=<s> heap=<free> heapmin=<low water> heaptot=<total>   internal heap, bytes
+//	psram=<free> psramtot=<total>                           only with PSRAM
+//	cpu=<0..100|-1> app=<image bytes> slot=<partition bytes> flash=<chip bytes>
+//	streams=<open mux streams>
+func parseStats(s string) (st nodeStats, ok bool) {
+	st.CPUPct = -1
+	for _, tok := range strings.Fields(s) {
+		k, v, found := strings.Cut(tok, "=")
+		if !found {
+			continue
+		}
+		u, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			continue
+		}
+		switch k {
+		case "up":
+			st.UptimeSec = u
+		case "heap":
+			st.HeapFree = uint32(u)
+		case "heapmin":
+			st.HeapMin = uint32(u)
+		case "heaptot":
+			st.HeapTotal = uint32(u)
+		case "psram":
+			st.PSRAMFree = uint32(u)
+		case "psramtot":
+			st.PSRAMTotal = uint32(u)
+		case "cpu":
+			if u <= 100 {
+				st.CPUPct = int(u)
+			}
+		case "app":
+			st.AppBytes = uint32(u)
+		case "slot":
+			st.SlotBytes = uint32(u)
+		case "flash":
+			st.FlashBytes = uint32(u)
+		case "streams":
+			st.Streams = int(u)
+		default:
+			continue
+		}
+		ok = true
+	}
+	return st, ok
+}

@@ -12,21 +12,46 @@ import (
 	"time"
 )
 
+// timeNow is the registry's clock; tests set it to move time.
+var timeNow = time.Now
+
+// nodeStats is the latest health sample a node sent in a STATS frame
+// (firmware 2.4.23+, every 30 s). Live only: never persisted.
+type nodeStats struct {
+	At         string `json:"at"`
+	UptimeSec  uint64 `json:"uptime_sec"`
+	HeapFree   uint32 `json:"heap_free"` // internal heap (PSRAM would hide internal-RAM starvation)
+	HeapMin    uint32 `json:"heap_min"`  // low-water mark since boot
+	HeapTotal  uint32 `json:"heap_total"`
+	PSRAMFree  uint32 `json:"psram_free,omitempty"`
+	PSRAMTotal uint32 `json:"psram_total,omitempty"`
+	CPUPct     int    `json:"cpu_pct"` // load since the previous sample, all cores; -1 = unknown
+	AppBytes   uint32 `json:"app_bytes"`
+	SlotBytes  uint32 `json:"slot_bytes"`
+	FlashBytes uint32 `json:"flash_bytes"`
+	Streams    int    `json:"streams"`
+}
+
 // node is one ESP32 exit device, identified by its WiFi STA MAC address.
 type node struct {
-	MAC        string `json:"mac"`
-	Firmware   string `json:"firmware,omitempty"`
-	RemoteIP   string `json:"remote_ip,omitempty"` // public IP the node dials from (= exit IP)
-	FirstSeen  string `json:"first_seen"`
-	LastSeen   string `json:"last_seen"`
-	UptimeSec  uint64 `json:"uptime_sec"`
-	SSID       string `json:"ssid,omitempty"`
-	Chip       string `json:"chip,omitempty"` // esp32s3 / esp32c3 from HELLO chip=; "" for firmware that predates it
-	Blocked    bool   `json:"blocked"`
-	Note       string `json:"note,omitempty"`
-	PendingOTA string `json:"pending_ota,omitempty"` // firmware URL to push on next connection
-	Slot       int    `json:"slot"`                  // gost slot pinned to this board (SOCKS user "slot-N"), 0 = none
-	Pool       bool   `json:"pool"`                  // also serves the shared pool; false for a dedicated board
+	MAC       string `json:"mac"`
+	Firmware  string `json:"firmware,omitempty"`
+	RemoteIP  string `json:"remote_ip,omitempty"` // public IP the node dials from (= exit IP)
+	FirstSeen string `json:"first_seen"`
+	LastSeen  string `json:"last_seen"`
+	UptimeSec uint64 `json:"uptime_sec"` // last reported; runningUptime() is what /nodes shows
+	SSID      string `json:"ssid,omitempty"`
+	Chip      string `json:"chip,omitempty"` // esp32s3 / esp32c3 from HELLO chip=; "" for firmware that predates it
+	Blocked   bool   `json:"blocked"`
+	// Stats is the latest STATS sample; nil until the first one (firmware
+	// before 2.4.23 never sends one).
+	Stats      *nodeStats `json:"stats,omitempty"`
+	uptimeAt   time.Time  // when UptimeSec was reported (HELLO or STATS); zero for a node read from disk
+	offAt      time.Time  // when its last link closed; zero while linked (or never linked)
+	Note       string     `json:"note,omitempty"`
+	PendingOTA string     `json:"pending_ota,omitempty"` // firmware URL to push on next connection
+	Slot       int        `json:"slot"`                  // gost slot pinned to this board (SOCKS user "slot-N"), 0 = none
+	Pool       bool       `json:"pool"`                  // also serves the shared pool; false for a dedicated board
 	// OTA tracking: queued -> sent -> ok | failed. "failed" means the node came
 	// back after a reboot still on its old firmware (download failed, or the new
 	// image did not confirm itself and the bootloader rolled it back).
@@ -70,11 +95,31 @@ func (n *node) online() bool {
 		time.Since(n.lastSeenT) < 45*time.Second
 }
 
+// runningUptime is the node's uptime now: the last reported value plus the
+// time since, frozen once its link closed. Firmware reports uptime in HELLO
+// (seconds after boot) and, from 2.4.23, in every STATS sample; between
+// reports the broker's clock carries it. A node read from disk has no report
+// yet and shows the stored value.
+func (n *node) runningUptime(now time.Time) uint64 {
+	if n.uptimeAt.IsZero() {
+		return n.UptimeSec
+	}
+	end := now
+	if !n.offAt.IsZero() && n.offAt.Before(end) {
+		end = n.offAt
+	}
+	if end.Before(n.uptimeAt) {
+		return n.UptimeSec
+	}
+	return n.UptimeSec + uint64(end.Sub(n.uptimeAt)/time.Second)
+}
+
 // snapshot copies the node with its live counters read atomically, so the
 // JSON encoder never reads fields that relays are updating.
 func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
-		LastSeen: n.LastSeen, UptimeSec: n.UptimeSec, SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note,
+		LastSeen: n.LastSeen, UptimeSec: n.runningUptime(timeNow()), SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note,
+		Stats:      n.Stats,
 		PendingOTA: n.PendingOTA, Slot: n.Slot, Pool: n.Pool,
 		OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt,
 		lastSeenT: n.lastSeenT,
@@ -104,7 +149,7 @@ func newRegistry(file string) *registry {
 func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *node {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now().UTC()
+	now := timeNow().UTC()
 	n, ok := r.nodes[mac]
 	if !ok {
 		n = &node{MAC: mac, FirstSeen: now.Format(time.RFC3339), Pool: true}
@@ -119,8 +164,12 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *
 	if ip != "" {
 		n.RemoteIP = ip
 	}
-	rebooted := uptime < n.UptimeSec
-	n.UptimeSec = uptime
+	// A reboot shows as an uptime below the one we were carrying. The link's
+	// death is noticed up to muxDeadAfter late, so the carried value can
+	// overshoot by that much on a quick reconnect: allow it before calling
+	// a reconnect a reboot.
+	rebooted := uptime+uint64(muxDeadAfter/time.Second)+15 < n.runningUptime(now)
+	n.UptimeSec, n.uptimeAt, n.offAt = uptime, now, time.Time{}
 	if ssid != "" {
 		n.SSID = ssid
 	}
@@ -235,11 +284,37 @@ func (r *registry) takeOTA(n *node) string {
 	u := n.PendingOTA
 	n.PendingOTA = ""
 	if u != "" {
-		n.OTAStatus, n.OTAAt = "sent", time.Now().UTC().Format(time.RFC3339)
-		n.otaFromFW, n.otaUptime = n.Firmware, n.UptimeSec
+		now := timeNow().UTC()
+		n.OTAStatus, n.OTAAt = "sent", now.Format(time.RFC3339)
+		n.otaFromFW, n.otaUptime = n.Firmware, n.runningUptime(now)
 		r.saveLocked()
 	}
 	return u
+}
+
+// stats stores a STATS sample; the uptime it carries restarts the running
+// clock (and proves the link is up).
+func (r *registry) stats(n *node, st nodeStats) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := timeNow().UTC()
+	st.At = now.Format(time.RFC3339)
+	if st.UptimeSec > 0 {
+		n.UptimeSec, n.uptimeAt, n.offAt = st.UptimeSec, now, time.Time{}
+	}
+	n.Stats = &st
+}
+
+// linkDown records that the node's link closed: its uptime stops running
+// and last_seen becomes now (until here it was the HELLO time, so a board
+// that ran for days was "last seen" days ago).
+func (r *registry) linkDown(n *node) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := timeNow().UTC()
+	n.offAt = now
+	n.LastSeen = now.Format(time.RFC3339)
+	r.saveLocked()
 }
 
 var (

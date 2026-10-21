@@ -50,6 +50,7 @@ const (
 	framePing    = 0x08
 	framePong    = 0x09
 	frameOTA     = 0x0A
+	frameStats   = 0x0B // node -> broker, sid 0: "key=value ..." health sample (parseStats)
 
 	muxHeaderLen  = 8
 	muxMaxPayload = 16384
@@ -103,7 +104,8 @@ type muxSession struct {
 
 	evicted, idleClosed *int64 // broker-wide counters (nil = don't count)
 
-	pollOTA func() string // returns a queued OTA URL to push on the live link (nil = none)
+	pollOTA func() string   // returns a queued OTA URL to push on the live link (nil = none)
+	onStats func(nodeStats) // receives each parsed STATS sample (nil = drop)
 }
 
 type muxStream struct {
@@ -199,10 +201,15 @@ func (s *muxSession) run() {
 
 func (s *muxSession) dispatch(typ byte, sid uint32, p []byte) {
 	if sid == 0 {
-		if typ == framePing {
+		switch typ {
+		case framePing:
 			s.writeFrame(framePong, 0, append([]byte(nil), p...))
+		case frameStats:
+			if st, ok := parseStats(string(p)); ok && s.onStats != nil {
+				s.onStats(st)
+			}
 		}
-		return // PONG only refreshes lastRx
+		return // PONG, and control frames this broker does not know, only refresh lastRx
 	}
 	s.mu.Lock()
 	st := s.streams[sid]

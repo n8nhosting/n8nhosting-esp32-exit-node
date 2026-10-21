@@ -292,6 +292,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	s := newMuxSession(c, br, n, o)
 	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
 	s.pollOTA = func() string { return b.reg.takeOTA(n) }
+	s.onStats = func(st nodeStats) { b.reg.stats(n, st) }
 	if url := b.reg.takeOTA(n); url != "" {
 		log.Printf("ota: pushing %s to %s (mux)", url, n.MAC)
 		s.writeFrame(frameOTA, 0, []byte(url))
@@ -305,6 +306,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	s.run()
 
 	n.addMux(-1)
+	b.reg.linkDown(n)
 	b.muxMu.Lock()
 	for i, m := range b.muxes {
 		if m == s {
