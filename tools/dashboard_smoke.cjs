@@ -8,7 +8,7 @@ const {spawn} = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const out = path.join(root, 'output', 'playwright');
 fs.mkdirSync(out, {recursive: true});
-for(const name of ['acceptance.json','failure.txt'])fs.rmSync(path.join(out,name),{force:true});
+for(const name of [process.argv.includes('--isp-only')?'isp-acceptance.json':'acceptance.json','failure.txt'])fs.rmSync(path.join(out,name),{force:true});
 function findCore() {
   if (process.env.PLAYWRIGHT_CORE_PATH) return require(process.env.PLAYWRIGHT_CORE_PATH);
   const cache = path.join(process.env.LOCALAPPDATA, 'npm-cache', '_npx');
@@ -98,6 +98,34 @@ async function noPageOverflow(page) {
   await snapshot(page, 'devices-desktop');
   assert.equal(await page.locator('#dtbl thead th').count(), 7);
   assert.equal(await page.locator('#dtbl tbody tr').count(), 8);
+  await page.waitForFunction(()=>[...document.querySelectorAll('.isp-logo')].every(img=>img.complete&&img.naturalWidth>0));
+  const brandIDs=await page.locator('[data-isp]').evaluateAll(items=>[...new Set(items.map(el=>el.dataset.isp))].sort());
+  assert.deepEqual(brandIDs,['3bb','ais','dtac','nt','true']);
+  assert.ok((await page.locator('#dtbl').innerText()).includes('Example Independent ISP'));
+  const hints=await page.evaluate(()=>({
+    old:healthCell({mac:'old-c3',firmware:'2.4.22-c3',online:true,uptime_sec:22}),
+    current:healthCell({mac:'new-c3',firmware:'2.4.23-c3',online:true,uptime_sec:22,link_since:new Date().toISOString()}),
+    unknown:ispCell('<img src=x onerror=invalid>'),
+    awn:ispBrand('Advanced Wireless Network Company Limited').id,
+    similar:ispBrand('NTT Communications')
+  }));
+  assert.match(hints.old,/Update to 2\.4\.23/);
+  assert.match(hints.old,/data-act="ota"/);
+  assert.match(hints.current,/Waiting for RAM \/ CPU report/);
+  assert.ok(!hints.current.includes('does not report'));
+  assert.ok(!hints.unknown.includes('<img'));
+  assert.equal(hints.awn,'ais');assert.equal(hints.similar,null);
+  const fallback=await page.evaluate(async()=>{
+    const box=document.createElement('span');box.innerHTML=ispCell('Advanced Wireless Network Company Limited');document.body.appendChild(box);
+    const img=box.querySelector('img');const failed=new Promise(resolve=>img.addEventListener('error',resolve,{once:true}));img.src='/isp/not-present.svg';await failed;
+    const result={name:box.textContent,hidden:getComputedStyle(img).display==='none'};box.remove();return result;
+  });
+  assert.equal(fallback.name,'AIS');assert.equal(fallback.hidden,true);
+  ok('five local ISP logos, legal-name aliases, escaped unknown fallback and firmware-aware health hints');
+  if(process.argv.includes('--isp-only')){
+    await page.screenshot({path:path.join(out,'devices-isp-desktop.png'),fullPage:true});
+    fs.writeFileSync(path.join(out,'isp-acceptance.json'),JSON.stringify({passed:checks,browser:await browser.version()},null,2));return;
+  }
   await page.screenshot({path: path.join(out, 'devices-desktop.png'), fullPage: true});
   await noPageOverflow(page);
   const first = page.locator('#dtbl tbody tr').first();

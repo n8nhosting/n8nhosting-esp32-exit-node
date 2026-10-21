@@ -107,3 +107,20 @@ Local implementation and acceptance are complete. Production deployment,
 production data migration, real-board acceptance/soak, RSSI firmware, billing,
 orders and external notifications were not part of this delivery. The existing
 firmware release index and latest/stable selections have not been changed.
+
+## ISP and C3 clarification follow-up (2026-10-22)
+
+- Added embedded, locally served AIS, True, 3BB, dtac and NT logos in the
+  device Location cell and drawer. Full legal ISP names remain in tooltips;
+  unknown names stay visible as escaped text. Asset provenance is recorded in
+  `admin-api/dashboard/isp/SOURCES.md`.
+- Capacity now says **Speed not measured** / **Measure speed** to explain
+  that it is an internet-throughput test, separate from board RAM/CPU reports.
+- Firmware before 2.4.23 gets an explicit upgrade explanation and Update FW
+  action. Current firmware with no STATS gets a waiting/report-path message,
+  rather than an incorrect instruction to upgrade an already current board.
+- Extended browser acceptance checks for all five loaded local logos, AWN
+  aliasing, unknown-provider escaping, similar-name non-matching and old/current
+  firmware health hints. Existing desktop/mobile acceptance continues to pass.
+- No board was flashed, measured, or reconfigured by this follow-up. Production
+  deployment remains separate from these locally verified changes.

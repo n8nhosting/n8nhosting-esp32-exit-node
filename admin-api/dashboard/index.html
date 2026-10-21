@@ -160,6 +160,12 @@
   @media(forced-colors:active){.pill,.segments i,.seatbar,.usagebar{border:1px solid CanvasText}.chart polyline{stroke:CanvasText}.chart .series-down{stroke-dasharray:6 4}}
   tr[hidden]{display:none!important}
   .device-title,.users-table td:first-child{overflow-wrap:anywhere}.users-table .subline{font-size:13px}
+  .isp-brand{display:inline-flex;align-items:center;gap:8px;max-width:100%;margin-top:6px;color:var(--muted);font-size:13px}
+  .isp-logo{display:block;width:58px;height:25px;object-fit:contain;flex:none}
+  .isp-logo[hidden]{display:none}
+  .isp-brand[data-isp="true"] .isp-logo,.isp-brand[data-isp="nt"] .isp-logo{background:#fff;border-radius:4px;padding:3px}
+  .health-hint{max-width:230px;font-size:13px;line-height:1.6;margin-top:4px;color:var(--muted)}
+  .health-hint button{margin-top:6px}
 </style>
 </head>
 <body>
@@ -283,7 +289,7 @@
 <script>
 const i18n = {
   name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
-  edit:'Edit', reveal:'Reveal', unmeasured:'\u2014 unmeasured', assign:'assign\u2026', change:'change',
+  edit:'Edit', reveal:'Reveal', unmeasured:'Speed not measured', assign:'assign\u2026', change:'change',
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
   coordHint:'Blank fields keep the current position. Use Clear position to remove the stored pin.',
@@ -297,7 +303,7 @@ const i18n = {
   reasonBlocked:'blocked', reasonNoSlot:'no slot / port yet', reasonOwned:'dedicated board already has its user', reasonUnmeasured:'capacity not measured',
   reasonFull:'full', reasonOffline:'offline', hasUsers:'users', seats:'seats', userCreated:'User created', saved:'Saved', noOnline:'No online devices.',
   slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
-  measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
+  measure:'Measure speed', measuring:'Measuring speed\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
   justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: ',
   slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.',
   health:'Health', ram:'RAM', cpu:'CPU', flash:'Flash', free:'free', freeOf:'free of', lowWater:'lowest since boot',
@@ -377,7 +383,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshAct
 document.addEventListener('click',e=>{if(e.target.closest('[data-refresh]'))refreshActive();});
 function empty(title,detail){return `<div class="empty"><strong>${esc(title)}</strong>${esc(detail)}</div>`;}
 function expiryLabel(iso){if(!iso)return '<span class="muted">Never</span>';const t=Date.parse(iso);if(!Number.isFinite(t))return '<span class="muted">Unknown expiry</span>';const days=Math.ceil((t-Date.now())/864e5);return `<span class="${days<=0?'pill bad':days<=7?'pill warn':''}">${esc(days<=0?'Expired':days+' days left')}</span><div class="subline">${esc(new Date(t).toLocaleDateString())}</div>`;}
-function statusPill(st){const c={online:'ok',active:'ok',blocked:'bad',rolled_back:'bad',offline:'off',disabled:'off',updating:'info',unmeasured:'warn',over_quota:'warn',expired:'bad'}[st]||'off';return `<span class="pill ${c}">${esc((st||'unknown').replaceAll('_',' '))}</span>`;}
+function statusPill(st){const c={online:'ok',active:'ok',blocked:'bad',rolled_back:'bad',offline:'off',disabled:'off',updating:'info',unmeasured:'warn',over_quota:'warn',expired:'bad'}[st]||'off';return `<span class="pill ${c}">${esc(st==='unmeasured'?T('unmeasured'):(st||'unknown').replaceAll('_',' '))}</span>`;}
 function scoreGauge(n){const h=n.health;if(!h||!Number.isFinite(h.score))return '';const score=Math.max(0,Math.min(100,h.score));return `<div class="score ${score<50?'bad':score<80?'warn':''}" title="${esc((h.reasons||[]).join(' · '))}" role="img" aria-label="Health score ${score} out of 100"><span class="segments" aria-hidden="true">${Array.from({length:10},(_,i)=>`<i class="${i<Math.ceil(score/10)?'on':''}"></i>`).join('')}</span><span>${score}%</span></div>`;}
 function nodeState(n){return statusPill(n.status||(n.blocked?'blocked':n.online?'online':'offline'))+scoreGauge(n)+(n.tags||[]).map(t=>`<div class="subline">${esc(t.replaceAll('_',' '))}</div>`).join('');}
 function spark(vals){if(!vals||vals.filter(v=>v!==null&&Number.isFinite(v)).length<4)return '';const valid=vals.filter(v=>v!==null&&Number.isFinite(v)),max=Math.max(...valid),min=Math.min(...valid),x=i=>i*160/Math.max(1,vals.length-1),y=v=>25-(v-min)*22/(max-min||1);let paths=[],run=[];vals.forEach((v,i)=>{if(v===null||!Number.isFinite(v)){if(run.length)paths.push(run.join(' '));run=[];}else run.push(x(i).toFixed(1)+','+y(v).toFixed(1));});if(run.length)paths.push(run.join(' '));return `<svg class="spark" viewBox="0 0 160 28" preserveAspectRatio="none" aria-hidden="true">${paths.map(points=>`<polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>`).join('')}</svg>`;}
@@ -500,6 +506,15 @@ addEventListener('scroll',()=>closeRowMenu(false),true);
 /* ---- Health cell: uptime (the broker keeps it running between reports) plus the board's
  * latest STATS sample: internal RAM, CPU load, flash. Old firmware has no sample. ---- */
 function fmtKB(b){ b=+b||0; return b>=1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB'; }
+function healthReportHint(n){
+  const version=/^(\d+)\.(\d+)\.(\d+)(?:[-+]|$)/.exec(n.firmware||'');
+  const old=version&&(Number(version[1])<2||(Number(version[1])===2&&(Number(version[2])<4||(Number(version[2])===4&&Number(version[3])<23))));
+  if(old)return `<div class="health-hint">Firmware ${esc(n.firmware)} does not report RAM / CPU. Update to 2.4.23 or newer.<br><button type="button" class="sec" data-act="ota" data-mac="${esc(n.mac)}">${esc(T('updateFw'))}</button></div>`;
+  if(!n.online)return '<div class="health-hint">No RAM / CPU report saved. Reconnect the board to receive a report.</div>';
+  const since=Date.parse(n.link_since),age=Date.now()-since;
+  if(Number.isFinite(since)&&age>90000)return '<div class="health-hint">No RAM / CPU report received. Check that the broker supports health reports and reconnect the board.</div>';
+  return '<div class="health-hint">Waiting for RAM / CPU report. Firmware 2.4.23+ sends a report every 30 seconds.</div>';
+}
 function meter(label, pct, text, warn, title){
   const p=Math.max(0,Math.min(100,+pct||0));
   return `<div class="meter${warn?' warn':''}" title="${esc(title||'')}"><span class="k">${esc(label)}</span><span class="bar" role="img" aria-label="${esc(label+' '+text)}"><i style="width:${p}%"></i></span><span class="v">${esc(text)}</span></div>`;
@@ -508,7 +523,7 @@ function healthCell(n){
   const s=n.stats;
   const top = n.online ? esc(fmtUptime(n.uptime_sec))
     : `<span class="muted">${esc(T('offline'))}${fmtAgo(n.last_seen) ? ' \u00b7 '+esc(T('lastSeen'))+' '+esc(fmtAgo(n.last_seen)) : ''}</span>`;
-  if(!s) return `<div>${top}</div><div class="muted micro">${esc(T('noStats'))}</div>`;
+  if(!s) return `<div>${top}</div>${healthReportHint(n)}`;
   const tot=+s.heap_total||0, free=+s.heap_free||0, used=tot?100-free*100/tot:0;
   const low = tot>0 && (free<24*1024 || free<tot*0.15);
   const ram = meter(T('ram'), used, fmtKB(free)+' '+T('free'), low,
@@ -683,10 +698,26 @@ async function userAction(name,a){const match=/^extend-(7|30|90)$/.exec(a),actio
 async function delUser(name){if(!confirm('Delete user '+name+'?'))return;try{await api('/api/users/'+encodeURIComponent(name),{method:'DELETE'});showToast('User deleted');await viewUsers();}catch(e){showToast(e.message,true);}}
 
 /* ---- Devices: seven columns, full instruments retained ---- */
+const failedIspLogos=new Set();
+function ispBrand(raw){
+  const name=String(raw||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  if(/\b3bb\b|\btriple\s*t\s*(?:broadband|internet)\b/.test(name))return {id:'3bb',label:'3BB',file:'3bb.png'};
+  if(/\bdtac\b|\btotal access communications?\b/.test(name))return {id:'dtac',label:'dtac',file:'dtac.png'};
+  if(/\bais\b|\badvanced wireless network\b|\badvanced info service\b|^awn$|แอดวานซ์ ไวร์เลส/.test(name))return {id:'ais',label:'AIS',file:'ais.svg'};
+  if(/\btrue\s*(?:internet|online|move|corporation|universal)\b|^true$/.test(name))return {id:'true',label:'True',file:'true.png'};
+  if(/\bnational telecom\b|\btot public\b|\bcat telecom\b|^(?:nt|tot|cat)$|โทรคมนาคมแห่งชาติ/.test(name))return {id:'nt',label:'NT',file:'nt.svg'};
+  return null;
+}
+function ispCell(raw){
+  const brand=ispBrand(raw);if(!brand)return `<span class="subline">${esc(raw||'ISP unknown')}</span>`;
+  const src='/isp/'+brand.file;
+  return `<span class="isp-brand" data-isp="${brand.id}" title="${esc(raw)}">${failedIspLogos.has(src)?'':`<img class="isp-logo" src="${src}" alt="" width="58" height="25" decoding="async">`}<span>${brand.label}</span></span>`;
+}
+document.addEventListener('error',e=>{const img=e.target;if(img instanceof HTMLImageElement&&img.classList.contains('isp-logo')){failedIspLogos.add(img.getAttribute('src'));img.hidden=true;}},true);
 function deviceRow(n){
   const mac=esc(n.mac),g=n.geo||{},city=[g.city,g.region||g.country].filter(Boolean).join(', ')||'Location unknown',hasPos=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPos?n.lat:g.lat,lo=hasPos?n.lon:g.lon,hasGeo=typeof la==='number'&&typeof lo==='number'&&(la||lo),map=hasGeo?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'',full=n.max_users>0&&n.active_users>=n.max_users;
   const loc=map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer" title="${esc(T(hasPos?'openMap':'openMapApprox'))}">${hasPos?'':'≈ '}${esc(city)} ↗</a>`:esc(city);
-  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(n.name||'Unnamed device')}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':'Not measured'}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div class="subline">${esc(g.isp||'ISP unknown')}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
+  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(n.name||'Unnamed device')}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':esc(T('unmeasured'))}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div>${ispCell(g.isp)}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
 }
 async function viewDevices(){
   if(activeView!=='devices')return;const epoch=routeEpoch;
@@ -721,10 +752,10 @@ function updateDrawer(initial=false){
   const mac=esc(n.mac),g=n.geo||{},section=(id,title,html)=>{const el=$('#'+id);if(el&&!el.contains(document.activeElement)&&!(menuOpener&&el.contains(menuOpener)))el.innerHTML='<h3>'+esc(title)+'</h3>'+html;};
   $('#ddTitle').textContent=n.name||'Unnamed device';$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3');
   section('ddHealth','Health',nodeState(n)+`<div class="drawer-health">${healthCell(n)}</div><ul class="reason-list">${(n.health?.reasons||[]).map(r=>'<li>'+esc(r)+'</li>').join('')}</ul>`);
-  section('ddCapacity','Capacity',facts([['Measured capacity',n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':'Not measured'],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
+  section('ddCapacity','Capacity',facts([['Measured capacity',n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':esc(T('unmeasured'))],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Measure speed tests the internet connection through this board. Assign a proxy slot first. RAM and CPU arrive separately in health reports.</p><p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
   section('ddRouting','Routing',facts([['Mode',esc(n.kind||'shared')],['Slot / port',n.slot?esc(n.slot)+' / :'+esc(slotPort(n.slot)):'Not assigned'],['Exit IP','<span class="mono">'+esc(n.remote_ip||'Unknown')+'</span>'],['IP group',esc(n.ip_group_size||1)+' board(s)'],['Streams',esc(n.active_dials||0)+(n.max_streams?' / '+esc(n.max_streams):'')],['Relayed traffic','↑ '+esc(fmtBytes(n.bytes_up))+' · ↓ '+esc(fmtBytes(n.bytes_down))]])+(n.slot_mismatch?`<div class="drawer-actions"><button type="button" class="sec" data-repush="${mac}">Re-push routing to broker</button></div>`:''));
   const hasPin=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPin?n.lat:g.lat,lo=hasPin?n.lon:g.lon,map=typeof la==='number'&&typeof lo==='number'&&(la||lo)?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'';
-  section('ddLocation','Location',facts([['Location',esc([g.city,g.region,g.country].filter(Boolean).join(', ')||'Unknown')],['ISP',esc(g.isp||'Unknown')],['Coordinates',hasPin?esc(n.lat.toFixed(6)+', '+n.lon.toFixed(6)):'Approximate geo-IP only']])+`<div class="drawer-actions">${map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:''}</div>`);
+  section('ddLocation','Location',facts([['Location',esc([g.city,g.region,g.country].filter(Boolean).join(', ')||'Unknown')],['ISP',ispCell(g.isp)],['Coordinates',hasPin?esc(n.lat.toFixed(6)+', '+n.lon.toFixed(6)):'Approximate geo-IP only']])+`<div class="drawer-actions">${map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:''}</div>`);
   if(initial||!$('#ddWifi [data-wifi]'))section('ddWifi','WiFi',`<span data-wifi="${mac}">${esc(n.ssid||'Unknown network')} · ${n.wifi_password_set?`•••• <button type="button" class="sec" data-act="reveal" data-mac="${mac}">Reveal for 10 seconds</button>`:'No stored password'}</span><p class="subline">Passwords stay hidden in the device list. Edit to set or clear a stored password.</p>`);
   section('ddUsers','Bound users',(n.users||[]).length?(n.users||[]).map(user=>'<div class="subline">'+esc(user)+'</div>').join(''):'<span class="muted">No users assigned</span>');
   section('ddNotes','Notes','<p style="white-space:pre-wrap;font-size:13px">'+esc(n.notes||'No notes')+'</p>');
