@@ -177,7 +177,9 @@ def entry_for(version, old=None):
         # what the board reports in HELLO / the dashboard FW column
         "reports": main["reports"],
         "protocol": old.get("protocol") or ("mux1" if "mux" in version or version >= "2.4.22" else "pool"),
-        "built": old.get("built") or main["built"],
+        # always from the archived image: a --force re-add must not keep the
+        # first add's time (someone debugging a field board reads this)
+        "built": main["built"],
         "added": old.get("added") or datetime.date.today().isoformat(),
         "size": main["size"],
         "sha256": main["sha256"],

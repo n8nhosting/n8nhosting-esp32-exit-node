@@ -185,6 +185,20 @@ class FwReleaseTest(unittest.TestCase):
         with open(os.path.join(self.rel_dir, "2.4.22", "esp32c3", APP), "rb") as f:
             self.assertEqual(f.read()[-1:], b"\xcc")
 
+    def test_force_readd_refreshes_built_and_commit(self):
+        fw.cmd_add(Args(make_build(self.tmp.name, "esp32c3", "2.4.22"), title="first", commit="aaaaaaa"))
+        again = os.path.join(self.tmp.name, "again")
+        b = make_build(again, "esp32c3", "2.4.22", filler=b"\xdd")
+        # the rebuilt image carries a later build time
+        with open(os.path.join(b, APP), "wb") as f:
+            f.write(fake_app("2.4.22", time="09:08:07", date="Oct 22 2026", filler=b"\xdd"))
+        fw.cmd_add(Args(b, force=True, commit="bbbbbbb"))
+        e = self.entry("2.4.22")
+        self.assertEqual(e["built"], "Oct 22 2026 09:08:07", "built must describe the archived image, not the first add")
+        self.assertEqual(e["targets"]["esp32c3"]["built"], "Oct 22 2026 09:08:07")
+        self.assertEqual(e["commit"], "bbbbbbb")
+        self.assertEqual(e["title"], "first", "notes survive a re-add")
+
     def test_add_unknown_target_refused(self):
         b = make_build(self.tmp.name, "esp32p4", "2.4.22")
         with self.assertRaises(SystemExit):

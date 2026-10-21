@@ -492,7 +492,7 @@ async function openFw(macs, title){
   show();
   $('#fwGo').onclick = async ()=>{
     const v=$('#fwSel').value; let custom='', version='', rel=null;
-    if(v==='custom'){ custom=$('#fwUrl').value.trim(); localStorage.setItem('ota_url',custom); if(!/^https?:\/\//.test(custom)){ $('#fwErr').textContent='URL must start with https://'; return; } }
+    if(v==='custom'){ custom=$('#fwUrl').value.trim(); localStorage.setItem('ota_url',custom); if(!/^https:\/\//.test(custom)){ $('#fwErr').textContent='URL must start with https:// (images are unsigned, the download must ride on TLS)'; return; } }
     else { rel=idx.releases[+v]; version=rel.reports||rel.version; }
     let failed=[];
     for(const mac of fwTargets){

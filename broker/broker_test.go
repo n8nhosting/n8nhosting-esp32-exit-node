@@ -493,6 +493,17 @@ func TestOTAStatusTracking(t *testing.T) {
 		t.Fatalf("status %q, want failed", n.OTAStatus)
 	}
 
+	// firmware 2.4.22+ (it sends chip=) closes the link for the download and
+	// only HELLOs again when the download is over: back on the same version
+	// without a reboot means it failed (older firmware keeps the link while
+	// downloading, so for it "same version, no reboot" stays "sent")
+	r.setOTA(mac, "https://flash.example/4.0.bin", "4.0")
+	r.takeOTA(n)
+	r.touch(mac, "2.0", "1.2.3.4", 100, "", "esp32c3")
+	if n.OTAStatus != "failed" {
+		t.Fatalf("status %q after a 2.4.22+ node came back on its old firmware, want failed", n.OTAStatus)
+	}
+
 	// cancel only clears a queued update
 	r.setOTA(mac, "https://flash.example/3.0.bin", "3.0")
 	r.setOTA(mac, "", "")
@@ -528,6 +539,21 @@ func TestOTATargetGuard(t *testing.T) {
 		{s3old, "esp32c3", http.StatusConflict},
 		{c3, "", http.StatusOK},
 	}
+	// firmware is not signed, so the download must ride on TLS: plain http is
+	// refused unless the broker was started with OTA_ALLOW_HTTP (test rigs)
+	if rec := postOTA(b, c3, `{"url":"http://192.168.1.10:8088/fw.bin","version":"2.4.22","target":"esp32c3"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("http:// OTA URL: status %d, want 400", rec.Code)
+	}
+	if b.reg.nodes[c3].PendingOTA != "" {
+		t.Errorf("http:// OTA URL was queued: %q", b.reg.nodes[c3].PendingOTA)
+	}
+	b.cfg.allowHTTPOTA = true
+	if rec := postOTA(b, c3, `{"url":"http://192.168.1.10:8088/fw.bin","version":"2.4.22","target":"esp32c3"}`); rec.Code != http.StatusOK {
+		t.Errorf("http:// OTA URL with OTA_ALLOW_HTTP: status %d, want 200", rec.Code)
+	}
+	b.cfg.allowHTTPOTA = false
+	b.reg.setOTA(c3, "", "")
+
 	for _, c := range cases {
 		b.reg.setOTA(c.mac, "", "") // clear whatever the previous case queued
 		rec := postOTA(b, c.mac, fmt.Sprintf(`{"url":"https://flash.example/fw.bin","version":"2.4.22","target":%q}`, c.target))

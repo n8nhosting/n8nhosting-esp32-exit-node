@@ -348,10 +348,17 @@ speed.cloudflare.com (same path as a customer).
 | Uplink loss > grace brings AP + portal back; new SSID connects; both go away again | **pass** (Task 5): `uplink down 90s: turning setup AP back on`, httpd task present; after `set_sta` to the real SSID: `got ip` → `stopping the setup portal`, httpd gone. The portal page itself was not opened from a phone — operator. |
 | S3 N16R8 regression (link, 40 streams, speed, OTA drain, old firmware vs new broker) | **not run** — the S3 board was not plugged in during this session (only COM30 enumerated). Image 2.4.22 esp32s3 (1,264,208 B) is archived; operator runs step 5 on COM7. Old-firmware compatibility is covered by the broker tests (`TestMuxLegacyHelloDefaults`) and by the production broker accepting the 2.4.22 HELLO. |
 
-Other evidence: the pre-token production broker accepts the 2.4.22 HELLO
-(link up in 3.4 s, TLS); a broker from this branch logs `max 4 streams, win
-8192, frame 4096, chip "esp32c3"`; OTA target guard returns 409 for an S3
-image pushed to the C3.
+Other evidence: a broker from this branch logs `max 4 streams, win 8192,
+frame 4096, chip "esp32c3"`; the OTA target guard returns 409 for an S3 image
+pushed to the C3; after the review fix the broker marks a 2.4.22+ node that
+comes back on its old version `failed` (`TestOTAStatusTracking`).
+
+**The C3 image requires the 2.4.22 broker.** Against the pre-token production
+broker it does link (HELLO accepted, TLS, 3.4 s) — but that broker still
+assumes a 32 KB window and 16 KB frames, so the first large transfer overruns
+the C3's 8 KB window / 4 KB frame limit and the link drops while the dashboard
+shows the node online. Deploy the broker first (spec §6.8 step 1); never
+flash a C3 from the flasher before that.
 
 ### 11.1 Why the first soak was slow, and what changed
 

@@ -59,6 +59,10 @@ type config struct {
 	tlsKey     string
 	nodesFile  string // persisted node policy (block list)
 	slotSecret string // SOCKS user/pass password for gost's per-slot chains ("" = slot logins refused)
+	// OTA_ALLOW_HTTP=1 lets /nodes/{mac}/ota queue a plain http:// image URL.
+	// Firmware images are not signed, so the download must ride on TLS in
+	// production; the flag exists for bench tests that serve an image from a PC.
+	allowHTTPOTA bool
 }
 
 // pemFromEnv reads a PEM from a plain env var or a base64-encoded one
@@ -114,14 +118,15 @@ type broker struct {
 func main() {
 	log.SetFlags(log.LstdFlags | log.LUTC)
 	cfg := config{
-		poolAddr:   envOr("POOL_ADDR", ":7000"),
-		socksAddr:  envOr("SOCKS_ADDR", ":1080"),
-		statusAddr: envOr("STATUS_ADDR", ":7001"),
-		token:      os.Getenv("POOL_TOKEN"),
-		tlsCert:    pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
-		tlsKey:     pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
-		nodesFile:  envOr("NODES_FILE", "/data/nodes.json"),
-		slotSecret: os.Getenv("SLOT_SECRET"),
+		poolAddr:     envOr("POOL_ADDR", ":7000"),
+		socksAddr:    envOr("SOCKS_ADDR", ":1080"),
+		statusAddr:   envOr("STATUS_ADDR", ":7001"),
+		token:        os.Getenv("POOL_TOKEN"),
+		tlsCert:      pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
+		tlsKey:       pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
+		nodesFile:    envOr("NODES_FILE", "/data/nodes.json"),
+		slotSecret:   os.Getenv("SLOT_SECRET"),
+		allowHTTPOTA: os.Getenv("OTA_ALLOW_HTTP") == "1",
 	}
 	waitS, _ := strconv.Atoi(envOr("DIAL_WAIT_SECONDS", "10"))
 	cfg.dialWait = time.Duration(waitS) * time.Second
@@ -831,8 +836,9 @@ func (b *broker) statusMux() *http.ServeMux {
 				Target  string `json:"target"`  // chip the image was built for (optional; esp32s3 / esp32c3)
 			}
 			json.NewDecoder(r.Body).Decode(&body)
-			if !strings.HasPrefix(body.URL, "http://") && !strings.HasPrefix(body.URL, "https://") {
-				http.Error(w, "url required", http.StatusBadRequest)
+			if !strings.HasPrefix(body.URL, "https://") &&
+				!(b.cfg.allowHTTPOTA && strings.HasPrefix(body.URL, "http://")) {
+				http.Error(w, "https url required (images are unsigned; set OTA_ALLOW_HTTP=1 only on a test broker)", http.StatusBadRequest)
 				return
 			}
 			if len(body.URL) >= 256 || len(body.Version) > 32 || len(body.Target) > 16 {

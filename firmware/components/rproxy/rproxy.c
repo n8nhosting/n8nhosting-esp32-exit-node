@@ -592,6 +592,17 @@ static bool handle_frame(link_t *l, uint8_t typ, uint32_t sid, const uint8_t *p,
              * streams on a board without PSRAM. mux_serve sees the flag, refuses
              * new OPENs, returns, and mux_task downloads with the link closed. */
             memcpy(s_ota_url, p, len); s_ota_url[len] = 0;
+#if !CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP
+            /* esp_https_ota only refuses http:// when no certificate source is
+             * configured; with the CA bundle attached it would download in the
+             * clear. Images are unsigned, so insist on TLS unless the build
+             * opted in (bench images that fetch from a PC). */
+            if (strncmp(s_ota_url, "https://", 8) != 0) {
+                ESP_LOGE(TAG, "OTA: refusing non-https URL %s", s_ota_url);
+                s_ota_url[0] = 0;
+                return true;
+            }
+#endif
             ESP_LOGW(TAG, "OTA requested by broker: %s", s_ota_url);
             s_ota_wanted = true;
         }

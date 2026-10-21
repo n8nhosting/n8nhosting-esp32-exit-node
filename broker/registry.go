@@ -132,11 +132,16 @@ func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *
 		if n.OTATarget != "" {
 			done = n.Firmware == n.OTATarget
 		}
+		// Firmware up to 2.4.21 keeps the link while it downloads, so a HELLO
+		// on the old version is only a failure once the board has rebooted.
+		// Firmware 2.4.22+ (it sends chip=) closes the link for the download
+		// and HELLOs again only when it is over: the old version without a
+		// reboot means the download failed.
 		switch {
 		case done:
 			n.OTAStatus, n.OTAAt = "ok", n.LastSeen
 			r.saveLocked()
-		case rebooted || uptime < n.otaUptime:
+		case rebooted || uptime < n.otaUptime || chip != "":
 			n.OTAStatus, n.OTAAt = "failed", n.LastSeen
 			r.saveLocked()
 		}
