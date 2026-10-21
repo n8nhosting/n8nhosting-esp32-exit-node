@@ -39,6 +39,9 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`otaAll()`,                       // "Update all online…"
 		`${otaPill(n)}`,                  // OTA status in the FW column
 		`data-act="ota-cancel"`,          // cancel goes through the table's delegated listener
+		`n.chip||'esp32s3'`,              // chip pill; nodes before 2.4.22 never said, all S3
+		`targets[chip]`,                  // OTA picker chooses the image built for the board's chip
+		`target: chip`,                   // and tells the broker which chip the image is for
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

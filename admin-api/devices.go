@@ -38,6 +38,7 @@ type brokerNode struct {
 	RemoteIP   string `json:"remote_ip"`
 	Firmware   string `json:"firmware"`
 	SSID       string `json:"ssid"`
+	Chip       string `json:"chip"` // esp32s3 / esp32c3 from HELLO; "" for firmware before 2.4.22 (all S3)
 	UptimeSec  uint64 `json:"uptime_sec"`
 	FirstSeen  string `json:"first_seen"`
 	LastSeen   string `json:"last_seen"`

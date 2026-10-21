@@ -361,7 +361,7 @@ async function delUser(u){ if(!confirm('Delete user '+u+'?'))return; await api('
 
 /* ---- Devices ---- */
 async function viewDevices(){
-  $('#view').innerHTML = `<div class="head"><h2>Exit devices (ESP32-S3)</h2><div><button class="sec" onclick="otaAll()">Update all online…</button> <button class="sec" onclick="route('devices')">Refresh</button></div></div><div id="dtbl">Loading…</div>`;
+  $('#view').innerHTML = `<div class="head"><h2>Exit devices</h2><div><button class="sec" onclick="otaAll()">Update all online…</button> <button class="sec" onclick="route('devices')">Refresh</button></div></div><div id="dtbl">Loading…</div>`;
   try{
     const nodes = await api('/api/devices') || [];
     window._nodes = nodes;
@@ -394,7 +394,7 @@ async function viewDevices(){
       const nm = `${esc(n.active_users??0)}/${esc(n.max_users??0)}`;
       const nmHtml = full ? `<span class="pill bad">${nm}</span>` : `<span class="muted">${nm}</span>`;
       return `<tr>
-        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div>${portTxt}</td>
+        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div><div><span class="pill off" title="board chip (from the firmware's HELLO)">${esc(n.chip||'esp32s3')}</span></div>${portTxt}</td>
         <td>${esc(n.kind||'\u2014')}</td>
         <td>${st}</td>
         <td>${users}<div>${nmHtml}</div>${grp}</td>
@@ -473,8 +473,11 @@ async function openFw(macs, title){
   $('#fwmodal').style.display='flex';
   const idx = await loadReleases();
   const cur = new Set((window._nodes||[]).filter(n=>macs.includes(n.mac)).map(n=>n.firmware));
+  // which chips a release has images for: 2.4.22+ lists them in r.targets,
+  // older releases are S3-only
+  const targetsOf = r => r.targets ? r.targets : (r.url ? {esp32s3:{url:r.url}} : {});
   const opts = idx.releases.map((r,i)=>{
-    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', cur.has(r.reports||r.version)?'current':'', r.protocol].filter(Boolean).join(', ');
+    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', cur.has(r.reports||r.version)?'current':'', r.protocol, Object.keys(targetsOf(r)).join('/')].filter(Boolean).join(', ');
     return `<option value="${i}" ${r.version===idx.latest?'selected':''}>${esc(r.version)}${r.title?' · '+esc(r.title):''} (${esc(tags)})</option>`;
   });
   opts.push('<option value="custom">Custom URL…</option>');
@@ -488,13 +491,16 @@ async function openFw(macs, title){
   if(!idx.releases.length){ $('#fwSel').value='custom'; $('#fwUrl').value = localStorage.getItem('ota_url') || flashBase()+'/firmware/esp32_nat_router.bin'; }
   show();
   $('#fwGo').onclick = async ()=>{
-    const v=$('#fwSel').value; let url, version='';
-    if(v==='custom'){ url=$('#fwUrl').value.trim(); localStorage.setItem('ota_url',url); }
-    else { const r=idx.releases[+v]; url=flashBase()+'/'+r.url; version=r.reports||r.version; }
-    if(!/^https?:\/\//.test(url)){ $('#fwErr').textContent='URL must start with https://'; return; }
+    const v=$('#fwSel').value; let custom='', version='', rel=null;
+    if(v==='custom'){ custom=$('#fwUrl').value.trim(); localStorage.setItem('ota_url',custom); if(!/^https?:\/\//.test(custom)){ $('#fwErr').textContent='URL must start with https://'; return; } }
+    else { rel=idx.releases[+v]; version=rel.reports||rel.version; }
     let failed=[];
     for(const mac of fwTargets){
-      try{ await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url,version})}); }
+      // each board gets the image built for its own chip; the broker refuses a mismatch too
+      const chip = ((window._devs||{})[mac]||{}).chip||'esp32s3';
+      let url = custom;
+      if(rel){ const targets = targetsOf(rel), tgt = targets[chip]; if(!tgt){ failed.push(mac+': no '+chip+' image in '+rel.version); continue; } url = flashBase()+'/'+tgt.url; }
+      try{ await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url, version, target: chip})}); }
       catch(e){ failed.push(mac+': '+e.message); }
     }
     if(failed.length){ $('#fwErr').textContent='Failed: '+failed.join('; '); return; }

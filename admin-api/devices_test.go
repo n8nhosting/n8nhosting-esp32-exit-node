@@ -131,10 +131,13 @@ func TestDevicePutAndReveal(t *testing.T) {
 
 func TestDeviceListWithoutRow(t *testing.T) {
 	_, mux, fb := newTestServerWithBroker(t)
-	fb.nodes = []brokerNode{{MAC: "aa:bb:cc:dd:ee:09", RemoteIP: "9.9.9.9"}}
+	fb.nodes = []brokerNode{{MAC: "aa:bb:cc:dd:ee:09", RemoteIP: "9.9.9.9", Chip: "esp32c3"}}
 	_, list := doJSONList(t, mux, "GET", "/api/devices", "admintok")
 	if len(list) != 1 || list[0]["kind"] != "shared" || list[0]["lat"] != nil || list[0]["port"] != float64(0) || list[0]["max_users"] != float64(0) {
 		t.Fatalf("zero-valued device: %v", list)
+	}
+	if list[0]["chip"] != "esp32c3" {
+		t.Fatalf("chip must pass through from the broker: %v", list[0]["chip"])
 	}
 	if v, ok := list[0]["lat"]; !ok || v != nil {
 		t.Fatalf("lat must be present as null: %v", list[0])
