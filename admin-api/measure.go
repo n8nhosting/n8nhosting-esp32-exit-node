@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,14 +15,158 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	measureMaxBytes = 8 << 20          // the size of the speedtest object
-	measureMinBytes = 64 << 10         // less is no measurement
-	measureTimeout  = 45 * time.Second // a slow board is measured on what it got through by then
+	measureMaxBytes     = 8 << 20          // the size of the speedtest object
+	measureMinBytes     = 64 << 10         // less is no measurement
+	measureTimeout      = 45 * time.Second // a slow board is measured on what it got through by then
+	measureSoakMaxBytes = 512 << 20        // per worker, even if the timed origin is unusually fast
 )
+
+type measureOptions struct {
+	Parallel    int  `json:"parallel"`
+	DurationSec int  `json:"duration_sec"`
+	Persist     bool `json:"persist"`
+}
+
+func readMeasureOptions(body io.Reader) (measureOptions, error) {
+	opts := measureOptions{Parallel: 1, Persist: true}
+	if body == nil {
+		return opts, nil
+	}
+	dec := json.NewDecoder(io.LimitReader(body, 4097))
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); errors.Is(err, io.EOF) {
+		return opts, nil
+	} else if err != nil {
+		return opts, errors.New("bad measurement options")
+	}
+	if len(raw) > 4096 || !strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
+		return opts, errors.New("measurement options must be an object")
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	for _, value := range fields {
+		if strings.TrimSpace(string(value)) == "null" {
+			return opts, errors.New("measurement options cannot be null")
+		}
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return opts, errors.New("bad measurement options")
+	}
+	strict := json.NewDecoder(strings.NewReader(string(raw)))
+	strict.DisallowUnknownFields()
+	if err := strict.Decode(&opts); err != nil {
+		return opts, errors.New("bad measurement options")
+	}
+	if opts.Parallel != 1 && opts.Parallel != 2 && opts.Parallel != 4 {
+		return opts, errors.New("parallel must be 1, 2 or 4")
+	}
+	if opts.DurationSec != 0 && (opts.DurationSec < 30 || opts.DurationSec > 300) {
+		return opts, errors.New("duration_sec must be 0 or between 30 and 300")
+	}
+	return opts, nil
+}
+
+type measureStreamResult struct {
+	Stream     int     `json:"stream"`
+	Bytes      int64   `json:"bytes"`
+	Seconds    float64 `json:"seconds"`
+	Mbps       float64 `json:"mbps"`
+	Downloads  int     `json:"downloads"`
+	Completed  bool    `json:"completed"`
+	Error      string  `json:"error,omitempty"`
+	StopReason string  `json:"stop_reason"`
+}
+
+type measureDiagnosticResult struct {
+	Bytes    int64
+	Seconds  float64
+	Mbps     float64
+	Streams  []measureStreamResult
+	Complete bool
+}
+
+// Each worker owns one request at a time. A timed soak repeats the fixed object
+// until its shared context or byte budget ends; it never accepts a target from
+// the caller. All workers finish before the throwaway account is deleted.
+func measureDiagnostic(ctx context.Context, proxyURL, target string, parallel int, repeat bool) measureDiagnosticResult {
+	start := time.Now()
+	result := measureDiagnosticResult{Streams: make([]measureStreamResult, parallel), Complete: true}
+	var wg sync.WaitGroup
+	for i := range result.Streams {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			workerStart := time.Now()
+			r := measureStreamResult{Stream: i + 1, StopReason: "object_complete"}
+			budget := int64(measureMaxBytes)
+			if repeat {
+				budget = measureSoakMaxBytes
+			}
+			for r.Bytes < budget {
+				if budget-r.Bytes < measureMinBytes {
+					r.StopReason = "byte_limit"
+					break
+				}
+				if ctx.Err() != nil {
+					break
+				}
+				_, n, err := measureViaProxy(ctx, proxyURL, target, min(int64(measureMaxBytes), budget-r.Bytes))
+				r.Bytes += n
+				if err != nil {
+					if errors.Is(ctx.Err(), context.DeadlineExceeded) && r.Bytes >= measureMinBytes {
+						break
+					}
+					r.Error = strings.ReplaceAll(err.Error(), proxyURL, "proxy")
+					r.StopReason = "error"
+					break
+				}
+				if ctx.Err() == nil {
+					r.Downloads++
+				}
+				if !repeat {
+					break
+				}
+			}
+			r.Seconds = time.Since(workerStart).Seconds()
+			if r.Seconds > 0 {
+				r.Mbps = float64(r.Bytes) * 8 / r.Seconds / 1e6
+			}
+			if ctx.Err() != nil {
+				if errors.Is(ctx.Err(), context.Canceled) {
+					r.Error = "measurement cancelled"
+					r.StopReason = "cancelled"
+				} else if r.Error == "" {
+					r.StopReason = "duration_elapsed"
+				}
+			} else if repeat && r.Bytes >= budget {
+				r.StopReason = "byte_limit"
+			}
+			if r.Bytes < measureMinBytes && r.Error == "" {
+				r.Error = fmt.Sprintf("too little data (%d bytes)", r.Bytes)
+				r.StopReason = "error"
+			}
+			r.Completed = r.Error == "" && r.Bytes >= measureMinBytes
+			result.Streams[i] = r
+		}(i)
+	}
+	wg.Wait()
+	result.Seconds = time.Since(start).Seconds()
+	for _, r := range result.Streams {
+		result.Bytes += r.Bytes
+		result.Complete = result.Complete && r.Completed
+	}
+	if result.Seconds > 0 {
+		result.Mbps = float64(result.Bytes) * 8 / result.Seconds / 1e6
+	}
+	return result
+}
 
 // measureProxyURL is gost's slot service for slot, as admin-api reaches it
 // inside the compose network. A var so tests can point it at a fake proxy.
@@ -107,6 +252,11 @@ func (s *server) activeDials(mac string) int {
 // throwaway user is created straight in the store (no admission) and always
 // deleted. A failed measurement answers 502 and leaves the record as it was.
 func (s *server) handleMeasure(w http.ResponseWriter, r *http.Request, mac string) {
+	opts, err := readMeasureOptions(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	d, err := s.devices.Get(mac)
 	if errors.Is(err, ErrNotFound) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device not found"})
@@ -154,31 +304,63 @@ func (s *server) handleMeasure(w http.ResponseWriter, r *http.Request, mac strin
 	pu.User = url.UserPassword(name, pw)
 
 	active := s.activeDials(mac) // just before the download
-	ctx, cancel := context.WithTimeout(r.Context(), measureTimeout)
+	timeout := measureTimeout
+	if opts.DurationSec > 0 {
+		timeout = time.Duration(opts.DurationSec) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 	target := envOr("SPEEDTEST_URL", "https://flash.jbacteam.com/speedtest.bin")
-	mbps, n, err := measureViaProxy(ctx, pu.String(), target, measureMaxBytes)
+	var mbps float64
+	var n int64
+	var diagnostic *measureDiagnosticResult
+	if opts.Parallel == 1 && opts.DurationSec == 0 && opts.Persist {
+		mbps, n, err = measureViaProxy(ctx, pu.String(), target, measureMaxBytes)
+	} else {
+		result := measureDiagnostic(ctx, pu.String(), target, opts.Parallel, opts.DurationSec > 0)
+		diagnostic = &result
+		mbps, n = result.Mbps, result.Bytes
+		if !result.Complete {
+			err = errors.New("one or more measurement streams failed")
+		}
+	}
+	if r.Context().Err() != nil {
+		err = errors.New("measurement cancelled")
+	}
+	response := map[string]any{"bytes": n, "active_streams": active}
+	if diagnostic != nil {
+		response["parallel"], response["duration_sec"], response["persisted"] = opts.Parallel, opts.DurationSec, false
+		response["aggregate_mbps"], response["seconds"], response["streams"], response["all_complete"] = diagnostic.Mbps, diagnostic.Seconds, diagnostic.Streams, diagnostic.Complete && r.Context().Err() == nil
+	}
 	if err != nil {
 		log.Printf("measure %s (slot %d): %v", mac, d.Slot, err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "measure failed: " + err.Error()})
+		response["error"] = "measure failed: " + err.Error()
+		writeJSON(w, http.StatusBadGateway, response)
 		return
 	}
 	capMbps := math.Round(mbps*10) / 10
 	at := time.Now().UTC().Format(time.RFC3339)
-	err = s.devices.Upsert(mac, func(d *Device) error {
-		d.CapacityMbps, d.CapacityMeasuredAt, d.CapacityActiveStreams = capMbps, at, active
-		return nil
-	})
+	if opts.Persist {
+		err = s.devices.Upsert(mac, func(d *Device) error {
+			d.CapacityMbps, d.CapacityMeasuredAt, d.CapacityActiveStreams = capMbps, at, active
+			return nil
+		})
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save device"})
 		return
 	}
 	log.Printf("measure %s (slot %d): %.1f Mbps, %d bytes, %d active streams", mac, d.Slot, capMbps, n, active)
-	s.emit("device.measured", "info", "device", mac, "admin", "Device capacity measured", map[string]any{"capacity_mbps": capMbps, "active_streams": active, "bytes": n})
-	writeJSON(w, http.StatusOK, map[string]any{
-		"capacity_mbps":  capMbps,
-		"bytes":          n,
-		"seconds":        math.Round(float64(n)*8/mbps/1e6*100) / 100,
-		"active_streams": active,
-	})
+	if opts.Persist {
+		s.emit("device.measured", "info", "device", mac, "admin", "Device capacity measured", map[string]any{"capacity_mbps": capMbps, "active_streams": active, "bytes": n})
+	} else {
+		s.emit("device.diagnostic", "info", "device", mac, "admin", "Bounded throughput diagnostic completed", map[string]any{"parallel": opts.Parallel, "duration_sec": opts.DurationSec, "bytes": n, "aggregate_mbps": mbps})
+	}
+	response["capacity_mbps"] = capMbps
+	if diagnostic == nil {
+		response["seconds"] = math.Round(float64(n)*8/mbps/1e6*100) / 100
+	} else {
+		response["persisted"] = opts.Persist
+	}
+	writeJSON(w, http.StatusOK, response)
 }
