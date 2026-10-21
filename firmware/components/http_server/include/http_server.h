@@ -11,9 +11,19 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+
 httpd_handle_t start_webserver(uint16_t port);
 
 void web_server_start_captive_dns(void);
+
+/** Start (on) or stop (off) the web server and captive DNS. Used by the rproxy
+ *  AP policy in CONFIG_WEB_SETUP_PORTAL_ONLY builds: the portal lives only
+ *  while the setup AP is up. Idempotent. */
+void web_server_set_setup_mode(bool on);
+
+/** True while the HTTP server task exists. */
+bool web_server_is_running(void);
 
 /** Get current web UI interface access bitmask (RC_BIND_AP, RC_BIND_STA, RC_BIND_VPN). */
 uint8_t web_ui_get_bind(void);

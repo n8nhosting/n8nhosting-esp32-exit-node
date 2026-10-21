@@ -187,6 +187,14 @@ static esp_err_t http_open_fn(httpd_handle_t hd, int sockfd)
 }
 
 static void web_server_start_captive_dns(void);
+static void web_server_stop_captive_dns(void);
+
+/* Server lifecycle (web_server_set_setup_mode): the exit-node builds run the
+ * web UI only while the setup AP is up. */
+static httpd_handle_t s_server;        /* running server, NULL when stopped        */
+static uint16_t s_port = 80;           /* port of the last start_webserver() call  */
+static int s_dns_sock = -1;            /* captive DNS socket; closing it ends the task */
+static TaskHandle_t s_dns_task;
 
 esp_timer_handle_t restart_timer;
 
@@ -930,17 +938,21 @@ static esp_err_t config_import_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t config_exportp = {
     .uri       = "/api/config-export",
     .method    = HTTP_POST,
     .handler   = config_export_handler,
 };
+#endif
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t config_importp = {
     .uri       = "/api/config-import",
     .method    = HTTP_POST,
     .handler   = config_import_handler,
 };
+#endif
 
 /* --- WireGuard .conf import handler --- */
 
@@ -994,11 +1006,13 @@ static esp_err_t vpn_import_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t vpn_importp = {
     .uri       = "/api/vpn-import",
     .method    = HTTP_POST,
     .handler   = vpn_import_handler,
 };
+#endif
 
 /* --- OTA Firmware Upload handler --- */
 
@@ -1142,11 +1156,13 @@ static esp_err_t ota_upload_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t ota_uploadp = {
     .uri       = "/api/ota-upload",
     .method    = HTTP_POST,
     .handler   = ota_upload_handler,
 };
+#endif
 
 esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 {
@@ -1543,19 +1559,23 @@ static esp_err_t index_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t indexp = {
     .uri       = "/",
     .method    = HTTP_GET,
     .handler   = index_get_handler,
 };
+#endif
 
 /* Same handler also serves POST so the login form can submit its password in the
  * request body instead of the URL query string. */
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t indexp_post = {
     .uri       = "/",
     .method    = HTTP_POST,
     .handler   = index_get_handler,
 };
+#endif
 
 uint8_t web_ui_get_bind(void)
 {
@@ -2336,11 +2356,13 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t configp = {
     .uri       = "/config",
     .method    = HTTP_GET,
     .handler   = config_get_handler,
 };
+#endif
 
 /* Mappings page GET handler (DHCP Reservations + Port Forwarding) - Chunked transfer */
 static esp_err_t mappings_get_handler(httpd_req_t *req)
@@ -2823,11 +2845,13 @@ static esp_err_t mappings_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t mappingsp = {
     .uri       = "/mappings",
     .method    = HTTP_GET,
     .handler   = mappings_get_handler,
 };
+#endif
 
 /* Firewall (ACL) page GET handler */
 static esp_err_t firewall_get_handler(httpd_req_t *req)
@@ -3170,11 +3194,13 @@ static esp_err_t firewall_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t firewallp = {
     .uri       = "/firewall",
     .method    = HTTP_GET,
     .handler   = firewall_get_handler,
 };
+#endif
 
 /* Helper function to convert auth mode to string for web UI */
 static const char* web_auth_mode_to_str(wifi_auth_mode_t authmode)
@@ -3544,6 +3570,15 @@ static httpd_uri_t setupp = {
     .method    = HTTP_GET,
     .handler   = setup_get_handler,
 };
+
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+/* In the portal-only build the Getting Started page is also the root page. */
+static httpd_uri_t setup_rootp = {
+    .uri       = "/",
+    .method    = HTTP_GET,
+    .handler   = setup_get_handler,
+};
+#endif
 #endif /* !CONFIG_ETH_UPLINK */
 
 /* VPN page GET handler */
@@ -3780,11 +3815,13 @@ static esp_err_t vpn_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if !CONFIG_WEB_SETUP_PORTAL_ONLY   /* management page, not in the setup-portal build */
 static httpd_uri_t vpnp = {
     .uri       = "/vpn",
     .method    = HTTP_GET,
     .handler   = vpn_get_handler,
 };
+#endif
 
 static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err);
 
@@ -3793,8 +3830,14 @@ httpd_handle_t start_webserver(uint16_t port)
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port;
+    s_port = port;
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+    config.stack_size = 8192;   // setup + scan pages only (chunked output, small buffers)
+    config.max_uri_handlers = 6;
+#else
     config.stack_size = 16384;  // Large stack needed for mappings page with 3x 2KB HTML buffers
     config.max_uri_handlers = 14;
+#endif
     config.max_uri_len = 1024;
     config.open_fn = http_open_fn;
     /* Fail a stalled send/recv fast (default 5s) so an abandoned connection
@@ -3819,13 +3862,24 @@ httpd_handle_t start_webserver(uint16_t port)
         if (s_web_bind == 0) s_web_bind = RC_BIND_AP;
     }
 
-    esp_timer_create(&restart_timer_args, &restart_timer);
+    if (!restart_timer) esp_timer_create(&restart_timer_args, &restart_timer);
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK) {
+        s_server = server;
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+        /* Setup portal only: the Getting Started page at / and /setup, the
+         * network scan it links to, and the icon. No management pages. */
+#if !CONFIG_ETH_UPLINK
+        httpd_register_uri_handler(server, &setup_rootp);
+        httpd_register_uri_handler(server, &setupp);
+        httpd_register_uri_handler(server, &scanp);
+#endif
+        httpd_register_uri_handler(server, &favicon_uri);
+#else
         httpd_register_uri_handler(server, &indexp);
         httpd_register_uri_handler(server, &indexp_post);
         httpd_register_uri_handler(server, &configp);
@@ -3849,6 +3903,7 @@ httpd_handle_t start_webserver(uint16_t port)
         httpd_register_uri_handler(server, &vpn_importp);
 #endif
         httpd_register_uri_handler(server, &ota_uploadp);
+#endif /* CONFIG_WEB_SETUP_PORTAL_ONLY */
 
 #if CONFIG_ETH_UPLINK
         // In ETH mode, start captive portal if router appears unconfigured
@@ -3904,6 +3959,7 @@ static void dns_server_task(void *pvParameters)
         return;
     }
 
+    s_dns_sock = sock;
     ESP_LOGI(TAG, "Captive portal DNS server started");
     uint8_t buf[512];
 
@@ -3916,6 +3972,10 @@ static void dns_server_task(void *pvParameters)
         socklen_t client_len = sizeof(client);
         int len = recvfrom(sock, buf, sizeof(buf), 0,
                            (struct sockaddr *)&client, &client_len);
+        if (len < 0) {
+            if (s_dns_sock < 0) break;              /* stopped: the socket was closed under us */
+            continue;
+        }
         if (len < 12) continue;
 
         /* Drop oversized queries: the appended answer must fit in buf.
@@ -3946,11 +4006,53 @@ static void dns_server_task(void *pvParameters)
         sendto(sock, buf, pos, 0,
                (struct sockaddr *)&client, client_len);
     }
+    ESP_LOGI(TAG, "Captive portal DNS server stopped");
+    s_dns_task = NULL;
+    vTaskDelete(NULL);
 }
 
 void web_server_start_captive_dns(void)
 {
-    xTaskCreate(dns_server_task, "dns_srv", 4096, NULL, 5, NULL);
+    if (s_dns_task) return;
+    xTaskCreate(dns_server_task, "dns_srv", 4096, NULL, 5, &s_dns_task);
+}
+
+static void web_server_stop_captive_dns(void)
+{
+    if (!s_dns_task) return;
+    int sock = s_dns_sock;
+    s_dns_sock = -1;                              /* tells the task its recvfrom error is a stop */
+    if (sock >= 0) {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+    }
+    for (int i = 0; i < 50 && s_dns_task; i++) vTaskDelay(pdMS_TO_TICKS(10));
+}
+
+bool web_server_is_running(void)
+{
+    return s_server != NULL;
+}
+
+/* Exit-node builds (CONFIG_WEB_SETUP_PORTAL_ONLY): the rproxy AP policy calls
+ * this with the setup AP's state. The server and the captive DNS exist only
+ * while a customer could be looking at the setup page; once the uplink is up
+ * their memory goes back to the heap. */
+void web_server_set_setup_mode(bool on)
+{
+    if (on) {
+        if (s_server) return;
+        ESP_LOGI(TAG, "setup mode: starting the setup portal on port %u", (unsigned)s_port);
+        start_webserver(s_port);
+        return;
+    }
+    if (!s_server && !s_dns_task) return;
+    ESP_LOGI(TAG, "uplink up: stopping the setup portal");
+    web_server_stop_captive_dns();
+    if (s_server) {
+        stop_webserver(s_server);
+        s_server = NULL;
+    }
 }
 
 // 404 handler: redirect unknown URIs to the main page (captive portal trigger)

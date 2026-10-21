@@ -896,6 +896,9 @@ static void start_ota(const char *url)
 
 /* ---- AP policy: hide the setup AP while the uplink works ---------------- */
 #if CONFIG_RPROXY_AP_AUTO_OFF
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+#include "http_server.h"   /* the setup portal lives and dies with the setup AP */
+#endif
 static void ap_policy_task(void *arg)
 {
     int down_secs = 0;
@@ -904,11 +907,17 @@ static void ap_policy_task(void *arg)
         if (sta_has_ip()) {
             down_secs = 0;
             if (!ap_disabled) { ESP_LOGI(TAG, "uplink up: turning setup AP off"); ap_set_enabled(false); }
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+            web_server_set_setup_mode(false);
+#endif
         } else {
             down_secs += 5;
             if (ap_disabled && down_secs >= CONFIG_RPROXY_AP_AUTO_OFF_GRACE) {
                 ESP_LOGW(TAG, "uplink down %ds: turning setup AP back on", down_secs);
                 ap_set_enabled(true);
+#if CONFIG_WEB_SETUP_PORTAL_ONLY
+                web_server_set_setup_mode(true);
+#endif
             }
         }
     }
@@ -962,7 +971,9 @@ esp_err_t rproxy_init(void)
              s_cfg.enabled, s_cfg.host, s_cfg.port, s_cfg.pool, s_cfg.use_tls, s_mac, s_fw);
     if (s_cfg.enabled && s_cfg.host[0] && s_cfg.token[0]) start_pool();
 #if CONFIG_RPROXY_AP_AUTO_OFF
-    xTaskCreate(ap_policy_task, "ap_policy", 3072, NULL, tskIDLE_PRIORITY + 1, NULL);
+    /* 4 KB: in portal-only builds this task also stops/starts the HTTP server
+     * (httpd_stop ran it down to ~900 B free with 3 KB). */
+    xTaskCreate(ap_policy_task, "ap_policy", 4096, NULL, tskIDLE_PRIORITY + 1, NULL);
 #endif
     return ESP_OK;
 }
