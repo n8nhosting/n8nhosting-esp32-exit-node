@@ -560,11 +560,14 @@ func TestMuxStatsFrame(t *testing.T) {
 	}
 	n := &testMuxNode{c: c}
 	n.send(0x7F, 0, []byte("a control frame from the future"))
-	n.send(frameStats, 0, []byte("up=600 heap=140000 heapmin=26000 heaptot=320000 cpu=12 app=1245184 slot=2031616 flash=4194304 streams=0"))
+	n.send(frameStats, 0, []byte("up=600 heap=140000 heapmin=26000 heaptot=320000 cpu=12 app=1245184 slot=2031616 flash=4194304 streams=0 rssi=-67"))
 	waitFor(t, func() bool { l := b.reg.list(); return len(l) == 1 && l[0].Stats != nil })
 	v := b.reg.list()[0]
 	if v.Stats.HeapFree != 140000 || v.Stats.CPUPct != 12 || v.Stats.FlashBytes != 4194304 || v.Stats.At == "" {
 		t.Fatalf("stats = %+v", v.Stats)
+	}
+	if v.Stats.RSSI == nil || *v.Stats.RSSI != -67 {
+		t.Fatalf("RSSI missing from mux sample: %+v", v.Stats)
 	}
 	if v.UptimeSec < 600 || v.UptimeSec > 605 {
 		t.Fatalf("uptime from STATS: %d", v.UptimeSec)

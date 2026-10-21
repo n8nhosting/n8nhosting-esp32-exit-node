@@ -26,7 +26,8 @@ type nodeStats struct {
 	HeapTotal  uint32 `json:"heap_total"`
 	PSRAMFree  uint32 `json:"psram_free,omitempty"`
 	PSRAMTotal uint32 `json:"psram_total,omitempty"`
-	CPUPct     int    `json:"cpu_pct"` // load since the previous sample, all cores; -1 = unknown
+	CPUPct     int    `json:"cpu_pct"`        // load since the previous sample, all cores; -1 = unknown
+	RSSI       *int   `json:"rssi,omitempty"` // STA signal in dBm; nil when missing or invalid
 	AppBytes   uint32 `json:"app_bytes"`
 	SlotBytes  uint32 `json:"slot_bytes"`
 	FlashBytes uint32 `json:"flash_bytes"`

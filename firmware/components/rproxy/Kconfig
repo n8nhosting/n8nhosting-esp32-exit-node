@@ -79,6 +79,16 @@ config RPROXY_DEFAULT_TLS
         firmware (components/rproxy/broker_ca.pem). Hostname is not checked
         because the CA is private and only ever issues the broker certificate.
 
+config RPROXY_OTA_DEADLINE_SEC
+    int "Overall OTA deadline (seconds)"
+    range 30 600
+    default 180
+    help
+        Bound the complete OTA download with a monotonic deadline, separate
+        from the 5-second network I/O timeout. Failure normally aborts the
+        partial image and reconnects without rebooting. A blocking IDF call
+        that exceeds this deadline plus 10 seconds triggers a safe restart.
+
 config RPROXY_MINIMAL_UI
     bool "Minimal exit-node web UI (hide Firewall/VPN/PCAP)"
     default n

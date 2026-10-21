@@ -19,6 +19,7 @@
  * SPDX-License-Identifier: MIT
  */
 #include "rproxy.h"
+#include "ota_transfer.h"
 #include "sdkconfig.h"
 
 #include <string.h>
@@ -734,6 +735,9 @@ static bool health_send(link_t *l)
     if (ptot && n > 0 && n < (int)sizeof(line))
         n += snprintf(line + n, sizeof(line) - n, " psram=%u psramtot=%u",
                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (unsigned)ptot);
+    wifi_ap_record_t ap;
+    if (n > 0 && n < (int)sizeof(line) && esp_wifi_sta_get_ap_info(&ap) == ESP_OK && ap.rssi >= -127 && ap.rssi <= 0)
+        n += snprintf(line + n, sizeof(line) - n, " rssi=%d", (int)ap.rssi);
     if (n <= 0 || n >= (int)sizeof(line)) return true;   /* cannot happen; never drop the link for it */
     return frame_send(l, F_STATS, 0, line, (uint16_t)n);
 }
@@ -1017,20 +1021,67 @@ static void ota_verify_start(void)
  * accepting OPENs and returns -> mux_task closes the link and frees its
  * buffers -> start_ota() here. s_ota_busy is declared with the flags above. */
 
+typedef struct {
+    esp_https_ota_config_t config;
+    esp_https_ota_handle_t handle;
+} ota_transfer_ctx_t;
+
+static int ota_begin(void *arg) { ota_transfer_ctx_t *c = arg; return esp_https_ota_begin(&c->config, &c->handle); }
+static int ota_perform(void *arg) { return esp_https_ota_perform(((ota_transfer_ctx_t *)arg)->handle); }
+static bool ota_complete(void *arg) { return esp_https_ota_is_complete_data_received(((ota_transfer_ctx_t *)arg)->handle); }
+static int ota_finish(void *arg) { ota_transfer_ctx_t *c = arg; int err = esp_https_ota_finish(c->handle); c->handle = NULL; return err; }
+static void ota_abort(void *arg) { ota_transfer_ctx_t *c = arg; esp_https_ota_abort(c->handle); c->handle = NULL; }
+static int64_t ota_now_us(void *arg) { (void)arg; return esp_timer_get_time(); }
+static void ota_yield(void *arg) { (void)arg; vTaskDelay(1); }
+
+/* IDF begin can block while fetching headers or draining a redirect body.
+ * This callback never owns a TLS/OTA handle or a task's stack. If a blocking
+ * IDF operation has not returned during the grace period, restart safely.
+ * Before finish, the current boot partition remains selected. */
+static void ota_failsafe_restart(void *arg)
+{
+    (void)arg;
+    ESP_LOGE(TAG, "OTA: overall deadline plus 10 s grace expired; restarting");
+    esp_restart();
+}
+
 static void ota_task(void *arg)
 {
     char *url = (char *)arg;
-    ESP_LOGW(TAG, "OTA: downloading %s", url);
+    const int budget = rproxy_ota_budget_seconds(CONFIG_RPROXY_OTA_DEADLINE_SEC);
+    const int64_t deadline = esp_timer_get_time() + (int64_t)budget * 1000000LL;
+    ESP_LOGW(TAG, "OTA: download starting; overall budget %d s", budget);
     esp_http_client_config_t http = {
         .url = url,
-        .timeout_ms = 30000,
+        .timeout_ms = 5000,
         .crt_bundle_attach = esp_crt_bundle_attach,   /* public CAs for https URLs */
         .keep_alive_enable = true,
     };
-    esp_https_ota_config_t ota = { .http_config = &http };
-    esp_err_t err = esp_https_ota(&ota);
+    ota_transfer_ctx_t transfer = { .config = { .http_config = &http } };
+    const rproxy_ota_ops_t ops = {
+        .ctx = &transfer, .begin = ota_begin, .perform = ota_perform,
+        .complete = ota_complete, .finish = ota_finish, .abort = ota_abort,
+        .now_us = ota_now_us, .yield = ota_yield,
+        .in_progress = ESP_ERR_HTTPS_OTA_IN_PROGRESS, .timeout = ESP_ERR_TIMEOUT,
+        .incomplete = ESP_ERR_INVALID_SIZE,
+    };
+    esp_timer_handle_t failsafe = NULL;
+    const esp_timer_create_args_t timer_args = { .callback = ota_failsafe_restart, .arg = NULL, .name = "ota_deadline" };
+    esp_err_t err = esp_timer_create(&timer_args, &failsafe);
+    if (err == ESP_OK) {
+        const int64_t remaining = deadline + 10 * 1000000LL - esp_timer_get_time();
+        err = remaining > 0 ? esp_timer_start_once(failsafe, remaining) : ESP_ERR_TIMEOUT;
+    }
+    if (err == ESP_OK) err = rproxy_ota_transfer(&ops, deadline);
+    /* One owner disarms/deletes the timer before stack or URL cleanup. */
+    if (failsafe) {
+        esp_timer_stop(failsafe);
+        esp_timer_delete(failsafe);
+        failsafe = NULL;
+    }
     if (err == ESP_OK) {
         ESP_LOGW(TAG, "OTA: success, rebooting");
+        free(url);
         vTaskDelay(pdMS_TO_TICKS(500));
         esp_restart();
     }

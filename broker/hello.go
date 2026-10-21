@@ -77,11 +77,19 @@ func parseHelloOpts(f []string) helloOpts {
 //	psram=<free> psramtot=<total>                           only with PSRAM
 //	cpu=<0..100|-1> app=<image bytes> slot=<partition bytes> flash=<chip bytes>
 //	streams=<open mux streams>
+//	rssi=<-127..0 dBm>                                    optional, firmware 2.4.25+
 func parseStats(s string) (st nodeStats, ok bool) {
 	st.CPUPct = -1
 	for _, tok := range strings.Fields(s) {
 		k, v, found := strings.Cut(tok, "=")
 		if !found {
+			continue
+		}
+		if k == "rssi" {
+			if value, err := strconv.ParseInt(v, 10, 16); err == nil && value >= -127 && value <= 0 {
+				rssi := int(value)
+				st.RSSI, ok = &rssi, true
+			}
 			continue
 		}
 		u, err := strconv.ParseUint(v, 10, 32)
