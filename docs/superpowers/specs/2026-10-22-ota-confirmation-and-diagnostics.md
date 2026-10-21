@@ -54,6 +54,17 @@ handler itself remains bounded at 300 seconds and stops on client cancellation.
 Starting or closing another test must invalidate late responses. Existing
 modal focus handling and refresh pausing apply.
 
+Only a timed worker that already finished an object may briefly retry a typed
+local proxy CONNECT 503 while the previous tunnel releases its stream slot.
+Use 100/200/400 ms context-aware waits, at most three retries per object and
+eight per worker, with a one-second eligibility window. Include waiting in
+elapsed time and rate; return `retries` and `connect_503s` per worker and show
+nonzero retry counts in the existing results. Initial CONNECT failures,
+origin errors, body/read failures and unrelated network errors remain terminal.
+Exhaustion or a deadline while retrying an unresolved CONNECT failure is an
+incomplete result, never a successful duration sample. Keep the original
+shared deadline, byte budget and stream/admission limits.
+
 ## Verification gates
 
 Keep local unit/race/browser checks, actual production deployment, actual board
@@ -69,3 +80,18 @@ confirm this fix. Valid console commands and network configuration are unchanged
 
 Record current results in `docs/dashboard-review/04-phase2-acceptance.md` and
 sanitized artifacts under `output/playwright/`; never store credentials.
+
+## Live payload accounting
+
+Broker-wide and per-node cumulative byte counters advance while connections
+remain open, for both mux and legacy relays. Count only the payload bytes an
+actual downstream write accepted, including a partial write that also returns
+an error. Exclude SOCKS replies and mux frame headers. Closing a connection
+must not add those bytes a second time; legacy bytes already buffered with a
+DIAL reply use the same counted path as subsequent payload.
+
+The existing metrics sampler, reset rule and API fields remain unchanged.
+`throughput_bps` remains bytes per second, converted to displayed Mbps by
+multiplying by 8 / 1,000,000. Rates use sampler intervals rather than a new
+ticker. Verify node counters during an open transfer and the next sampled
+Overview rate on actual production hardware after deployment.

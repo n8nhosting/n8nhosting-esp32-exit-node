@@ -18,6 +18,11 @@
 > without section tabs. See the latest acceptance section and
 > [`device-settings-and-flasher-refinement.md`](../specs/2026-10-22-device-settings-and-flasher-refinement.md)
 > for the superseding UI and migration v6 contracts.
+>
+> OTA confirmation and hardware diagnostics follow-up (2026-10-22): see
+> [`ota-confirmation-and-diagnostics.md`](../specs/2026-10-22-ota-confirmation-and-diagnostics.md)
+> and the latest acceptance section for firmware 2.4.24, actual board results,
+> durable broker storage, live traffic counters and remaining soak gates.
 
 
 > **For agentic workers:** this plan sequences design work that already

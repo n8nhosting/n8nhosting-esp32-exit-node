@@ -495,3 +495,108 @@ disconnected-console yield fixes the observed standalone C3 idle saturation.
 S3 received one24-s3 request at04:12:26. The broker confirms a full command
 write; at the following check it still reported21-mux1.4 and had not confirmed
 the target. Do not claim successful download, rollback or completed update.
+
+The permanent storage image was deployed by `gfgjklmcir2vk0msotlawsn7`, importing
+`23ca773a7933e5dba63867cee9fca947aa1f05db` at 04:13:43 +07. All four services
+started by 04:14:27 and the deployment finished successfully. A real postrestart
+read of the broker file and production dashboard confirms slots 1/3/4 and
+AEC0's `24-c3/ok` retained exactly; S3's unconfirmed `24-s3/sent` also persisted
+without automatically resending. See `broker-state-{before,after}-restart.txt`.
+
+### All three boards recovered to 2.4.24
+
+7EB0's broker OTA command was written at 04:15:57 and the board returned at
+04:16:09 reporting `2.4.24-c3/ok` (12 seconds). Idle CPU remains 1%.
+
+The old S3 updater did not confirm its broker request. A single historical LAN
+address from the bench log, `192.168.1.126`, was checked without scanning.
+`GET /config` confirmed STA MAC `e8:3d:c1:f2:86:bc`, ESP32-S3 and old firmware
+`2.4.21-mux1.4`. Only allowlisted identity fields were emitted; configuration
+HTML and passwords were not logged or saved.
+
+The board's existing reboot action was invoked to clear any old in-flight OTA.
+The broker recorded the deliberate reboot at 04:16:58–04:16:59, correctly showing
+an unchanged-version failure rather than success. After confirming fresh uptime
+and identity, the existing LAN `/api/ota-upload` received the verified S3 image:
+1,265,744 bytes, SHA256
+`6b25ef65e3174586a06e8da846c0218a67675ae4d4365e4bfed6a1bc5494b952`.
+It returned HTTP200/`ok:true`; HELLO at 04:17:47 reported `2.4.24-s3`, resolving
+the earlier inferred failure to `ok`. No USB/serial probe or NVS erase was used.
+
+A controlled broker OTA round trip then verified the recovered S3 uploader,
+with the same partition layout: `2.4.24-s3` to `2.4.23-s3` at
+04:20:07–04:20:24 (17 seconds), then back to `2.4.24-s3` at
+04:20:44–04:21:00 (16 seconds). Both reported the requested version and `ok`.
+Final intended firmware is 2.4.24 on all three boards; none remains downgraded.
+S3 idle reports now include RAM (about 100 KiB of 336 KiB), CPU1%, PSRAM and
+flash. The exact cause of the old S3 HTTPS updater failure remains unproven;
+source analysis is in `output/playwright/s3-ota-source-analysis.md`. It documents
+per-read timeout versus the absent overall deadline, not a confirmed rollback.
+
+### Real proxy diagnostics
+
+All following short checks use production gost, the board's own slot, the fixed
+8 MiB speedtest object, temporary measurement users and `persist:false`:
+
+| Board | Parallel streams | Actual duration | Aggregate | Data | Result |
+|---|---:|---:|---:|---:|---|
+| AEC0 / 3134 | 2 | 30.0 s | 2.55 Mbps | 9.1 MiB | 2/2 completed |
+| AEC0 / 3134 | 4 | 30.0 s | 2.52 Mbps | 9.0 MiB | 4/4 completed |
+| 7EB0 / 3133 | 2 | 30.0 s | 2.38 Mbps | 8.5 MiB | 2/2 completed |
+| 7EB0 / 3133 | 4 | 30.0 s | 2.43 Mbps | 8.7 MiB | 4/4 completed |
+
+These are aggregate board rates, not a promise of that rate per connection.
+All twelve short-test worker outcomes completed successfully; per-stream details
+and actual production screenshots are in `production-{aec0,7eb0}-{2,4}x30.*`.
+Capacity remains 2.4/1.6 Mbps and both customer occupancies remain 1/1.
+Four connections are stream slots, not four seats/users.
+
+A longer 4-stream/300-second diagnostic on each C3 is running internally to avoid
+the public HTTP proxy deadline. The first raw-netcat runner closed its request
+connection at stdin EOF, causing both requests to cancel before traffic
+(zero bytes, microsecond duration); that runner result is not a board failure or
+soak result. Its evidence is retained in
+`diagnostic-runner-cancelled-before-traffic.txt`. The corrected runner holds
+stdin open, and both board drawers confirm 4/4 active streams. Long-run results
+will be recorded after the actual request durations finish.
+
+The corrected run completed at 04:27:02 +07 with actual aggregate durations
+300.0009/300.0006 seconds. It is **partial, not passed**:
+
+| Board | Aggregate | Bytes | Workers reaching 300 s | Failure |
+|---|---:|---:|---:|---|
+| AEC0 | 2.554 Mbps | 95,787,814 | 3/4 | Worker 4: next CONNECT refused after its first 8 MiB object, at 103.2 s |
+| 7EB0 | 2.560 Mbps | 96,000,218 | 3/4 | Worker 2: next CONNECT refused after its first 8 MiB object, at 102.9 s |
+
+Both responses correctly returned HTTP 502 / `all_complete:false`, retaining
+partial per-worker results. Broker logs at 04:23:45 report no usable slot link
+for those two replacement connections, without a mux link-down/reboot during
+the run. The other three workers on each board each completed three objects.
+Afterward, active streams returned to 0/4 and free heap recovered to about
+136 KiB on 7EB0. Investigate capacity release at object rollover before
+claiming sustained four-connection acceptance. Raw results and broker evidence
+are in `production-c3-4x300-{results,broker-log}.txt`.
+
+The same run also exposed close-time broker byte accounting: Overview showed
+0.00 Mbps while streams were carrying data. Incremental payload accounting and
+open-stream regression tests are in progress; live verification must follow
+their deployment.
+
+Both C3s subsequently returned to idle CPU 1%, 0/4 streams and free heap
+141 KiB (AEC0) / 137 KiB (7EB0), with continuing uptime. Actual production
+layout checks at 1440x900 show all drawer sections together in three columns,
+without an overflowing dialog. At 375x812, device cards expose slot/port and
+the prominent Assign button, bottom navigation is visible, and the page and
+drawer have equal client/scroll widths (360 CSS px after the vertical gutter).
+All detail sections remain present in the mobile vertical flow. Escape closes
+the detail view. Temporary viewport overrides were reset. Evidence:
+`production-2.4.24-{desktop-drawer,mobile-devices,mobile-drawer}.jpg`.
+
+Live byte accounting commit `f5738d4` passes full broker tests (14.654 s),
+vet and focused race checks (2.359 s). Tests keep actual mux and legacy SOCKS
+streams open across two payload batches, then assert exact unchanged totals
+after EOF; partial/header/error and buffered legacy paths are also covered.
+Dashboard commit `175ccf9` displays nonzero slot retries per worker. All five
+connection-browser groups pass again with simulated retry responses, including
+partial failures, cancellation, stale-response protection and mobile layout.
+These local checks do not establish production or hardware acceptance.
