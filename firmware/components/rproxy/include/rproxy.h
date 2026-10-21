@@ -5,8 +5,10 @@
  * Instead it keeps ONE outbound link to a broker running on the VPS and the
  * broker multiplexes every customer stream over it ("mux1" protocol):
  *
- *     HELLO <token> <mac> <fw> <uptime> <ssid_b64> mux1 <max>\n
+ *     HELLO <token> <mac> <fw> <uptime> <ssid_b64> mux1 <max> win=<B> frame=<B> chip=<target>\n
  *         ->   READY mux1\n   then binary frames in both directions
+ *     (win/frame/chip are optional key=value tokens from 2.4.22 on; a broker
+ *     that does not know them assumes 32768 / 16384.)
  *
  * Frame: type u8 | flags u8 | len u16 BE | stream id u32 BE | payload.
  * When a customer connects to the VPS proxy (GOST) the broker sends
@@ -43,7 +45,14 @@ extern "C" {
 #define RPROXY_MAX_POOL        8      /* legacy setting, kept for NVS compat   */
 #define RPROXY_DEFAULT_POOL    4
 #define RPROXY_DEFAULT_PORT    7000
-#define RPROXY_RELAY_BUF       16376  /* max DATA frame read from a target: header + payload = one 16 KB TLS record */
+#ifdef CONFIG_RPROXY_MUX_FRAME
+#define RPROXY_MUX_FRAME       CONFIG_RPROXY_MUX_FRAME
+#else
+#define RPROXY_MUX_FRAME       16384
+#endif
+/* max DATA payload read from a target per frame: on the S3, header + payload
+ * = one 16 KB TLS record */
+#define RPROXY_RELAY_BUF       (RPROXY_MUX_FRAME - 8)
 #ifdef CONFIG_RPROXY_MAX_STREAMS
 #define RPROXY_MAX_STREAMS     CONFIG_RPROXY_MAX_STREAMS
 #else
@@ -65,6 +74,9 @@ typedef struct {
     uint8_t   connected;              /* 1 while the mux link is up            */
     uint8_t   dialing;                /* streams dialing or relaying           */
     uint8_t   max_streams;            /* stream limit of the mux link          */
+    uint8_t   dialers;                /* dialer tasks (CONFIG_RPROXY_DIALERS)  */
+    uint32_t  window;                 /* per-stream receive window advertised  */
+    uint32_t  frame;                  /* largest DATA payload accepted         */
     uint32_t  total_dials;            /* successful DIALs since boot           */
     uint32_t  failed_dials;           /* DIALs that ended in ERR               */
     uint32_t  blocked_dials;          /* DIALs refused by the safety filter    */

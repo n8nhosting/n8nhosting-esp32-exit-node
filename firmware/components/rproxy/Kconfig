@@ -35,9 +35,41 @@ config RPROXY_MAX_STREAMS
     default 24 if SPIRAM
     default 6
     help
-        Every stream holds a target socket and a 32 KB receive window (in
-        PSRAM when available). Keep CONFIG_LWIP_MAX_SOCKETS at least this
-        plus ~16 for the web UI, console and the broker link itself.
+        Every stream holds a target socket and a RPROXY_MUX_WINDOW receive
+        window (in PSRAM when available). Keep CONFIG_LWIP_MAX_SOCKETS at
+        least this plus ~10 for the console, DNS and the broker link itself.
+
+config RPROXY_MUX_WINDOW
+    int "Per-stream receive window advertised to the broker (bytes)"
+    range 4096 65536
+    default 32768
+    help
+        Credit the node grants the broker per stream (broker -> node). Sent in
+        HELLO as win=; a broker that predates the token assumes 32768, so only
+        lower this with a broker from 2.4.22 on. A board without PSRAM uses
+        8192. The node -> broker direction stays at the broker's 32 KB.
+
+config RPROXY_MUX_FRAME
+    int "Largest DATA payload accepted from the broker (bytes)"
+    range 1024 16384
+    default 16384
+    help
+        Sent in HELLO as frame=. Sizes the link receive buffer and the frame
+        scratch buffer (2 x this + headers); also the largest frame the node
+        sends. 4096 on a board without PSRAM.
+
+config RPROXY_DIALERS
+    int "Dialer tasks (parallel DNS + connect)"
+    range 1 4
+    default 4
+    help
+        Each dialer task costs RPROXY_DIALER_STACK bytes of RAM. One is enough
+        for a few streams; four keep 40 streams dialing in parallel.
+
+config RPROXY_DIALER_STACK
+    int "Dialer task stack (bytes)"
+    range 3072 8192
+    default 4608
 
 config RPROXY_DEFAULT_TLS
     bool "Use TLS for the broker link by default"

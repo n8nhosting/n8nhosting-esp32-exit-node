@@ -30,6 +30,12 @@ CONFIG_LWIP_MAX_ACTIVE_TCP=64
 # Keep LWIP_MAX_SOCKETS >= streams + ~15 (web UI, console, DNS, the link) and
 # <= 58: the VFS needs FD_SETSIZE(64) - LWIP_MAX_SOCKETS >= 6 fds for the console.
 CONFIG_RPROXY_MAX_STREAMS=40
+# Explicit S3 values for the sizes the firmware advertises in HELLO (2.4.22):
+# 32 KB window, 16 KB frames, 4 dialer tasks — unchanged from mux1.4.
+CONFIG_RPROXY_MUX_WINDOW=32768
+CONFIG_RPROXY_MUX_FRAME=16384
+CONFIG_RPROXY_DIALERS=4
+CONFIG_RPROXY_DIALER_STACK=4608
 
 # --- TCP / WiFi throughput for the mux link ---
 # rproxy terminates TCP on the ESP32 (unlike plain NAT forwarding), so every

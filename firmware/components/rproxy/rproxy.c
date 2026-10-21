@@ -382,11 +382,11 @@ static void ota_confirm(const char *why);
  */
 
 #define MUX_HDR          8
-#define MUX_MAX_PAYLOAD  16384
-#define MUX_WINDOW       32768
-#define MUX_GRANT_AT     8192
+#define MUX_MAX_PAYLOAD  RPROXY_MUX_FRAME          /* CONFIG_RPROXY_MUX_FRAME, HELLO frame= */
+#define MUX_WINDOW       CONFIG_RPROXY_MUX_WINDOW  /* HELLO win=                              */
+#define MUX_GRANT_AT     (MUX_WINDOW / 4)          /* return credit after a quarter window     */
 #define MUX_DEAD_MS      45000
-#define MUX_DIALERS      4
+#define MUX_DIALERS      CONFIG_RPROXY_DIALERS
 #define MUX_RXCAP        (MUX_HDR + MUX_MAX_PAYLOAD + 2048)
 
 enum {
@@ -724,16 +724,31 @@ static void backoff_delay(int *ms)
     if (*ms > BACKOFF_MAX_MS) *ms = BACKOFF_MAX_MS;
 }
 
+/* The two link buffers exist only while a link does: on a board without PSRAM
+ * they are the largest single allocations, so they must not sit idle between
+ * connections (or compete with an OTA download, see start_ota). */
+static void link_buffers_free(uint8_t **rx)
+{
+    free(*rx); *rx = NULL;
+    free(s_fb); s_fb = NULL;
+}
+
+static bool link_buffers_alloc(uint8_t **rx)
+{
+    *rx = heap_caps_malloc(MUX_RXCAP, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!*rx) *rx = malloc(MUX_RXCAP);
+    s_fb = heap_caps_malloc(MUX_HDR + MUX_MAX_PAYLOAD, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_fb) s_fb = malloc(MUX_HDR + MUX_MAX_PAYLOAD);
+    if (*rx && s_fb) return true;
+    ESP_LOGE(TAG, "mux: no memory for link buffers (%u B free)", (unsigned)esp_get_free_heap_size());
+    link_buffers_free(rx);
+    return false;
+}
+
 static void mux_task(void *arg)
 {
     int backoff = BACKOFF_MIN_MS;
-    uint8_t *rx = heap_caps_malloc(MUX_RXCAP, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!rx) rx = malloc(MUX_RXCAP);
-    if (!rx || !s_fb) {
-        ESP_LOGE(TAG, "mux: no memory");
-        free(rx);
-        s_mux_task = NULL; vTaskDelete(NULL); return;
-    }
+    uint8_t *rx = NULL;                       /* link receive buffer, per connection */
 
     while (s_run) {
         if (!sta_has_ip()) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
@@ -749,6 +764,7 @@ static void mux_task(void *arg)
 
         link_t link;
         if (!link_connect(&link, host, port, tls)) { backoff_delay(&backoff); continue; }
+        if (!link_buffers_alloc(&rx)) { link_close(&link); backoff_delay(&backoff); continue; }
 
         char line[320];
         uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000000ULL);
@@ -760,12 +776,14 @@ static void mux_task(void *arg)
                 if (sl > 0) b64encode(sta_cfg.sta.ssid, sl, ssid_b64, sizeof(ssid_b64));
             }
         }
-        /* HELLO <token> <mac> <fw> <uptime_s> <ssid_b64> mux1 <max_streams>
-         * (the WiFi password is never sent) */
-        int hlen = snprintf(line, sizeof(line), "HELLO %s %s %s %lu %s mux1 %d\n",
-                            token, s_mac, s_fw, (unsigned long)uptime, ssid_b64, RPROXY_MAX_STREAMS);
+        /* HELLO <token> <mac> <fw> <uptime_s> <ssid_b64> mux1 <max_streams> win= frame= chip=
+         * (the WiFi password is never sent; the key=value tokens are optional
+         * for the broker, which assumes 32768 / 16384 when it does not know them) */
+        int hlen = snprintf(line, sizeof(line), "HELLO %s %s %s %lu %s mux1 %d win=%d frame=%d chip=%s\n",
+                            token, s_mac, s_fw, (unsigned long)uptime, ssid_b64, RPROXY_MAX_STREAMS,
+                            MUX_WINDOW, MUX_MAX_PAYLOAD, CONFIG_IDF_TARGET);
         if (!link_write_all(&link, line, hlen) || link_read_line(&link, line, sizeof(line)) < 0) {
-            link_close(&link); backoff_delay(&backoff); continue;
+            link_buffers_free(&rx); link_close(&link); backoff_delay(&backoff); continue;
         }
         if (strcmp(line, "READY mux1") != 0) {
             if (strncmp(line, "DENY", 4) == 0) {
@@ -774,12 +792,13 @@ static void mux_task(void *arg)
             } else if (strcmp(line, "READY") == 0) {
                 ESP_LOGE(TAG, "broker does not support the mux link; update the broker");
             }
-            link_close(&link); backoff_delay(&backoff); continue;
+            link_buffers_free(&rx); link_close(&link); backoff_delay(&backoff); continue;
         }
         s_rejected = false;
         backoff = BACKOFF_MIN_MS;
         s_link_up = true;
-        ESP_LOGI(TAG, "mux link up -> %s:%u (tls=%d, max %d streams)", host, port, tls, RPROXY_MAX_STREAMS);
+        ESP_LOGI(TAG, "mux link up -> %s:%u (tls=%d, max %d streams, win %d, frame %d)",
+                 host, port, tls, RPROXY_MAX_STREAMS, MUX_WINDOW, MUX_MAX_PAYLOAD);
         ota_confirm("mux link up");
 
         mux_serve(&link, rx);
@@ -787,6 +806,7 @@ static void mux_task(void *arg)
         s_link_up = false;
         mux_reset_streams();
         link_close(&link);
+        link_buffers_free(&rx);
         ESP_LOGW(TAG, "mux link down");
         if (s_run) vTaskDelay(pdMS_TO_TICKS(BACKOFF_MIN_MS));
     }
@@ -932,12 +952,10 @@ static void start_pool(void)
     if (!s_dial_q) {
         s_dial_q = xQueueCreate(RPROXY_MAX_STREAMS, sizeof(dial_job_t));
         s_res_q  = xQueueCreate(RPROXY_MAX_STREAMS + MUX_DIALERS, sizeof(dial_res_t));
-        s_fb = heap_caps_malloc(MUX_HDR + MUX_MAX_PAYLOAD, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!s_fb) s_fb = malloc(MUX_HDR + MUX_MAX_PAYLOAD);
-        if (!s_dial_q || !s_res_q || !s_fb) { ESP_LOGE(TAG, "mux: no memory"); return; }
+        if (!s_dial_q || !s_res_q) { ESP_LOGE(TAG, "mux: no memory"); return; }
         for (int i = 0; i < RPROXY_MAX_STREAMS; i++) s_st[i].fd = -1;
         for (int i = 0; i < MUX_DIALERS; i++)
-            xTaskCreate(dialer_task, "rproxy_dial", 4608, NULL, tskIDLE_PRIORITY + 3, NULL);
+            xTaskCreate(dialer_task, "rproxy_dial", CONFIG_RPROXY_DIALER_STACK, NULL, tskIDLE_PRIORITY + 3, NULL);
     }
     s_run = true;
     s_rejected = false;
@@ -1042,6 +1060,9 @@ void rproxy_get_status(rproxy_status_t *out)
     out->running = s_run;
     out->configured_pool = s_cfg.pool;
     out->max_streams = RPROXY_MAX_STREAMS;
+    out->dialers = MUX_DIALERS;
+    out->window = MUX_WINDOW;
+    out->frame = MUX_MAX_PAYLOAD;
     out->total_dials = s_total_dials;
     out->failed_dials = s_failed_dials;
     out->blocked_dials = s_blocked_dials;
@@ -1100,6 +1121,7 @@ static int cmd_rproxy(int argc, char **argv)
         printf("  tls:      %s\n", c.use_tls ? "on (CA pinned)" : "off");
         printf("  state:    %s\n", rproxy_link_state_str(rproxy_link_state()));
         printf("  link:     %s (mux), %u/%u streams active\n", s.connected ? "up" : "down", s.dialing, s.max_streams);
+        printf("  mux:      window %lu B, frame %lu B, %u dialer(s)\n", (unsigned long)s.window, (unsigned long)s.frame, s.dialers);
         printf("  dials:    %lu ok, %lu failed, %lu blocked\n",
                (unsigned long)s.total_dials, (unsigned long)s.failed_dials, (unsigned long)s.blocked_dials);
         printf("  traffic:  up %llu B, down %llu B\n",
