@@ -254,3 +254,17 @@ including a real isolated unassigned account, both button labels, measured
 spacing/height at 1440px and 375px, no page overflow and opening the correct
 user's existing picker. Impeccable detector returns `[]`. Local screenshots are
 `output/playwright/users-desktop.png` and `users-mobile.png`.
+
+Production: Coolify deployment `2nf5dznhfdwdgapldawixvhn` imported
+`c209fa1236e6ea59f74a242dbb4cdc8c9cfbc9d6`; log start 02:39:55 +07, all new
+services started by 02:41:16 +07 on 2026-10-22. Browser verification found two
+Assign board buttons and one Change board button, each 44px high with a 12px
+gap from endpoint information. Opened earth's picker and cancelled without
+changing a customer binding. Production 375x812 has no horizontal overflow;
+viewport was reset and browser console was clean. Screenshots:
+`production-users-assignment.jpg` and `production-users-assignment-mobile.jpg`.
+Re-pushed the previously authorized shared slot 1 for Board 1 after the known
+startup registration race; refreshed Routing no longer has a mismatch action.
+Only Board 1 and Board-AEC0 were registered at this check; Board-7EB0 was absent
+from the broker list, so this rollout does not claim three-board hardware
+acceptance. No board firmware or C3 routing was changed.
