@@ -328,3 +328,54 @@ operator says otherwise.
    customer-bound (decides the OTA canary order in 6.8 step 3)?
 5. Is the dashboard's slot-2 device the C3 (`ac:a7:04:ba:ae:c0`)? If so,
    unbind it before the soak.
+
+## 11. Acceptance results (2026-10-21, branch `claude/c3-exit-node`)
+
+Setup: C3 Super Mini on COM30 (home uplink `IokWireless_2.4Ghz`, RSSI −57…−72 dBm),
+a broker built from this branch running on the PC (192.168.1.114) with the
+pinned-CA TLS certificate from `pki_out/`, customer traffic generated on the PC
+through that broker's SOCKS5 (customer → broker → C3 → origin), the console
+polled every 30 s. The production broker was not yet deployed, so "dashboard
+Measure" was replaced by four parallel 25 MB HTTPS downloads from
+speed.cloudflare.com (same path as a customer).
+
+| §8 line | Result |
+|---|---|
+| C3 build fits with ≥ 10% slot free | **pass** — 1,215,632 B in a 1,984 KB slot (40% free) |
+| ≥ 20 KB free heap with all 4 streams moving data for 30 min, no reboot, no `overran window` | **pass** — first config, 30 min: 60/60 samples link up, 58 with 4/4 streams, heap 68.8–143 KB (no downward trend after the first minute: 77 → 72 KB), 0 overrun on device and broker, 0 reboots; 377 MB relayed. **Shipped config, 10 min (final soak):** 20/20 link up, 18 with 4/4 streams, sampled heap 43–139 KB, console minimum **26.1 KB**, 0 overrun, 0 reboots, ~250 MB relayed at ~2.7 Mbps aggregate. The 30-minute run on the shipped config is the operator's (Task 11 step 2). |
+| Throughput per node | first soak **1.76 Mbps aggregate (≈0.44 Mbps per stream)**; after the fixes in §11.1: **single stream 1.73 Mbps, four streams 2.7 Mbps aggregate** (final soak below) |
+| OTA under load succeeds (drain path), rollback still works | **pass (drain + OTA)**: twice through the local broker — `OTA requested` → `draining` → `mux link down` → `link closed, 180 KB free` → download 8 s → reboot → probation → `confirmed`, broker `ota_status: ok`, slots alternate ota_1/ota_0. Unreachable URL → `OTA: failed`, link back in 1 s, no reboot. **Rollback (image that cannot reach the broker) not exercised** — operator, Task 11 step 3. |
+| Uplink loss > grace brings AP + portal back; new SSID connects; both go away again | **pass** (Task 5): `uplink down 90s: turning setup AP back on`, httpd task present; after `set_sta` to the real SSID: `got ip` → `stopping the setup portal`, httpd gone. The portal page itself was not opened from a phone — operator. |
+| S3 N16R8 regression (link, 40 streams, speed, OTA drain, old firmware vs new broker) | **not run** — the S3 board was not plugged in during this session (only COM30 enumerated). Image 2.4.22 esp32s3 (1,264,208 B) is archived; operator runs step 5 on COM7. Old-firmware compatibility is covered by the broker tests (`TestMuxLegacyHelloDefaults`) and by the production broker accepting the 2.4.22 HELLO. |
+
+Other evidence: the pre-token production broker accepts the 2.4.22 HELLO
+(link up in 3.4 s, TLS); a broker from this branch logs `max 4 streams, win
+8192, frame 4096, chip "esp32c3"`; OTA target guard returns 409 for an S3
+image pushed to the C3.
+
+### 11.1 Why the first soak was slow, and what changed
+
+The first 30-minute soak relayed 377 MB without a hiccup but at 0.44 Mbps per
+stream, although the board's own ping to the origin was 7–13 ms and RSSI was
+−59 dBm. Measured step by step (single 10 MB download / four 5 MB downloads
+through the local TLS broker, heap floor from the console):
+
+| Change (cumulative) | single | 4 streams | heap floor |
+|---|---|---|---|
+| as archived first (TCP wnd 5,760 B) | 0.33 Mbps | 1.76 Mbps | 68.8 KB |
+| TCP wnd 16 KB | — | 1.22 Mbps | 67.7 KB |
+| + node→broker send credit back to 32 KB (`MUX_SEND_CREDIT`; the Kconfig window had also been used as the send credit, a deviation from §6.3) | 0.51 | 1.45 | — |
+| + `TCP_NODELAY` on the link socket (a 16-byte credit sliver was held by Nagle for the peer's delayed ACK) | 0.22 | 1.2 | 29 KB |
+| + receive pools (WiFi static RX 8, dynamic RX 24, RX BA window 16, lwIP TCP recvmbox 32, tcpip mbox 48) | 0.84 | 2.4 | 9.5 KB |
+| + **WiFi power save off** (`esp_wifi_set_ps(WIFI_PS_NONE)` when rproxy starts; PC→board ping fell from 87 ms to 7 ms) | 1.39 | 2.5 | 10.5 KB |
+| TCP wnd back to 8 KB, link send buffer 16 KB (**shipped**) | **1.73** | **2.72** | **26.3 KB** |
+
+The dominant cause was WiFi modem power save: the station only listened every
+DTIM, so every inbound ACK and WINDOW grant from the broker arrived ~100 ms
+late and the one link's in-flight window per RTT capped the whole board. The
+16 KB receive windows cost ~40 KB of heap at full load and were not needed
+once latency was 7 ms. The remaining ceiling (~2.7 Mbps aggregate, ~1.7 Mbps
+single) is most likely the single 160 MHz core doing TLS for the link plus
+four TCP streams; it is the number the operator prices a C3 node on.
+Power save off also applies to the S3 (same code path); its 9–12 Mbps figure
+should be re-measured and may rise.

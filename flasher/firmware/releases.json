@@ -7,22 +7,22 @@
       "protocol": "mux1",
       "built": "Oct 21 2026 15:04:11",
       "added": "2026-10-21",
-      "size": 1264208,
-      "sha256": "1c500d0abe56108e9ebe8573628d84d45d559b62daaa0916061d092faa7dfa34",
+      "size": 1264608,
+      "sha256": "82e10133b88cffad27c7bb073ab7cbefa70e47390e1f7598ae2498453dc87de2",
       "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.22/manifest.json",
       "targets": {
         "esp32c3": {
           "url": "firmware/releases/2.4.22/esp32c3/esp32_nat_router.bin",
-          "size": 1215632,
-          "sha256": "1e4bb112967affae4134721e32e3c6948d66e75dbd03e9c9f17e57322bce4fe9",
-          "built": "Oct 21 2026 15:16:40"
+          "size": 1216032,
+          "sha256": "d63b78af4cdfef0d761515437b61dfda41f92c595a6f205b1c815ef57bab3f23",
+          "built": "Oct 21 2026 16:31:02"
         },
         "esp32s3": {
           "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
-          "size": 1264208,
-          "sha256": "1c500d0abe56108e9ebe8573628d84d45d559b62daaa0916061d092faa7dfa34",
-          "built": "Oct 21 2026 15:04:11"
+          "size": 1264608,
+          "sha256": "82e10133b88cffad27c7bb073ab7cbefa70e47390e1f7598ae2498453dc87de2",
+          "built": "Oct 21 2026 16:35:14"
         }
       },
       "title": "2.4.22: รองรับ ESP32-C3 Super Mini, ตัด web UI เหลือหน้า setup, OTA แบบปิด link ก่อนโหลด",

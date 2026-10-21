@@ -21,13 +21,19 @@ CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 CONFIG_LWIP_IRAM_OPTIMIZATION=n
 
-# --- WiFi buffer pools (spike v2 values; do not raise without a measurement) ---
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
-CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+# --- WiFi buffer pools ---
+# Spike v2 used 6/16/16 with BA windows of 6 and lwIP's 6-entry TCP receive
+# mailbox; with 4 downloads that lost packets at the mailbox and every stream
+# crawled at ~0.3 Mbps (2026-10-21 soak). The receive side is sized for
+# bursts here; dynamic buffers are allocated only while packets are queued.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=24
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_TX_BA_WIN=6
-CONFIG_ESP_WIFI_RX_BA_WIN=6
+CONFIG_ESP_WIFI_RX_BA_WIN=16
 CONFIG_ESP_WIFI_MGMT_SBUF_NUM=10
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=32
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=48
 CONFIG_LWIP_DHCPS_MAX_STATION_NUM=4
 
 # --- mux link: 4 streams, 8 KB window, 4 KB frames, one dialer ---
@@ -42,6 +48,15 @@ CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_LWIP_MAX_ACTIVE_TCP=24
 # outgoing TLS records 4 KB (one frame); incoming stays 16 KB (TLS peers, OTA via CDN)
 CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+
+# --- TCP buffers ---
+# Receive window 8 KB per target socket: with WiFi power save off the path to
+# the origin is ~10–15 ms, so 8 KB already allows ~4 Mbps per stream, and 16 KB
+# windows drove the heap floor to 10 KB with 4 downloads (2026-10-21). The send
+# buffer matters for the ONE mux link socket (every download crosses it):
+# 16 KB in flight per link RTT. Measured heap floor with these: see spec §11.
+CONFIG_LWIP_TCP_WND_DEFAULT=8192
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 
 # --- board: blue LED on GPIO8, lit when the pin is low ---
 CONFIG_LED_GPIO_DEFAULT=8

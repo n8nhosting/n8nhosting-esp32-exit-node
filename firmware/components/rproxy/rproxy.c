@@ -386,8 +386,13 @@ static void ota_confirm(const char *why);
 
 #define MUX_HDR          8
 #define MUX_MAX_PAYLOAD  RPROXY_MUX_FRAME          /* CONFIG_RPROXY_MUX_FRAME, HELLO frame= */
-#define MUX_WINDOW       CONFIG_RPROXY_MUX_WINDOW  /* HELLO win=                              */
+#define MUX_WINDOW       CONFIG_RPROXY_MUX_WINDOW  /* broker -> node: our receive window, HELLO win= */
 #define MUX_GRANT_AT     (MUX_WINDOW / 4)          /* return credit after a quarter window     */
+/* node -> broker: the broker's per-stream receive window (broker/mux.go
+ * muxWindow). A protocol constant, not negotiated: broker RAM is not the
+ * constraint, and a small send credit would throttle every download to one
+ * credit round trip per 8 KB. */
+#define MUX_SEND_CREDIT  32768
 #define MUX_DEAD_MS      45000
 #define MUX_DIALERS      CONFIG_RPROXY_DIALERS
 #define MUX_RXCAP        (MUX_HDR + MUX_MAX_PAYLOAD + 2048)
@@ -572,7 +577,7 @@ static void handle_open(link_t *l, uint32_t sid, const uint8_t *p, int len)
     st->state = ST_DIALING;
     st->sid = sid;
     st->fd = -1;
-    st->credit = MUX_WINDOW;
+    st->credit = MUX_SEND_CREDIT;
     s_active++;
 }
 
@@ -775,6 +780,15 @@ static void mux_task(void *arg)
 
         link_t link;
         if (!link_connect(&link, host, port, tls)) { backoff_delay(&backoff); continue; }
+        {
+            /* The link carries small control frames (WINDOW grants, PING, the
+             * last sliver of a stream's credit) between big DATA frames. With
+             * Nagle on, lwIP holds such a sliver until the peer ACKs the data in
+             * flight (Windows/Linux delayed ACK: up to 200 ms) — measured as
+             * 8 KB per 200 ms = 0.33 Mbps per stream on the C3. */
+            int one = 1;
+            setsockopt(link_fd(&link), IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+        }
         if (!link_buffers_alloc(&rx)) { link_close(&link); backoff_delay(&backoff); continue; }
 
         char line[320];
@@ -983,6 +997,12 @@ static void start_pool(void)
     }
     s_run = true;
     s_rejected = false;
+    /* An exit node is mains-powered and lives on one TLS link whose ACKs
+     * arrive from the AP: with the default modem power save the station only
+     * listens every DTIM, so inbound latency is ~100 ms (PC -> C3 ping 38–115
+     * ms, C3 -> router 3–9 ms) and the link's in-flight window per RTT capped
+     * every board at ~1.5 Mbps. */
+    esp_wifi_set_ps(WIFI_PS_NONE);
     if (!s_mux_task)
         xTaskCreate(mux_task, "rproxy_mux", 8192, NULL, tskIDLE_PRIORITY + 3, &s_mux_task);
     ESP_LOGI(TAG, "mux link started -> %s:%u (tls=%d)", s_cfg.host, s_cfg.port, s_cfg.use_tls);
