@@ -6,8 +6,9 @@
 <title>Proxy Server Dashboard</title>
 <style>
   :root{
-    --bg:#0b0e14; --panel:#141924; --panel2:#1b2230; --line:#283040;
-    --fg:#e8edf3; --muted:#8c99ad; --accent:#4b9fff; --ok:#35d6a4; --warn:#ffb020; --bad:#ff5c6c;
+    color-scheme:dark;
+    --bg:#0E1116; --panel:#222631; --panel2:#2F374C; --line:#343c50;
+    --fg:#F2F5FA; --muted:#A0A9C0; --accent:#8595E8; --primary:#455DDC; --ok:#43D1A7; --warn:#FF862E; --bad:#F96589;
     --r:12px;
   }
   *{box-sizing:border-box}
@@ -96,7 +97,7 @@
   .toggle{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--muted);cursor:pointer;line-height:1.4}
   .toggle input{width:auto;margin:3px 0 0;flex:none} .toggle span{flex:1;min-width:0}
   /* transient confirmations (3 s), never a blocking alert */
-  #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:10px;padding:10px 16px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20;max-width:92vw}
+  #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:1px solid var(--ok);border-radius:10px;padding:10px 16px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20;max-width:92vw}
   #toast.show{opacity:1;transform:translate(-50%,0)} #toast.err{border-left-color:var(--bad)}
   @media (prefers-reduced-motion:reduce){#toast{transition:none}}
   .field.inline label{display:flex;gap:8px;align-items:center}
@@ -108,6 +109,57 @@
   .muted{color:var(--muted)} .right{text-align:right}
   .banner{background:rgba(75,159,255,.12);border:1px solid rgba(75,159,255,.35);border-radius:9px;padding:10px 14px;margin-bottom:16px;font-size:.88rem}
   @media(max-width:720px){#app{grid-template-columns:1fr}aside{flex-direction:row;overflow:auto}main{padding:18px}}
+  /* Phase 2: a quiet fleet console. Slot identities and live instruments lead;
+     indigo selects actions, semantic colours describe actual state. */
+  body{font-size:14px;line-height:1.6}
+  button{background:var(--primary);min-height:36px;font-family:inherit;line-height:1.5;transition:background .15s}
+  button:hover{filter:none;background:#384fcb} button.sec:hover{background:#3a445d}
+  button:disabled{opacity:.55;cursor:not-allowed} button.danger{background:#D9224F}
+  input,select,textarea{font-size:14px} input::placeholder,textarea::placeholder{color:var(--muted);opacity:1} label,.micro{font-size:13px}
+  a:hover{text-decoration:underline} .brand{display:flex;gap:10px;align-items:center;padding:8px 10px 30px;line-height:1.35}
+  .brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--primary);color:white;flex:none}
+  .brand small{font-size:12px}.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+  #app{grid-template-columns:216px minmax(0,1fr)} aside{padding:26px 14px;position:sticky;top:0;height:100dvh;gap:6px}
+  nav a{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;font-size:14px}
+  nav a.active{background:#2b3455;color:#b3bfff}nav a.active:hover{text-decoration:none}
+  aside .utility{display:flex;flex-direction:column;gap:3px;border-top:1px solid var(--line);padding-top:16px;font-size:13px}
+  main{padding:32px;min-width:0;overflow:visible}#view{max-width:1640px;margin:auto}
+  .head{gap:16px;flex-wrap:wrap;margin-bottom:24px}.head h2{font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.3}
+  .head .intro{color:var(--muted);margin:5px 0 0;font-size:13px}.head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .updated{font-size:12px;color:var(--muted)} .updated.stale{color:var(--warn)}
+  .toolbar{gap:10px;align-items:center;margin-bottom:16px}.toolbar input{max-width:380px;margin:0}.toolbar select{width:auto;max-width:200px;margin:0}.result-count{margin-left:auto;color:var(--muted);font-size:13px}
+  .cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}
+  .stat{padding:20px;border:0;box-shadow:inset 0 1px rgba(255,255,255,.04);min-width:0}.stat .k{font-size:13px;text-transform:none;letter-spacing:0;color:var(--muted)}
+  .stat .v{font-size:32px;font-weight:600;line-height:1.35;margin:12px 0 8px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}.stat .v small{font-size:16px}
+  .stat .detail{font-size:12px;color:var(--muted)}.kpi-title{display:flex;justify-content:space-between;align-items:center}.kpi-title .ic{color:var(--accent)}
+  .opbar{display:flex;gap:22px;flex-wrap:wrap;padding:14px 0 22px;font-size:13px;color:var(--muted)}.opbar strong{color:var(--fg);font-weight:500}
+  .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:20px;align-items:start}.panel{background:var(--panel);border-radius:14px;padding:22px;min-width:0;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.panel-head h3{font-size:15px;font-weight:600;margin:0}.panel-head span{font-size:12px;color:var(--muted)}
+  .section-space{margin-top:20px}.feed{margin:0;padding:0;list-style:none}.feed li{padding:14px 0;border-top:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}.feed li:first-child{border:0;padding-top:0}.feed li:last-child{padding-bottom:0}.feed .msg{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}.feed .msg small{display:block;color:var(--muted);font-size:12px;margin-top:4px}.feed .dot{height:7px;width:7px;border-radius:50%;background:var(--accent);margin-top:7px;flex:none}.feed .dot.warn{background:var(--warn)}.feed .dot.critical,.feed .dot.error{background:var(--bad)}
+  .fleet-strip{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:12px 0 0}.fleet-strip i{display:inline-block;width:6px;height:6px;background:var(--ok);border-radius:50%;margin-right:6px}
+  .pill{font-size:12px;padding:3px 8px;line-height:1.5;white-space:normal}.pill.ok{background:#274144;color:var(--ok)}.pill.warn{background:#453531;color:var(--warn)}.pill.bad{background:#442839;color:var(--bad)}.pill.off{background:#2F374C;color:#C3CBDC}.pill.info{background:#352B4F;color:#B67EF4}
+  .table-wrap{width:100%;overflow:auto;overscroll-behavior-x:contain}table{border:0;border-collapse:separate;border-spacing:0 8px;background:transparent;overflow:visible}
+  th{text-transform:none;letter-spacing:0;font-size:12px;border:0;padding:4px 14px;color:var(--muted);font-weight:500}
+  td{padding:15px 14px;border:0;background:var(--panel);font-size:13px;vertical-align:top}td:first-child{border-radius:12px 0 0 12px}td:last-child{border-radius:0 12px 12px 0}
+  tbody tr:hover td{background:#272d3a}tbody tr:focus-within td{box-shadow:inset 0 1px var(--accent),inset 0 -1px var(--accent)}
+  td.device-cell{min-width:174px}.device-title{font-size:14px;font-weight:600;color:var(--fg)}.device-id{display:flex;gap:8px;align-items:center;margin-bottom:4px}.slot-tag{display:grid;place-items:center;color:#b3bfff;background:#303852;width:30px;height:30px;border-radius:8px;font:500 13px ui-monospace,monospace;flex:none}
+  .subline{color:var(--muted);font-size:12px;margin-top:4px}.mono{font-size:12px}.row-actions{white-space:nowrap}.row-actions button{min-height:32px;font-size:12px;margin-left:0}.row-actions{display:flex;gap:6px}.health{font-variant-numeric:tabular-nums}td.health{min-width:178px}.meter{grid-template-columns:30px 48px 1fr;font-size:12px;gap:5px}
+  .seatbar,.usagebar{height:5px;border-radius:3px;background:var(--panel2);margin:8px 0;overflow:hidden;max-width:135px}.seatbar i,.usagebar i{display:block;height:100%;background:var(--accent);border-radius:3px}.usagebar.over i{background:var(--warn)}
+  .score{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--muted)}.segments{display:flex;gap:2px}.segments i{display:block;width:4px;height:11px;background:var(--panel2);border-radius:2px}.segments i.on{background:var(--ok)}.score.warn .on{background:var(--warn)}.score.bad .on{background:var(--bad)}
+  .empty{padding:26px 12px;color:var(--muted);font-size:13px;line-height:1.7}.empty strong{color:var(--fg);display:block;font-weight:500}.err:empty{display:none}.skeleton{height:180px;background:var(--panel);border-radius:14px;opacity:.65}
+  .legend{display:flex;gap:18px;color:var(--muted);font-size:12px;margin:0 0 16px}.legend i{display:inline-block;height:3px;width:16px;margin-right:6px;vertical-align:middle;background:#8595E8}.legend .second{background:#FF862E}
+  .chart{width:100%;display:block;max-height:240px}.chart .grid{stroke:#3b4252;stroke-width:1}.chart text{fill:var(--muted);font:var(--chart-label-size,12px) 'Segoe UI',sans-serif}.chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.chart-readout{font-size:12px;min-height:24px;color:var(--muted)}.chart-table{font-size:12px;color:var(--muted);margin-top:12px}.chart-table summary{cursor:pointer}.chart-table table{font-variant-numeric:tabular-nums}.chart-table td{padding:5px}.spark{display:block;width:100%;height:28px;margin-top:12px}.delta{font-size:12px;color:var(--muted)}
+  .modal-bg{z-index:50;padding:16px}.modal{max-height:90dvh;overflow:auto;max-width:100%;box-shadow:0 24px 48px -12px rgba(0,0,0,.7)}.modal .right{display:flex;gap:8px;justify-content:flex-end}.modal .right button{margin:0}
+  #rowmenu{z-index:80;max-height:calc(100dvh - 16px);overflow:auto}#toast{z-index:100;border-left:1px solid var(--ok)}#toast.err{border-left-color:var(--bad)}
+  #ddrawer{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.5);display:flex;justify-content:flex-end}#ddrawer[hidden]{display:none}.drawer-sheet{background:var(--bg);width:640px;max-width:100%;height:100dvh;display:flex;flex-direction:column;box-shadow:-16px 0 48px rgba(0,0,0,.3)}.drawer-head{padding:22px 26px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start;background:var(--panel)}.drawer-head h2{margin:0;font-size:20px;line-height:1.4;overflow-wrap:anywhere}.drawer-head .identity{flex:1;min-width:0}.drawer-body{padding:24px 26px;overflow:auto;overscroll-behavior:contain}.drawer-section{border-bottom:1px solid var(--line);padding:0 0 24px;margin-bottom:24px}.drawer-section h3{font-size:14px;margin:0 0 14px}.drawer-section:last-child{border:0}.drawer-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.facts{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1fr);gap:10px 16px;font-size:13px;margin:0}.facts dt{color:var(--muted)}.facts dd{margin:0;overflow-wrap:anywhere}.drawer-health .meter{grid-template-columns:45px minmax(80px,1fr) 1fr}.drawer-health .micro{font-size:12px}.danger-zone h3{color:var(--bad)}.reason-list{color:var(--muted);padding-left:18px;font-size:13px}
+  @media(min-width:1450px){main{padding:36px 42px}td{padding:17px 16px}}
+  @media(max-width:1100px){main{padding:24px 20px}#app{grid-template-columns:184px minmax(0,1fr)}aside{padding:24px 10px}.cards{gap:10px}.stat{padding:16px}.stat .v{font-size:28px}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.row-actions button{padding:5px 8px}}
+  @media(max-width:720px){#app{grid-template-columns:minmax(0,1fr)}aside{position:fixed;inset:auto 0 0;height:auto;z-index:25;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border:0;border-top:1px solid var(--line);overflow:visible;flex-direction:row;background:var(--panel)}.brand,aside .spacer,aside .utility{display:none}nav{display:flex;width:100%;justify-content:space-around}nav a{flex:1;flex-direction:column;gap:3px;padding:7px 2px;font-size:12px;min-height:48px}nav a.active{background:transparent;color:#b3bfff}main{padding:22px 16px calc(96px + env(safe-area-inset-bottom))}.head{gap:12px;margin-bottom:20px}.head h2{font-size:23px}.head-actions{width:100%;justify-content:space-between}.cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stat{padding:16px}.stat .v{font-size:28px}.stat .v small{font-size:13px}.dashboard-grid{gap:16px}.panel{padding:18px}.opbar{gap:10px 20px;font-size:12px}.toolbar input{max-width:none;flex:1;min-width:160px}.toolbar select{max-width:130px}.result-count{width:100%;margin:0}.table-wrap{overflow:visible}table,tbody{display:block;width:100%}.fleet-table thead,.users-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.fleet-table tbody tr,.users-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 12px;padding:16px;background:var(--panel);border-radius:12px;margin-bottom:10px}.fleet-table td,.users-table td{display:block;background:transparent!important;padding:0;min-width:0!important;border-radius:0!important;box-shadow:none!important}.fleet-table td:nth-child(1){grid-column:1;grid-row:1}.fleet-table td:nth-child(2){grid-column:2;grid-row:1}.fleet-table td:nth-child(3){grid-column:1;grid-row:2}.fleet-table td:nth-child(4),.fleet-table td:nth-child(5),.fleet-table td:nth-child(6){display:none}.fleet-table td:nth-child(7){grid-column:2;grid-row:2;align-self:end}.users-table td:nth-child(1){grid-column:1;grid-row:1}.users-table td:nth-child(2){grid-column:2;grid-row:1}.users-table td:nth-child(3){display:none}.users-table td:nth-child(4){grid-column:1/-1}.users-table td:nth-child(5){grid-column:1;grid-row:3}.users-table td:nth-child(6){grid-column:1/-1}.users-table td:nth-child(7){grid-column:2;grid-row:3}.users-table .row-actions{flex-wrap:wrap;justify-content:flex-end}.device-id{align-items:flex-start}.device-title{font-size:14px}.device-cell .mono{overflow-wrap:anywhere}.row-actions{gap:6px}.row-actions button,button.more{min-height:44px;min-width:44px}.drawer-sheet{width:100%}.drawer-head{padding:20px 16px}.drawer-body{padding:22px 16px}.facts{grid-template-columns:105px minmax(0,1fr);gap:10px}.drawer-head button{padding:6px 10px}#toast{bottom:90px}.modal-bg{padding:12px}.modal{width:100%!important;max-height:88dvh;padding:20px}.copyrow{grid-template-columns:64px minmax(0,1fr) auto;gap:6px}.chart-table{overflow:auto}.chart-table table{display:table}.chart-table tbody{display:table-row-group}.chart-table td{display:table-cell}.chart-table tr{display:table-row}}
+  @media(pointer:coarse){button,.row-actions button,#rowmenu button{min-height:44px}button.link{min-height:44px;padding:8px 0}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}}
+  @media(forced-colors:active){.pill,.segments i,.seatbar,.usagebar{border:1px solid CanvasText}.chart polyline{stroke:CanvasText}.chart .series-down{stroke-dasharray:6 4}}
+  tr[hidden]{display:none!important}
+  .device-title,.users-table td:first-child{overflow-wrap:anywhere}.users-table .subline{font-size:13px}
 </style>
 </head>
 <body>
@@ -127,17 +179,17 @@
 <!-- APP -->
 <div id="app">
   <aside>
-    <div class="brand">⚡ Proxy Server<small id="gostuiHost"></small></div>
+    <div class="brand"><span class="brand-mark"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v8H4zM8 4v4m8-4v4M8 16v4m8-4v4M8 12h.01M12 12h4"/></svg></span><div>Proxy Server<small id="gostuiHost"></small></div></div>
     <nav>
-      <a data-view="overview" class="active">Overview</a>
-      <a data-view="users">Users</a>
-      <a data-view="devices">Devices</a>
-      <a data-view="settings">Settings</a>
+      <a href="#/overview" data-view="overview" class="active"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>Overview</a>
+      <a href="#/users" data-view="users"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.9"/><circle cx="9" cy="7" r="4"/><path d="M16 3a4 4 0 0 1 0 8"/></svg>Users</a>
+      <a href="#/devices" data-view="devices"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6zM9 9h6v6H9zM9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4M18 9h4m-4 6h4"/></svg>Devices</a>
+      <a href="#/settings" data-view="settings"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3-1 3-3 1-2 3 2 2-1 3 3 2 1 3h4l1-3 3-1 2-3-2-2 1-3-3-2-1-3z"/></svg>Settings</a>
     </nav>
     <div class="spacer"></div>
-    <a id="flashLink" target="_blank" class="muted" style="padding:9px 12px">⚡ Flash firmware ↗</a>
-    <a id="gostuiLink" target="_blank" class="muted" style="padding:9px 12px">GOST config UI ↗</a>
-    <a id="logout" class="muted" style="padding:9px 12px">Sign out</a>
+    <div class="utility"><a id="flashLink" target="_blank" rel="noopener noreferrer" class="muted" style="padding:9px 12px">Flash firmware ↗</a>
+    <a id="gostuiLink" target="_blank" rel="noopener noreferrer" class="muted" style="padding:9px 12px">GOST config UI ↗</a>
+    <a id="logout" href="#/logout" class="muted" style="padding:9px 12px">Sign out</a></div>
   </aside>
   <main>
     <div id="view"></div>
@@ -148,13 +200,14 @@
 <div class="modal-bg" id="umodal">
   <div class="modal">
     <h3 id="umTitle">New user</h3>
-    <div class="field"><label>Username</label><input id="umUser" /></div>
-    <div class="field"><label>Password <span class="muted">(blank = auto-generate)</span></label><input id="umPass" type="text" /></div>
-    <div class="field"><label>Rate limit (Mbps, 0 = unlimited)</label><input id="umRate" type="number" value="0" /></div>
-    <div class="field"><label>Monthly quota (GB, 0 = unlimited)</label><input id="umQuota" type="number" value="0" /></div>
-    <div class="field"><label>Expires in (days, blank = never)</label><input id="umDays" type="number" placeholder="30" /></div>
+    <div class="field"><label for="umUser">Username</label><input id="umUser" /></div>
+    <div class="field"><label for="umPass">Password <span class="muted">(blank = auto-generate)</span></label><input id="umPass" type="text" /></div>
+    <div class="field"><label for="umRate">Rate limit (Mbps, 0 = unlimited)</label><input id="umRate" type="number" value="0" /></div>
+    <div class="field"><label for="umQuota">Monthly quota (GB, 0 = unlimited)</label><input id="umQuota" type="number" value="0" /></div>
+    <div class="field"><label for="umDays">Set expiry from today (days, blank = keep when editing)</label><input id="umDays" type="number" placeholder="30" /></div>
     <div class="err" id="umErr"></div>
-    <div class="right"><button class="sec" onclick="closeModal()">Cancel</button> <button id="umSave">Save</button></div>
+    <div class="field inline"><label><input id="umNever" type="checkbox" /> No expiry</label></div>
+    <div class="right"><button class="sec" id="umCancel">Cancel</button> <button id="umSave">Save</button></div>
   </div>
 </div>
 
@@ -164,12 +217,13 @@
     <h3 id="dmTitle">Edit device</h3>
     <div class="field"><label for="dmName">Name</label><input id="dmName" autocomplete="off" /></div>
     <div class="field"><label for="dmKind">Kind</label>
-      <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select></div>
+      <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select><p class="subline">Dedicated reserves the whole exit IP for one customer. Shared seats follow measured capacity.</p></div>
     <div class="field"><label for="dmSlot">Slot <span class="muted">(blank = none, 1–30)</span></label><input id="dmSlot" type="number" step="1" min="1" max="30" inputmode="numeric" /></div>
     <div class="muted" id="dmPort" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
     <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
     <div class="muted" id="dmCoordHint" style="margin:-6px 0 12px;font-size:.78rem"></div>
+    <div class="toolbar"><button type="button" class="sec" id="dmGeo">Use geo-IP position</button><button type="button" class="sec" id="dmClearPos">Clear position</button></div>
     <div class="field"><label for="dmMaps">Google Maps link <span class="muted" id="dmMapsHint"></span></label>
       <div style="display:flex;gap:6px"><input id="dmMaps" autocomplete="off" placeholder="https://maps.app.goo.gl/…" style="flex:1;min-width:0" /><button type="button" class="sec" id="dmMapsGo"></button></div></div>
     <div class="muted" id="dmMapsMsg" style="margin:-6px 0 12px;font-size:.78rem"></div>
@@ -216,22 +270,23 @@
 <div class="modal-bg" id="fwmodal">
   <div class="modal" style="width:440px">
     <h3 id="fwTitle">Update firmware</h3>
-    <div class="field"><label>Version</label><select id="fwSel"></select></div>
-    <div class="field" id="fwUrlRow" style="display:none"><label>Firmware URL (https://…/esp32_nat_router.bin)</label><input id="fwUrl" /></div>
+    <div class="field"><label for="fwSel">Version</label><select id="fwSel"></select></div>
+    <div class="field" id="fwUrlRow" style="display:none"><label for="fwUrl">Firmware URL (https://…/esp32_nat_router.bin)</label><input id="fwUrl" /></div>
     <div class="muted" id="fwNotes" style="font-size:.85rem;min-height:1.2em;margin-bottom:10px"></div>
     <div class="banner" style="font-size:.82rem">The device downloads over HTTPS and reboots. If the new firmware cannot reach the broker within 5 minutes (or crashes), the board rolls itself back to the previous one; the FW column then shows <span class="pill bad">rolled back</span>.</div>
     <div class="err" id="fwErr"></div>
-    <div class="right"><button class="sec" onclick="closeFw()">Cancel</button> <button id="fwGo">Push update</button></div>
+    <div class="right"><button class="sec" id="fwCancel">Cancel</button> <button id="fwGo">Push update</button></div>
   </div>
 </div>
 
+<div id="ddrawer" hidden><section class="drawer-sheet" role="dialog" aria-modal="true" aria-labelledby="ddTitle"><header class="drawer-head"><div class="identity"><h2 id="ddTitle">Device</h2><div id="ddIdentity" class="subline mono"></div></div><button type="button" class="sec" id="ddEdit">Edit</button><button type="button" class="sec" id="ddClose" aria-label="Close device details">✕</button></header><div class="drawer-body" id="ddBody"></div></section></div>
 <script>
 const i18n = {
   name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
   edit:'Edit', reveal:'Reveal', unmeasured:'\u2014 unmeasured', assign:'assign\u2026', change:'change',
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
-  coordHint:'Coordinates cannot be cleared yet; a blank field keeps the current value.',
+  coordHint:'Blank fields keep the current position. Use Clear position to remove the stored pin.',
   mbps:'Mbps', openMap:'Open in Google Maps', openMapApprox:'Approximate (geo-IP) — open in Google Maps',
   mapsHint:'(paste a share link, then Find fills the coordinates)', mapsFind:'Find', mapsFinding:'Finding…', mapsFound:'Coordinates filled from the link; Save to keep them.',
   connection:'Connection', connTitle:'Connection details', copy:'Copy', copied:'Copied', copyMsg:'Copy message', copyFailed:'Copy failed — select the text and copy it by hand',
@@ -284,7 +339,7 @@ $('#loginBtn').onclick = async ()=>{
 };
 $('#tok').addEventListener('keydown',e=>{ if(e.key==='Enter')$('#loginBtn').click(); });
 $('#logout').onclick = logout;
-function logout(){ localStorage.removeItem('adm_tok'); TOKEN=''; $('#app').style.display='none'; $('#login').style.display='flex'; }
+function logout(){localStorage.removeItem('adm_tok');TOKEN='';clearInterval(refreshTimer);routeEpoch++;closeRowMenu(false);hideDrawer(false);document.querySelectorAll('.modal-bg').forEach(x=>x.style.display='none');$('#app').inert=false;$('#app').style.display='none';$('#login').style.display='flex';}
 
 function showApp(){
   $('#login').style.display='none';
@@ -293,98 +348,100 @@ function showApp(){
   $('#gostuiLink').href = gostui; $('#gostuiHost').textContent = location.hostname;
   const flash = new URLSearchParams(location.search).get('flash') || localStorage.getItem('flash') || (location.protocol+'//'+location.hostname.replace(/^admin\./,'flash.'));
   $('#flashLink').href = flash;
-  route('overview');
+  startRefresh(); syncRoute();
 }
 
-/* ---- navigation ---- */
-document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{
-  document.querySelectorAll('nav a').forEach(x=>x.classList.remove('active'));
-  a.classList.add('active'); route(a.dataset.view);
-});
-function route(v){ ({overview:viewOverview,users:viewUsers,devices:viewDevices,settings:viewSettings}[v])(); }
-
-/* ---- Overview ---- */
+/* ---- Routes, stable polling and shared view chrome ---- */
+let activeView='',routeEpoch=0,refreshing=false,refreshTimer=null,lastUpdated=0,refreshError='';
+const filters={devices:'',users:''},sorts={devices:'name',users:'name'};
+function route(v){const h='#/'+v;if(location.hash!==h)location.hash=h;else syncRoute();}
+function routeParts(){try{return location.hash.replace(/^#\/?/,'').split('/').map(decodeURIComponent);}catch(_){return ['overview'];}}
+async function syncRoute(){
+  if(!TOKEN)return;const parts=routeParts(),v=['overview','users','devices','settings'].includes(parts[0])?parts[0]:'overview';
+  const changed=activeView!==v;activeView=v;routeEpoch++;const epoch=routeEpoch;closeRowMenu(false);
+  if(v!=='devices'||!parts[1])hideDrawer(false);
+  document.querySelectorAll('nav a').forEach(a=>{const on=a.dataset.view===v;a.classList.toggle('active',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  if(changed){$('#view').innerHTML='';lastUpdated=0;refreshError='';}
+  await ({overview:viewOverview,users:viewUsers,devices:viewDevices,settings:viewSettings}[v])();
+  if(v==='devices'&&parts[1]&&activeView===v&&epoch===routeEpoch)openDrawer(parts[1]);
+}
+addEventListener('hashchange',syncRoute);
+function viewHeader(title,description,actions=''){return `<div class="head"><div><h2>${esc(title)}</h2><p class="intro">${esc(description)}</p></div><div class="head-actions"><span class="updated" id="updatedLabel" role="status">Loading…</span><button type="button" class="sec" data-refresh>Refresh</button>${actions}</div></div>`;}
+function stamp(error=''){refreshError=error;if(!error)lastUpdated=Date.now();updateStamp();}
+function updateStamp(){const el=$('#updatedLabel');if(!el)return;el.classList.toggle('stale',!!refreshError);el.textContent=refreshError?'Update failed · '+refreshError:(lastUpdated?'Updated '+Math.floor((Date.now()-lastUpdated)/1000)+'s ago':'Loading…');}
+function modalOpen(){return [...document.querySelectorAll('.modal-bg')].some(x=>x.style.display==='flex');}
+async function refreshActive(){if(refreshing||!TOKEN||document.hidden||modalOpen()||activeView==='settings')return;refreshing=true;try{await ({overview:viewOverview,users:viewUsers,devices:viewDevices}[activeView]||(()=>{}))();}finally{refreshing=false;}}
+function startRefresh(){clearInterval(refreshTimer);refreshTimer=setInterval(refreshActive,10000);}
+setInterval(updateStamp,1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshActive();});
+document.addEventListener('click',e=>{if(e.target.closest('[data-refresh]'))refreshActive();});
+function empty(title,detail){return `<div class="empty"><strong>${esc(title)}</strong>${esc(detail)}</div>`;}
+function expiryLabel(iso){if(!iso)return '<span class="muted">Never</span>';const t=Date.parse(iso);if(!Number.isFinite(t))return '<span class="muted">Unknown expiry</span>';const days=Math.ceil((t-Date.now())/864e5);return `<span class="${days<=0?'pill bad':days<=7?'pill warn':''}">${esc(days<=0?'Expired':days+' days left')}</span><div class="subline">${esc(new Date(t).toLocaleDateString())}</div>`;}
+function statusPill(st){const c={online:'ok',active:'ok',blocked:'bad',rolled_back:'bad',offline:'off',disabled:'off',updating:'info',unmeasured:'warn',over_quota:'warn',expired:'bad'}[st]||'off';return `<span class="pill ${c}">${esc((st||'unknown').replaceAll('_',' '))}</span>`;}
+function scoreGauge(n){const h=n.health;if(!h||!Number.isFinite(h.score))return '';const score=Math.max(0,Math.min(100,h.score));return `<div class="score ${score<50?'bad':score<80?'warn':''}" title="${esc((h.reasons||[]).join(' · '))}" role="img" aria-label="Health score ${score} out of 100"><span class="segments" aria-hidden="true">${Array.from({length:10},(_,i)=>`<i class="${i<Math.ceil(score/10)?'on':''}"></i>`).join('')}</span><span>${score}%</span></div>`;}
+function nodeState(n){return statusPill(n.status||(n.blocked?'blocked':n.online?'online':'offline'))+scoreGauge(n)+(n.tags||[]).map(t=>`<div class="subline">${esc(t.replaceAll('_',' '))}</div>`).join('');}
+function spark(vals){if(!vals||vals.filter(v=>v!==null&&Number.isFinite(v)).length<4)return '';const valid=vals.filter(v=>v!==null&&Number.isFinite(v)),max=Math.max(...valid),min=Math.min(...valid),x=i=>i*160/Math.max(1,vals.length-1),y=v=>25-(v-min)*22/(max-min||1);let paths=[],run=[];vals.forEach((v,i)=>{if(v===null||!Number.isFinite(v)){if(run.length)paths.push(run.join(' '));run=[];}else run.push(x(i).toFixed(1)+','+y(v).toFixed(1));});if(run.length)paths.push(run.join(' '));return `<svg class="spark" viewBox="0 0 160 28" preserveAspectRatio="none" aria-hidden="true">${paths.map(points=>`<polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>`).join('')}</svg>`;}
+function deltaPill(summary){if(!summary||summary.delta_pct===null||!Number.isFinite(summary.delta_pct))return '';return `<span class="delta">${summary.delta_pct>0?'+':''}${summary.delta_pct.toFixed(1)}% vs previous ${summary.window_sec>=86400?'day':'period'}</span>`;}
+function feedHTML(events,limit=8){if(!events?.length)return empty('No activity yet','Device changes and account actions will appear here.');return `<ul class="feed">${events.slice(0,limit).map(e=>`<li><i class="dot ${esc(e.severity||'info')}" aria-hidden="true"></i><div class="msg">${esc(e.message||e.kind)}<small>${esc(fmtAgo(e.ts))} · ${esc(e.actor||'system')}</small></div></li>`).join('')}</ul>`;}
+function attentionHTML(data){const list=data?.alerts||[];if(!list.length)return empty('All clear','No devices or accounts need attention right now.');return `<ul class="feed">${list.slice(0,6).map(e=>{const node=['node','device'].includes(e.subject_type),href=node?'#/devices/'+encodeURIComponent(e.subject_id):'#/users';return `<li><i class="dot ${esc(e.severity)}" aria-hidden="true"></i><div class="msg"><a href="${esc(href)}">${esc(e.message||e.kind)}</a><small>${esc(e.severity)} · ${esc(fmtAgo(e.since))}</small></div></li>`;}).join('')}</ul>`;}
+/* Charts keep null observations as gaps. No chart library or build step. */
+function renderChart(host,data,label='Traffic history'){
+  if(!host)return;if(!data?.series){host.innerHTML=empty('No history yet','Recording starts with this version of the admin API.');return;}
+  const keys=['bytes_down','bytes_up'].filter(k=>Array.isArray(data.series[k])),n=+data.n||Math.max(0,...keys.map(k=>data.series[k].length));
+  const from=+data.from||0,step=+data.step_sec||3600,rows=Array.from({length:n},(_,i)=>({t:from+i*step,v:keys.map(k=>data.series[k][i]??null)}));
+  if(!rows.some(r=>r.v.some(v=>v!==null&&Number.isFinite(v)))){host.innerHTML=empty('No history yet','Recording starts with this version of the admin API.');return;}
+  const W=680,H=220,P={l:host.clientWidth<480?94:54,r:16,t:12,b:28},pw=W-P.l-P.r,ph=H-P.t-P.b,max=Math.max(1,...rows.flatMap(r=>r.v.filter(v=>v!==null&&Number.isFinite(v)))),x=i=>P.l+i*pw/Math.max(1,n-1),y=v=>P.t+ph-v/max*ph,colors=['#8595E8','#FF862E'];
+  const grid=[0,.5,1].map(f=>`<line class="grid" x1="${P.l}" x2="${W-P.r}" y1="${y(max*f)}" y2="${y(max*f)}"/><text x="${P.l-8}" y="${y(max*f)+4}" text-anchor="end">${esc(fmtBytes(max*f))}</text>`).join('');
+  const paths=keys.map((k,ki)=>{let runs=[],run=[];rows.forEach((r,i)=>{const v=r.v[ki];if(v===null||!Number.isFinite(v)){if(run.length)runs.push(run);run=[];}else run.push({x:x(i),y:y(v)});});if(run.length)runs.push(run);return runs.map(points=>{const pts=points.map(p=>p.x.toFixed(2)+','+p.y.toFixed(2)).join(' '),area=points.length>1?`<polygon points="${points[0].x},${P.t+ph} ${pts} ${points.at(-1).x},${P.t+ph}" fill="${colors[ki]}" opacity=".09"/>`:'';return area+`<polyline class="series-${ki?'up':'down'}" points="${pts}" fill="none" stroke="${colors[ki]}" stroke-width="2" stroke-linejoin="round"/>`+(points.length===1?`<circle cx="${points[0].x}" cy="${points[0].y}" r="4" fill="${colors[ki]}"/>`:'');}).join('');}).join('');
+  const formatTick=unix=>{const date=new Date(unix*1000);return n*step<=172800?date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):date.toLocaleDateString(undefined,{month:'short',day:'numeric'});};
+  const xt=rows.filter((_,i)=>i===0||i===n-1||i%Math.max(1,Math.ceil(n/4))===0).map(r=>`<text x="${x(rows.indexOf(r))}" y="${H-5}" text-anchor="${rows.indexOf(r)===0?'start':rows.indexOf(r)===n-1?'end':'middle'}">${esc(formatTick(r.t))}</text>`).join('');
+  host.innerHTML=`<div class="legend"><span><i></i>Downloaded</span><span><i class="second"></i>Uploaded</span></div><svg class="chart" style="--chart-label-size:${(12*W/Math.min(host.clientWidth||W,W)).toFixed(1)}px" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="${esc(label)}. Arrow keys inspect samples.">${grid}${xt}${paths}<line class="crosshair" hidden x1="0" x2="0" y1="${P.t}" y2="${H-P.b}" stroke="var(--muted)"/></svg><div class="chart-readout" role="status">Use pointer or arrow keys to inspect · gaps mean no observation</div><details class="chart-table"><summary>Table view · ${n} samples</summary><div class="table-wrap"><table><thead><tr><th>Time</th><th>Downloaded</th><th>Uploaded</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(new Date(r.t*1000).toLocaleString())}</td>${[0,1].map(i=>`<td>${r.v[i]===null||r.v[i]===undefined?'—':esc(fmtBytes(r.v[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`;
+  let index=0;const svg=host.querySelector('svg'),line=host.querySelector('.crosshair'),read=host.querySelector('.chart-readout');const inspect=i=>{index=Math.max(0,Math.min(n-1,i));const r=rows[index];line.removeAttribute('hidden');line.setAttribute('x1',x(index));line.setAttribute('x2',x(index));read.textContent=new Date(r.t*1000).toLocaleString()+' · '+keys.map((k,ki)=>(ki?'Uploaded ':'Downloaded ')+(r.v[ki]===null?'no observation':fmtBytes(r.v[ki]))).join(' · ');};
+  svg.addEventListener('pointermove',e=>{const rect=svg.getBoundingClientRect();inspect(Math.round(((e.clientX-rect.left)*W/rect.width-P.l)/pw*Math.max(1,n-1)));});svg.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();inspect(index+(e.key==='ArrowRight'?1:-1));}});
+}
+/* ---- Overview: inventory first, live operations second ---- */
 async function viewOverview(){
-  $('#view').innerHTML = `<div class="head"><h2>Overview</h2><button class="sec" onclick="route('overview')">Refresh</button></div><div id="ov">Loading…</div>`;
+  if(activeView!=='overview')return;const epoch=routeEpoch;
+  if($('#ov')?.contains(document.activeElement))return;
+  if(!$('#ov'))$('#view').innerHTML=viewHeader('Overview','Your exit network, at a glance.')+`<div id="ov"><div class="skeleton" aria-label="Loading overview"></div></div>`;
   try{
-    const o = await api('/api/overview');
-    const b = o.broker||{};
-    const online = b.tls ? 'TLS' : 'plain';
-    $('#ov').innerHTML = `
-      <div class="cards">
-        <div class="stat"><div class="k">Users</div><div class="v">${o.users.total} <small>(${o.users.active} active)</small></div></div>
-        <div class="stat"><div class="k">Exit devices online</div><div class="v">${b.nodes_online??0} <small>/ ${b.nodes_total??0}</small></div></div>
-        <div class="stat"><div class="k">Idle connections</div><div class="v">${b.idle_nodes??0}</div></div>
-        <div class="stat"><div class="k">Traffic this month</div><div class="v">${(o.month_gb||0).toFixed(2)} <small>GB</small></div></div>
-        <div class="stat"><div class="k">Dials (ok / fail)</div><div class="v">${b.dials_ok??0} <small>/ ${(b.dials_err??0)+(b.dials_no_node??0)}</small></div></div>
-        <div class="stat"><div class="k">Over quota / expired</div><div class="v">${o.users.over_quota} <small>/ ${o.users.expired}</small></div></div>
-      </div>
-      <div class="banner">Broker link: <b>${online}</b> · uptime ${Math.floor((b.uptime_sec||0)/3600)}h · relayed ↑${fmtBytes(b.bytes_up)} ↓${fmtBytes(b.bytes_down)}</div>`;
-  }catch(e){ $('#ov').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+    const results=await Promise.allSettled([api('/api/overview'),api('/api/metrics?entity=fleet&range=30d&step=1d&fields=bytes_down,bytes_up,nodes_online,users_seated'),api('/api/alerts'),api('/api/events?limit=6')]);
+    if(epoch!==routeEpoch||!TOKEN)return;if(results[0].status==='rejected')throw results[0].reason;
+    const o=results[0].value,b=o.broker||{},u=o.users||{},seats=o.seats||{},m=results[1].status==='fulfilled'?results[1].value:null,al=results[2].status==='fulfilled'?results[2].value:null,events=results[3].status==='fulfilled'?results[3].value:null,counts=al?.counts||o.alerts?.counts||{},need=(counts.critical||0)+(counts.warn||0);
+    const rate=b.throughput_bps||{},fmtRate=v=>v===null||v===undefined?'—':(v*8/1e6).toFixed(2)+' Mbps';
+    const card=(id,label,value,detail,series,summary)=>`<div class="stat" id="${id}"><div class="kpi-title"><span class="k">${label}</span></div><div class="v">${value}</div><div class="detail">${detail}</div>${spark(series)}${deltaPill(summary)}</div>`;
+    $('#ov').innerHTML=`<div class="cards">${card('kpi-online','Exit devices online',`${b.nodes_online??0} <small>/ ${b.nodes_total??0}</small>`,need?need+' need attention':'Network availability',m?.series?.nodes_online,m?.summary?.nodes_online)}${card('kpi-seats','Seats occupied',`${seats.occupied??0} <small>used</small>`,`${seats.available??0} available online · per exit IP`)}${card('kpi-users','Users ready',`${u.status_counts?.active??u.active??0} <small>/ ${u.total??0}</small>`,`${u.expiring_7d??0} expiring within 7 days`,m?.series?.users_seated,m?.summary?.users_seated)}${card('kpi-traffic','Traffic this month',`${(o.month_gb||0).toFixed(2)} <small>GB</small>`,'Customer usage · current billing month')}</div><div class="opbar"><span>Connected now <strong>${u.connected_now??0}</strong></span><span>Download <strong>${fmtRate(rate.down)}</strong></span><span>Upload <strong>${fmtRate(rate.up)}</strong></span><span>Broker <strong>${b.tls?'TLS':'plain'} · ${fmtUptime(b.uptime_sec)}</strong></span></div><div class="dashboard-grid"><div><section class="panel"><div class="panel-head"><h3>Network traffic</h3><span>Last 30 days · UTC buckets</span></div><div id="trafficChart"></div></section><section class="panel section-space"><div class="panel-head"><h3>Recent activity</h3><a href="#/devices">View devices ↗</a></div>${events?feedHTML(events.events):empty('Activity unavailable','Use Refresh to try again.')}</section></div><div><section class="panel"><div class="panel-head"><h3>Needs attention</h3><span>${need} to review</span></div>${al?attentionHTML(al):empty('Alerts unavailable','Use Refresh to try again.')}</section><section class="panel section-space"><div class="panel-head"><h3>Capacity, counted once</h3></div><p class="muted" style="font-size:13px;margin:0">Boards behind the same public IP share one customer capacity. Dedicated users reserve that entire exit IP.</p><div class="fleet-strip"><span><i></i>${b.nodes_online??0} online</span><span>${Math.max(0,(b.nodes_total||0)-(b.nodes_online||0))} offline</span></div></section></div></div>`;
+    if(m)renderChart($('#trafficChart'),m,'Network traffic over the last 30 days');else $('#trafficChart').innerHTML=results[1].status==='rejected'&&results[1].reason.status!==404?empty('History unavailable','Use Refresh to try again.'):empty('No history yet','Recording starts with this version of the admin API.');
+    $('#ov').dataset.loaded='true';stamp(o.stale?'Broker telemetry is stale':'');
+  }catch(e){if(epoch===routeEpoch){stamp(e.message);if(!$('#ov').dataset.loaded)$('#ov').innerHTML=empty('Could not load overview',e.message+' · Use Refresh to try again.');}}
 }
-
-/* ---- Users ---- */
-// The rendered users by username: row buttons carry only data-user, never the
-// user object or the name inside inline script.
-let usersByName = new Map();
+/* ---- Keyed updates preserve row identity, open menus and focused controls ---- */
+let usersByName=new Map();
+function tableToolbar(kind){return `<div class="toolbar"><input type="search" id="${kind}Search" data-filter="${kind}" aria-label="Search ${kind}" placeholder="${kind==='devices'?'Search name, MAC, IP, city…':'Search username, note, device…'}" value="${esc(filters[kind])}"><select aria-label="Sort ${kind}" data-sort="${kind}"><option value="name"${sorts[kind]==='name'?' selected':''}>Name A–Z</option><option value="status"${sorts[kind]==='status'?' selected':''}>Status</option><option value="expiry"${sorts[kind]==='expiry'?' selected':''}>Next expiry</option></select><span class="result-count" id="${kind}Count"></span></div>`;}
+function patchRows(kind,items,markup){
+  const table=$('#'+(kind==='devices'?'dtbl':'utbl')+' tbody');if(!table)return;const keyOf=x=>kind==='devices'?x.mac:x.username,existing=new Map([...table.children].map(r=>[r.dataset.key,r])),query=filters[kind].toLocaleLowerCase();
+  const list=items.slice().sort((a,b)=>{const av=sorts[kind]==='status'?(a.status||''):sorts[kind]==='expiry'?(a.next_expiry||a.expires_at||'9999'):(a.name||a.username||a.mac),bv=sorts[kind]==='status'?(b.status||''):sorts[kind]==='expiry'?(b.next_expiry||b.expires_at||'9999'):(b.name||b.username||b.mac);return String(av).localeCompare(String(bv));});let visible=0;
+  for(const item of list){const key=keyOf(item),hay=JSON.stringify({...item,stats:undefined,health:undefined}).toLocaleLowerCase();let row=existing.get(key);existing.delete(key);const html=markup(item);if(!row){row=document.createElement('tr');row.dataset.key=key;row.innerHTML=html;}else if(!row.contains(document.activeElement)&&!(menuOpener&&row.contains(menuOpener))){const tmp=document.createElement('tr');tmp.innerHTML=html;[...tmp.children].forEach((cell,i)=>{if(row.children[i]&&row.children[i].innerHTML!==cell.innerHTML)row.children[i].innerHTML=cell.innerHTML;});}
+    row.dataset.status=item.status||'';row.hidden=!!query&&!hay.includes(query);if(!row.hidden)visible++;
+    if(!row.isConnected)table.appendChild(row);
+  }
+  if(!table.contains(document.activeElement)&&!(menuOpener&&table.contains(menuOpener))){list.forEach((item,i)=>{const row=[...table.children].find(r=>r.dataset.key===keyOf(item));if(row&&table.children[i]!==row)table.insertBefore(row,table.children[i]||null);});}
+  for(const row of existing.values()){if(menuOpener&&row.contains(menuOpener))closeRowMenu(false);row.remove();}
+  $('#'+kind+'Count').textContent=visible+' of '+items.length+' '+kind;
+  let msg=table.parentElement.parentElement.querySelector('.table-empty');if(!msg){msg=document.createElement('div');msg.className='table-empty';table.parentElement.parentElement.appendChild(msg);}msg.innerHTML=visible?'':empty(items.length?'No matches':'No '+kind+' yet',items.length?'Try another search.':kind==='devices'?'Connect an exit board to see it here.':'Create a user to get started.');
+}
+document.addEventListener('input',e=>{const k=e.target.dataset.filter;if(k){filters[k]=e.target.value;renderCurrentRows(k);}});
+document.addEventListener('change',e=>{const k=e.target.dataset.sort;if(k){sorts[k]=e.target.value;renderCurrentRows(k);}});
+function renderCurrentRows(k){if(k==='devices')patchRows(k,window._nodes||[],deviceRow);else patchRows(k,[...usersByName.values()],userRow);}
+function userRow(u){
+  const un=esc(u.username),dv=(window._devByMac||{})[u.device_mac],usage=Number(u.usage_gb)||0,over=u.quota_gb>0&&usage>=u.quota_gb,st=u.status||(!u.enabled?'disabled':u.expires_at&&Date.parse(u.expires_at)<Date.now()?'expired':over?'over_quota':'active');
+  const dev=u.device_mac?`<a href="#/devices/${encodeURIComponent(u.device_mac)}">${esc(dv?.name||u.device_mac)}</a><div class="subline mono">${dv?.slot?':'+esc(slotPort(dv.slot)):'No slot'}</div>`:'<span class="muted">Shared pool :3128</span>';
+  return `<td><strong class="mono">${un}</strong>${u.note?`<div class="subline">${esc(u.note)}</div>`:''}</td><td>${statusPill(st)}</td><td>${u.rate_mbps>0?esc(u.rate_mbps)+' Mbps':'≤ capacity'}</td><td>${usage.toFixed(2)} / ${u.quota_gb>0?esc(u.quota_gb):'∞'} GB<div class="usagebar ${over?'over':''}"><i style="width:${u.quota_gb>0?Math.min(100,usage/u.quota_gb*100):0}%"></i></div></td><td>${expiryLabel(u.expires_at)}</td><td>${dev}<button type="button" class="link" data-act="assign" data-user="${un}">${esc(T(u.device_mac?'change':'assign'))}</button></td><td><div class="row-actions"><button type="button" class="sec" data-act="copy" data-user="${un}">${esc(T('connection'))}</button><button type="button" class="sec" data-act="edit" data-user="${un}">${esc(T('edit'))}</button>${moreBtn('user',un,u.username)}</div></td>`;
+}
 async function viewUsers(){
-  $('#view').innerHTML = `<div class="head"><h2>Users</h2><button type="button" id="newUserBtn">+ New user</button></div>
-    <div id="utbl">Loading…</div>`;
-  $('#newUserBtn').addEventListener('click',()=>openUser());
-  try{
-    const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices').catch(()=>[])]);
-    usersByName = new Map(users.map(u=>[u.username,u]));
-    window._devByMac = Object.fromEntries((devices||[]).map(d=>[d.mac,d]));
-    if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
-    const rows = users.map(u=>{
-      const quota = u.quota_gb>0 ? `${u.usage_gb.toFixed(2)} / ${u.quota_gb} GB` : `${u.usage_gb.toFixed(2)} GB`;
-      const over = u.quota_gb>0 && u.usage_gb>=u.quota_gb;
-      const exp = u.expires_at ? new Date(u.expires_at) : null;
-      const expired = exp && exp < new Date();
-      let st = u.enabled ? '<span class="pill ok">active</span>' : '<span class="pill off">disabled</span>';
-      if(expired) st='<span class="pill bad">expired</span>';
-      else if(over) st='<span class="pill warn">over quota</span>';
-      const dv = (window._devByMac||{})[u.device_mac];
-      let devLabel = '';
-      if(u.device_mac){
-        devLabel = dv && dv.name ? `${esc(dv.name)} <span class="mono muted">(${esc(u.device_mac)})</span>` : `<span class="mono">${esc(u.device_mac)}</span>`;
-        const up = dv ? slotPort(dv.slot) : 0;
-        if(up) devLabel += ` <span class="mono">\u00b7 :${esc(up)}</span>`;
-      }
-      const un = esc(u.username);
-      const dev = u.device_mac
-        ? `${devLabel} <button type="button" class="link" data-act="assign" data-user="${un}">${esc(T('change'))}</button>`
-        : `<button type="button" class="link" data-act="assign" data-user="${un}">${esc(T('assign'))}</button>`;
-      return `<tr>
-        <td class="mono">${un}</td>
-        <td>${st}</td>
-        <td>${u.rate_mbps>0?u.rate_mbps+' Mbps':'—'}</td>
-        <td>${quota}${over?' ⚠':''}</td>
-        <td>${exp?exp.toISOString().slice(0,10):'never'}</td>
-        <td>${dev}</td>
-        <td class="right row-actions">
-          <button type="button" data-act="copy" data-user="${un}">${esc(T('connection'))}</button>
-          <button type="button" class="sec" data-act="edit" data-user="${un}">${esc(T('edit'))}</button>
-          ${moreBtn('user', un, u.username)}
-        </td></tr>`;
-    }).join('');
-    $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-    $('#utbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
-      const name=b.dataset.user, act=b.dataset.act;
-      if(act==='copy') openCreds(name);
-      else if(act==='edit'){ const u=usersByName.get(name); if(u) openUser(u); }
-      else if(act==='assign') openAssign(name);
-      else if(act==='more'){
-        const u=usersByName.get(name)||{};
-        openRowMenu(b, [
-          {label:u.enabled?T('disable'):T('enable'), act:u.enabled?'disable':'enable'},
-          {label:T('extend30'), act:'extend'},
-          {sep:true},
-          {label:T('del'), act:'delete', danger:true},
-        ], a => a==='delete' ? delUser(name) : userAction(name,a));
-      }
-    }));
-  }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  if(activeView!=='users')return;const epoch=routeEpoch;
+  if(!$('#utbl')){$('#view').innerHTML=viewHeader('Users','Accounts, usage and renewals.','<button type="button" id="newUserBtn">+ New user</button>')+tableToolbar('users')+'<div id="utbl" class="table-wrap"><table class="users-table"><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th>Actions</th></tr></thead><tbody></tbody></table></div>';$('#newUserBtn').addEventListener('click',()=>openUser());}
+  try{const [users,devices]=await Promise.all([api('/api/users'),api('/api/devices')]);if(epoch!==routeEpoch||!TOKEN)return;usersByName=new Map(users.map(u=>[u.username,u]));window._devByMac=Object.fromEntries((devices||[]).map(d=>[d.mac,d]));window._devs=window._devByMac;window._nodes=devices;renderCurrentRows('users');$('#utbl').dataset.loaded='true';stamp();}catch(e){if(epoch===routeEpoch)stamp(e.message);}
 }
 
 /* ---- Toast: a 3 s confirmation that never blocks and never hides text behind a button ---- */
@@ -600,7 +657,7 @@ function openUser(u){
   $('#umTitle').textContent = u? 'Edit '+u.username : 'New user';
   $('#umUser').value = u?u.username:''; $('#umUser').disabled = !!u;
   $('#umPass').value=''; $('#umPass').placeholder = u?'(unchanged)':'(auto-generate)';
-  $('#umRate').value = u?u.rate_mbps:0; $('#umQuota').value = u?u.quota_gb:0; $('#umDays').value='';
+  $('#umRate').value = u?u.rate_mbps:0; $('#umQuota').value = u?u.quota_gb:0; $('#umDays').value=''; $('#umNever').checked=!!u&&!u.expires_at;
   $('#umErr').textContent=''; $('#umodal').style.display='flex';
 }
 function closeModal(){ $('#umodal').style.display='none'; }
@@ -608,7 +665,8 @@ $('#umSave').onclick = async ()=>{
   const body={ rate_mbps:+$('#umRate').value||0, quota_gb:+$('#umQuota').value||0 };
   if($('#umPass').value) body.password=$('#umPass').value;
   const days=$('#umDays').value;
-  if(days!=='' ) body.expires_at = new Date(Date.now()+(+days)*864e5).toISOString();
+  if($('#umNever').checked)body.expires_at='';
+  if(!$('#umNever').checked && days!=='' ) body.expires_at = new Date(Date.now()+(+days)*864e5).toISOString();
   try{
     if(editUser){ await api('/api/users/'+encodeURIComponent(editUser.username),{method:'PUT',body:JSON.stringify(body)}); }
     else {
@@ -621,99 +679,73 @@ $('#umSave').onclick = async ()=>{
     closeModal(); viewUsers();
   }catch(e){ $('#umErr').textContent=e.message; }
 };
-async function userAction(u,a){ const b=a==='extend'?JSON.stringify({days:30}):null;
-  await api('/api/users/'+encodeURIComponent(u)+'/'+a,{method:'POST',body:b}); viewUsers(); }
-async function delUser(u){ if(!confirm('Delete user '+u+'?'))return; await api('/api/users/'+encodeURIComponent(u),{method:'DELETE'}); viewUsers(); }
+async function userAction(name,a){const match=/^extend-(7|30|90)$/.exec(a),action=match?'extend':a,body=action==='extend'?JSON.stringify({days:match?+match[1]:30}):null;try{await api('/api/users/'+encodeURIComponent(name)+'/'+action,{method:'POST',body});showToast('User updated');await viewUsers();}catch(e){showToast(e.message,true);}}
+async function delUser(name){if(!confirm('Delete user '+name+'?'))return;try{await api('/api/users/'+encodeURIComponent(name),{method:'DELETE'});showToast('User deleted');await viewUsers();}catch(e){showToast(e.message,true);}}
 
-/* ---- Devices ---- */
-async function viewDevices(){
-  $('#view').innerHTML = `<div class="head"><h2>Exit devices</h2><div><button class="sec" onclick="otaAll()">Update all online…</button> <button class="sec" onclick="route('devices')">Refresh</button></div></div><div id="dtbl">Loading…</div>`;
-  try{
-    const nodes = await api('/api/devices') || [];
-    window._nodes = nodes;
-    if(!nodes.length){ $('#dtbl').innerHTML='<p class="muted">No devices have connected yet.</p>'; return; }
-    window._devs = Object.fromEntries(nodes.map(n=>[n.mac,n]));
-    const rows = nodes.map(n=>{
-      let st = n.blocked?'<span class="pill bad">blocked</span>':(n.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>');
-      const g = n.geo||{};
-      const cityLoc = [g.city,g.country].filter(Boolean).join(', ') || '\u2014';
-      const hasPos = typeof n.lat==='number' && typeof n.lon==='number';
-      // operator position: the pasted Google Maps link (keeps the place name) or the pin by
-      // coordinates; no position: the geo-IP estimate, marked approximate
-      const gmaps = (la,lo)=>'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo);
-      const hasGeoPos = typeof g.lat==='number' && typeof g.lon==='number' && (g.lat||g.lon);
-      const loc = hasPos
-        ? `<a target="_blank" rel="noopener noreferrer" title="${esc(T('openMap'))}" href="${esc(n.maps_url||gmaps(n.lat,n.lon))}">${esc(n.lat.toFixed(4)+', '+n.lon.toFixed(4))}</a>`
-        : (hasGeoPos ? `<a target="_blank" rel="noopener noreferrer" class="muted" title="${esc(T('openMapApprox'))}" href="${esc(gmaps(g.lat,g.lon))}">≈ ${esc(cityLoc)}</a>` : esc(cityLoc));
-      const mac = esc(n.mac);
-      const users = (n.users&&n.users.length)? n.users.map(esc).join(', ') : '<span class="muted">\u2014</span>';
-      const wifi = `<span data-wifi="${mac}">${esc(n.ssid||'\u2014')} ${n.wifi_password_set
-        ? `<span class="mono">\u2022\u2022\u2022\u2022</span> <button type="button" class="sec" data-act="reveal" data-mac="${mac}">${esc(T('reveal'))}</button>`
-        : `<span class="muted">(${esc(T('notSet'))})</span>`}</span>`;
-      let cap;
-      if(n.capacity_mbps>0){
-        const ns=+n.capacity_active_streams||0, ago=fmtAgo(n.capacity_measured_at);
-        cap = esc(n.capacity_mbps)+' '+esc(T('mbps'))+' \u00b7 '+esc(ns)+' '+esc(T(ns===1?'stream1':'streamsActive'))+(ago?' \u00b7 '+esc(ago):'');
-      } else cap = `<span class="pill warn">${esc(T('unmeasured'))}</span>`;
-      const hasSlot = slotPort(n.slot)>0;
-      cap = `<div>${cap}</div><button type="button" class="sec" data-act="measure" data-mac="${mac}"${hasSlot?'':' disabled'}>${esc(T('measure'))}</button><div class="err" data-merr="${mac}" role="alert"></div>`;
-      const portTxt = (hasSlot ? `<div class="mono muted">${esc(T('slot'))} ${esc(n.slot)} \u00b7 :${esc(slotPort(n.slot))}</div>` : '')
-        + (n.slot_mismatch ? `<div><span class="pill warn" title="${esc(T('slotMismatchHint'))}">${esc(T('slotMismatch'))}</span></div>` : '');
-      const grp = n.ip_group_size>1 ? `<div><span class="pill off">${esc(T('ipGroup'))} ${esc(n.ip_group||n.remote_ip||'')} (${esc(n.ip_group_size)} ${esc(T('boards'))})</span></div>` : '';
-      const full = n.max_users>0 && n.active_users>=n.max_users;
-      const nm = `${esc(n.active_users??0)}/${esc(n.max_users??0)}`;
-      const nmHtml = full ? `<span class="pill bad">${nm}</span>` : `<span class="muted">${nm}</span>`;
-      return `<tr>
-        <td>${esc(n.name||'\u2014')}<div class="mono muted">${mac}</div><div><span class="pill off" title="board chip (from the firmware's HELLO)">${esc(n.chip||'esp32s3')}</span></div>${portTxt}</td>
-        <td>${esc(n.kind||'\u2014')}</td>
-        <td>${st}</td>
-        <td>${users}<div>${nmHtml}</div>${grp}</td>
-        <td>${wifi}</td>
-        <td class="mono">${esc(n.remote_ip||'\u2014')}</td>
-        <td>${loc}</td>
-        <td>${cap}</td>
-        <td class="muted">${esc(g.isp||'\u2014')}</td>
-        <td class="health${n.online?'':' muted'}">${healthCell(n)}</td>
-        <td>\u2191${fmtBytes(n.bytes_up)} \u2193${fmtBytes(n.bytes_down)}</td>
-        <td class="mono muted">${esc(n.firmware||'')} ${otaPill(n)}</td>
-        <td class="right row-actions">
-          <button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>
-          ${moreBtn('mac', mac, n.name||n.mac)}
-        </td></tr>`;
-    }).join('');
-    $('#dtbl').innerHTML = `<table><thead><tr><th>${esc(T('name'))}</th><th>${esc(T('kind'))}</th><th>Status</th><th>${esc(T('users'))}</th><th>${esc(T('wifi'))}</th><th>Exit IP</th><th>${esc(T('location'))}</th><th>${esc(T('capacity'))}</th><th>ISP</th><th>Health</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-    $('#dtbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
-      const mac=b.dataset.mac, act=b.dataset.act;
-      if(act==='edit') openDevice(mac,b);
-      else if(act==='measure') measureDevice(mac,b);
-      else if(act==='reveal') revealWifi(mac,b);
-      else if(act==='more'){
-        const n=(window._devs||{})[mac]||{};
-        openRowMenu(b, [
-          {label:T('updateFw'), act:'ota'},
-          {label:n.blocked?T('allow'):T('block'), act:n.blocked?'allow':'block'},
-          {sep:true},
-          {label:T('forget'), act:'forget', danger:true},
-        ], a => a==='ota' ? otaDevice(mac) : devAction(mac,a));
-      }
-      else devAction(mac,act);
-    }));
-  }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+/* ---- Devices: seven columns, full instruments retained ---- */
+function deviceRow(n){
+  const mac=esc(n.mac),g=n.geo||{},city=[g.city,g.region||g.country].filter(Boolean).join(', ')||'Location unknown',hasPos=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPos?n.lat:g.lat,lo=hasPos?n.lon:g.lon,hasGeo=typeof la==='number'&&typeof lo==='number'&&(la||lo),map=hasGeo?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'',full=n.max_users>0&&n.active_users>=n.max_users;
+  const loc=map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer" title="${esc(T(hasPos?'openMap':'openMapApprox'))}">${hasPos?'':'≈ '}${esc(city)} ↗</a>`:esc(city);
+  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(n.name||'Unnamed device')}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':'Not measured'}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div class="subline">${esc(g.isp||'ISP unknown')}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
 }
+async function viewDevices(){
+  if(activeView!=='devices')return;const epoch=routeEpoch;
+  if(!$('#dtbl'))$('#view').innerHTML=viewHeader('Exit devices','Physical boards. Real connections.','<button type="button" class="sec" data-ota-all>Update all online…</button>')+tableToolbar('devices')+'<div id="dtbl" class="table-wrap"><table class="fleet-table"><thead><tr><th>Device</th><th>State</th><th>Seats / capacity</th><th>Location</th><th>Health</th><th>Firmware</th><th>Actions</th></tr></thead><tbody></tbody></table></div>';
+  try{const nodes=await api('/api/devices')||[];if(epoch!==routeEpoch||!TOKEN)return;window._nodes=nodes;window._devs=Object.fromEntries(nodes.map(n=>[n.mac,n]));renderCurrentRows('devices');$('#dtbl').dataset.loaded='true';stamp();if(drawerMAC)updateDrawer();}catch(e){if(epoch===routeEpoch)stamp(e.message);}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]');if(e.target.closest('[data-ota-all]')){otaAll();return;}if(!b||!b.closest('#utbl,#dtbl,#ddrawer'))return;
+  const act=b.dataset.act,name=b.dataset.user,mac=b.dataset.mac;
+  if(name){const person=usersByName.get(name)||{};if(act==='copy')openCreds(name);else if(act==='edit')openUser(person);else if(act==='assign')openAssign(name);else if(act==='more')openRowMenu(b,[{label:person.enabled?T('disable'):T('enable'),act:person.enabled?'disable':'enable'},...[7,30,90].map(days=>({label:'Extend '+days+' days',act:'extend-'+days})),{sep:true},{label:T('del'),act:'delete',danger:true}],a=>a==='delete'?delUser(name):userAction(name,a));}
+  else if(mac){const n=window._devs?.[mac]||{};if(act==='edit')openDevice(mac,b);else if(act==='measure')measureDevice(mac,b);else if(act==='reveal')revealWifi(mac,b);else if(act==='ota')otaDevice(mac);else if(act==='more')openRowMenu(b,[{label:'View details',act:'details'},{label:T('measure'),act:'measure'},{label:T('updateFw'),act:'ota'},{label:n.blocked?T('allow'):T('block'),act:n.blocked?'allow':'block'},{sep:true},{label:T('forget'),act:'forget',danger:true}],a=>a==='details'?route('devices/'+encodeURIComponent(mac)):a==='measure'?measureDevice(mac,b):a==='ota'?otaDevice(mac):safeDevAction(mac,a));else safeDevAction(mac,act);}
+});
+async function safeDevAction(mac,action){try{await devAction(mac,action);}catch(e){showToast(e.message,true);}}
+/* ---- Device detail sheet: stable sections, hash navigation, history ---- */
+let drawerMAC='',drawerOpener=null,drawerRequest=0;
+function hideDrawer(refocus=true){if(!$('#ddrawer')||$('#ddrawer').hidden)return;drawerMAC='';drawerRequest++;$('#ddrawer').hidden=true;$('#ddrawer').inert=false;$('#ddBody').innerHTML='';Object.keys(revealTimers).forEach(k=>{clearTimeout(revealTimers[k]);delete revealTimers[k];});$('#app').inert=false;if(refocus&&drawerOpener?.isConnected)drawerOpener.focus();drawerOpener=null;}
+function closeDrawer(){const opener=drawerOpener;hideDrawer(true);if(routeParts()[1])history.replaceState(null,'','#/devices');if(opener?.isConnected)opener.focus();}
+function drawerSection(id,title,content,extra=''){return `<section class="drawer-section ${extra}" id="${id}"><h3>${esc(title)}</h3>${content}</section>`;}
+function facts(pairs){return '<dl class="facts">'+pairs.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')+'</dl>';}
+async function openDrawer(mac){
+  if(drawerMAC===mac&&!$('#ddrawer').hidden){updateDrawer();return;}
+  drawerOpener=document.activeElement;drawerMAC=mac;$('#ddrawer').hidden=false;$('#app').inert=true;
+  $('#ddBody').innerHTML=drawerSection('ddHealth','Health','')+drawerSection('ddHistory','Traffic · last 24 hours','<div class="skeleton"></div>')+drawerSection('ddCapacity','Capacity','')+drawerSection('ddRouting','Routing','')+drawerSection('ddLocation','Location','')+drawerSection('ddWifi','WiFi','')+drawerSection('ddUsers','Bound users','')+drawerSection('ddNotes','Notes','')+drawerSection('ddActivity','Activity','<div class="skeleton"></div>')+drawerSection('ddDanger','Danger zone','','danger-zone');
+  updateDrawer(true);$('#ddClose').focus();const request=++drawerRequest;
+  const results=await Promise.allSettled([api('/api/metrics?entity=node&id='+encodeURIComponent(mac)+'&range=24h&fields=bytes_down,bytes_up'),api('/api/events?subject='+encodeURIComponent(mac)+'&limit=50')]);
+  if(request!==drawerRequest||drawerMAC!==mac||!TOKEN)return;
+  const h=$('#ddHistory');if(!h)return;h.innerHTML='<h3>Traffic · last 24 hours</h3><div class="history-content"></div>';if(results[0].status==='fulfilled')renderChart(h.querySelector('div'),results[0].value,'Device traffic, last 24 hours');else h.querySelector('div').innerHTML=empty('History unavailable','Close and reopen details to retry.');
+  $('#ddActivity').innerHTML='<h3>Activity</h3>'+(results[1].status==='fulfilled'?feedHTML(results[1].value.events,12):empty('Activity unavailable','Close and reopen details to retry.'));
+}
+function updateDrawer(initial=false){
+  if(!drawerMAC)return;const n=window._devs?.[drawerMAC];if(!n){$('#ddTitle').textContent='Device unavailable';$('#ddBody').innerHTML=empty('Device is no longer listed','Close details and refresh the device list.');return;}
+  const mac=esc(n.mac),g=n.geo||{},section=(id,title,html)=>{const el=$('#'+id);if(el&&!el.contains(document.activeElement)&&!(menuOpener&&el.contains(menuOpener)))el.innerHTML='<h3>'+esc(title)+'</h3>'+html;};
+  $('#ddTitle').textContent=n.name||'Unnamed device';$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3');
+  section('ddHealth','Health',nodeState(n)+`<div class="drawer-health">${healthCell(n)}</div><ul class="reason-list">${(n.health?.reasons||[]).map(r=>'<li>'+esc(r)+'</li>').join('')}</ul>`);
+  section('ddCapacity','Capacity',facts([['Measured capacity',n.capacity_mbps>0?esc(n.capacity_mbps)+' Mbps':'Not measured'],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
+  section('ddRouting','Routing',facts([['Mode',esc(n.kind||'shared')],['Slot / port',n.slot?esc(n.slot)+' / :'+esc(slotPort(n.slot)):'Not assigned'],['Exit IP','<span class="mono">'+esc(n.remote_ip||'Unknown')+'</span>'],['IP group',esc(n.ip_group_size||1)+' board(s)'],['Streams',esc(n.active_dials||0)+(n.max_streams?' / '+esc(n.max_streams):'')],['Relayed traffic','↑ '+esc(fmtBytes(n.bytes_up))+' · ↓ '+esc(fmtBytes(n.bytes_down))]])+(n.slot_mismatch?`<div class="drawer-actions"><button type="button" class="sec" data-repush="${mac}">Re-push routing to broker</button></div>`:''));
+  const hasPin=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPin?n.lat:g.lat,lo=hasPin?n.lon:g.lon,map=typeof la==='number'&&typeof lo==='number'&&(la||lo)?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'';
+  section('ddLocation','Location',facts([['Location',esc([g.city,g.region,g.country].filter(Boolean).join(', ')||'Unknown')],['ISP',esc(g.isp||'Unknown')],['Coordinates',hasPin?esc(n.lat.toFixed(6)+', '+n.lon.toFixed(6)):'Approximate geo-IP only']])+`<div class="drawer-actions">${map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:''}</div>`);
+  if(initial||!$('#ddWifi [data-wifi]'))section('ddWifi','WiFi',`<span data-wifi="${mac}">${esc(n.ssid||'Unknown network')} · ${n.wifi_password_set?`•••• <button type="button" class="sec" data-act="reveal" data-mac="${mac}">Reveal for 10 seconds</button>`:'No stored password'}</span><p class="subline">Passwords stay hidden in the device list. Edit to set or clear a stored password.</p>`);
+  section('ddUsers','Bound users',(n.users||[]).length?(n.users||[]).map(user=>'<div class="subline">'+esc(user)+'</div>').join(''):'<span class="muted">No users assigned</span>');
+  section('ddNotes','Notes','<p style="white-space:pre-wrap;font-size:13px">'+esc(n.notes||'No notes')+'</p>');
+  section('ddDanger','Danger zone',`<p class="subline">Blocking stops new traffic. Forget removes this board from the broker registry.</p><div class="drawer-actions"><button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow device':'Block device'}</button><button type="button" class="danger drawer-forget" data-act="forget" data-mac="${mac}">Forget device</button></div>`);
+}
+$('#ddClose').addEventListener('click',closeDrawer);$('#ddEdit').addEventListener('click',()=>openDevice(drawerMAC,$('#ddEdit')));$('#ddrawer').addEventListener('click',e=>{if(e.target===$('#ddrawer'))closeDrawer();});
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-repush]');if(!b)return;const n=window._devs?.[b.dataset.repush];if(!n)return;b.disabled=true;try{await api('/api/devices/'+encodeURIComponent(n.mac),{method:'PUT',body:JSON.stringify({slot:n.slot,kind:n.kind})});showToast('Routing sent to broker');await viewDevices();}catch(error){showToast(error.message,true);}finally{b.disabled=false;}});
+
 const measuring = new Set();
 async function measureDevice(mac, btn){
   if(measuring.has(mac)) return;
   measuring.add(mac);
-  const errEl = [...document.querySelectorAll('#dtbl [data-merr]')].find(x=>x.dataset.merr===mac);
+  const errEl = [...document.querySelectorAll('[data-merr]')].find(x=>x.dataset.merr===mac);
   const label = btn ? btn.textContent : '';
   if(errEl) errEl.textContent='';
   if(btn){ btn.disabled=true; btn.textContent=T('measuring'); }
   try{
     await api('/api/devices/'+encodeURIComponent(mac)+'/measure',{method:'POST'});
-    measuring.delete(mac);
-    await viewDevices();
+    measuring.delete(mac);showToast('Capacity measurement saved');await viewDevices();
   }catch(e){
-    measuring.delete(mac);
+    measuring.delete(mac);showToast(e.message,true);
     if(btn && btn.isConnected){ btn.disabled=false; btn.textContent=label; }
     if(errEl && errEl.isConnected){ errEl.textContent=''; const p=document.createElement('span'); p.className='pill bad'; p.textContent=e.message; errEl.appendChild(p); }
   }
@@ -727,7 +759,7 @@ function otaPill(n){
   const cancel = n.pending_ota ? ` <button type="button" class="link" data-act="ota-cancel" data-mac="${esc(n.mac)}">cancel</button>` : '';
   switch(n.ota_status){
     case 'queued': return `<span class="pill warn" title="waiting for the device to connect${esc(at)}">queued${esc(t)}</span>${cancel}`;
-    case 'sent':   return `<span class="pill warn" title="device is downloading / rebooting${esc(at)}">updating${esc(t)}</span>`;
+    case 'sent':   return `<span class="pill info" title="device is downloading / rebooting${esc(at)}">updating${esc(t)}</span>`;
     case 'failed': return `<span class="pill bad" title="device rebooted but is still on its old firmware: download failed or the new image rolled back${esc(at)}">rolled back${esc(t)}</span>`;
     case 'ok':     return n.ota_at && Date.now()-new Date(n.ota_at) < 864e5 ? `<span class="pill ok" title="updated${esc(at)}">updated</span>` : '';
   }
@@ -797,10 +829,10 @@ async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))re
   await api('/api/devices/'+encodeURIComponent(mac)+'/'+a,{method:'POST'}); viewDevices(); }
 
 /* ---- Device editor ---- */
-let editDev=null, dmOpener=null;
+let editDev=null, dmOpener=null, clearPosition=false;
 function openDevice(mac, opener){
   const d = (window._devs||{})[mac]; if(!d) return;
-  editDev = d; dmOpener = opener||document.activeElement;
+  clearPosition=false; editDev = d; dmOpener = opener||document.activeElement;
   $('#dmTitle').textContent = T('editDevice')+' '+d.mac;
   $('#dmName').value = d.name||'';
   $('#dmKind').value = d.kind==='dedicated'?'dedicated':'shared';
@@ -814,12 +846,12 @@ function openDevice(mac, opener){
   $('#dmCancel').textContent=T('cancel'); $('#dmSave').textContent=T('save');
   $('#dmCoordHint').textContent=T('coordHint');
   $('#dmErr').textContent=''; $('#dmodal').style.display='flex';
-  $('#app').inert = true;
+  $('#app').inert = true; $('#ddrawer').inert=!$('#ddrawer').hidden;
   $('#dmName').focus();
 }
 function closeDevice(keepFocus){
   $('#dmodal').style.display='none'; editDev=null;
-  $('#app').inert = false;
+  $('#app').inert = !$('#ddrawer').hidden; $('#ddrawer').inert=false;
   if(keepFocus!==true && dmOpener && dmOpener.isConnected) dmOpener.focus();
   dmOpener=null;
 }
@@ -838,8 +870,9 @@ $('#dmSave').addEventListener('click', async ()=>{
   if(kind!==(d.kind==='dedicated'?'dedicated':'shared')) body.kind = kind;
   if(notes!==(d.notes||'')) body.notes = notes;
   const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
-  if(lat!=='' && +lat!==d.lat) body.lat = +lat;
-  if(lon!=='' && +lon!==d.lon) body.lon = +lon;
+  if(clearPosition){body.lat=null;body.lon=null;body.maps_url='';}
+  if(!clearPosition && lat!=='' && +lat!==d.lat) body.lat = +lat;
+  if(!clearPosition && lon!=='' && +lon!==d.lon) body.lon = +lon;
   // a changed Google Maps link is resolved by the server and overrides lat/lon;
   // an unchanged one is not re-sent, so Find + Save does not resolve twice
   const maps=$('#dmMaps').value.trim();
@@ -858,7 +891,7 @@ $('#dmSave').addEventListener('click', async ()=>{
     await viewDevices();
     // The table was re-rendered, so the original opener is gone: focus its replacement.
     const nb = [...document.querySelectorAll('#dtbl button[data-act="edit"]')].find(x=>x.dataset.mac===mac);
-    if(nb) nb.focus();
+    if(!$('#ddrawer').hidden)$('#ddEdit').focus();else if(nb) nb.focus();
   }catch(e){ $('#dmErr').textContent=e.message; }
   finally{ $('#dmSave').disabled=false; }
 });
@@ -915,15 +948,16 @@ function viewSettings(){
   const otaUrl = localStorage.getItem('ota_url') || (flash.replace(/\/$/,'')+'/firmware/esp32_nat_router.bin');
   $('#view').innerHTML = `<div class="head"><h2>Settings</h2></div>
     <div class="card" style="max-width:560px">
-      <div class="field"><label>Flash firmware page URL</label><input id="setFlash" value="${esc(flash)}" /></div>
-      <div class="field"><label>GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
-      <div class="field"><label>Custom OTA firmware URL (pre-filled for "Custom URL…" in Update FW)</label><input id="setOta" value="${esc(otaUrl)}" /></div>
-      <button onclick="saveSettings()">Save</button>
+      <div class="field"><label for="setFlash">Flash firmware page URL</label><input id="setFlash" value="${esc(flash)}" /></div>
+      <div class="field"><label for="setGost">GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
+      <div class="field"><label for="setOta">Custom OTA firmware URL (pre-filled for "Custom URL…" in Update FW)</label><input id="setOta" value="${esc(otaUrl)}" /></div>
+      <button type="button" id="saveSettingsBtn">Save</button><div class="drawer-actions"><a href="${esc(flash)}" target="_blank" rel="noopener noreferrer">Flash firmware &#8599;</a><a href="${esc(gostui)}" target="_blank" rel="noopener noreferrer">GOST config UI &#8599;</a><button type="button" class="sec" id="settingsLogout">Sign out</button></div>
       <p class="muted" style="margin-top:16px">Customer proxy endpoint: <span class="mono">this VPS : 3131\u20133160</span> (per-customer slot ports, one per device slot 1\u201330; HTTP &amp; SOCKS5, username/password).<br>
       Legacy pool port: <span class="mono">3128</span> (shared pool across devices).<br>
       Flash new devices at the Flash page — each self-provisions (TLS, token baked in) and appears under <b>Devices</b> by MAC.<br>
       <b>OTA:</b> on the Devices tab, "Update FW" lists every firmware release kept on the Flash page (<span class="mono">/firmware/releases.json</span>), older ones included, so a board can be moved back to an earlier version. A new image that cannot reach the broker rolls itself back.</p>
     </div>`;
+  $('#saveSettingsBtn').addEventListener('click',saveSettings);$('#settingsLogout').addEventListener('click',logout);
 }
 function saveSettings(){
   localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim();
@@ -933,6 +967,33 @@ function saveSettings(){
 }
 
 /* ---- boot ---- */
+$('#umCancel').addEventListener('click',closeModal);
+$('#fwCancel').addEventListener('click',closeFw);
+$('#umDays').addEventListener('input',()=>{if($('#umDays').value!=='')$('#umNever').checked=false;});
+$('#umNever').addEventListener('change',()=>{if($('#umNever').checked)$('#umDays').value='';});
+$('#dmClearPos').addEventListener('click',()=>{clearPosition=true;$('#dmLat').value='';$('#dmLon').value='';$('#dmMaps').value='';$('#dmMapsMsg').textContent='Position will be removed when you save.';});
+$('#dmGeo').addEventListener('click',()=>{const g=editDev?.geo;if(typeof g?.lat!=='number'||typeof g?.lon!=='number'||!(g.lat||g.lon)){showToast('No geo-IP position available',true);return;}clearPosition=false;$('#dmLat').value=g.lat;$('#dmLon').value=g.lon;$('#dmMaps').value='';$('#dmMapsMsg').textContent='Approximate geo-IP position selected. Save to keep it.';});
+['dmLat','dmLon','dmMaps'].forEach(id=>$('#'+id).addEventListener('input',()=>{clearPosition=false;}));
+/* Protect the active overlay, including an editor opened above the drawer. */
+const modalNames={umodal:['umTitle',closeModal],dmodal:['dmTitle',closeDevice],cmodal:['cmTitle',closeCreds],amodal:['amTitle',closeAssign],fwmodal:['fwTitle',closeFw]};
+let overlayTrigger=null,previousModal=null;
+document.addEventListener('click',e=>{if(!modalOpen())overlayTrigger=e.target.closest('button,a,input')||document.activeElement;},true);
+function topModal(){return [...document.querySelectorAll('.modal-bg')].filter(el=>el.style.display==='flex').at(-1);}
+function syncOverlays(){
+  const top=topModal();$('#app').inert=!!top||!$('#ddrawer').hidden;$('#ddrawer').inert=!!top;
+  document.querySelectorAll('.modal-bg').forEach(el=>{el.inert=!!top&&el!==top;});
+  if(top&&top!==previousModal&&!top.contains(document.activeElement)){const first=top.querySelector('input:not(:disabled),button:not(:disabled),select,textarea');first?.focus();}
+  if(!top&&previousModal){const target=!$('#ddrawer').hidden?$('#ddEdit'):overlayTrigger;if(target?.isConnected)target.focus();}
+  previousModal=top;
+}
+Object.entries(modalNames).forEach(([id,[label]])=>{const el=$('#'+id),dialog=el.firstElementChild;dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby',label);new MutationObserver(syncOverlays).observe(el,{attributes:true,attributeFilter:['style']});});
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&!modalOpen()&&$('#ddrawer').hidden&&!e.target.matches('input,textarea,select')){const search=$('input[type="search"]');if(search){e.preventDefault();search.focus();}return;}
+  if(!$('#rowmenu').hidden)return;
+  const modal=topModal(),root=modal||(!$('#ddrawer').hidden?$('#ddrawer'):null);if(!root)return;
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();if(modal)modalNames[modal.id][1]();else closeDrawer();return;}
+  if(e.key==='Tab'){const focusable=[...root.querySelectorAll('a[href],button,input,select,textarea,summary,[tabindex="0"]')].filter(el=>!el.disabled&&el.getClientRects().length&&!el.closest('[inert]'));if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&(document.activeElement===first||!root.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!root.contains(document.activeElement))){e.preventDefault();first.focus();}e.stopImmediatePropagation();}
+},true);
 if(TOKEN){ api('/api/overview').then(showApp).catch(()=>{ $('#login').style.display='flex'; }); }
 else $('#login').style.display='flex';
 </script>

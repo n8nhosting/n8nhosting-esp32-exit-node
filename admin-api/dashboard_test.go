@@ -57,6 +57,19 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`id="rowmenu"`,                   // one shared popover for every row's "more" button
 		`role="menu"`,                    // ... which is a real menu for keyboard and screen readers
 		`aria-haspopup="menu"`,           // the trigger says so
+		`n.status`,                       // the server owns the canonical state
+		`n.tags`,                         // secondary reasons do not replace that state
+		`id="ddrawer"`,                   // deep-linked device details
+		`/api/metrics?entity=node&id=`,    // canonical per-node history query
+		`/api/events?subject=`,            // canonical subject-filtered audit trail
+		`kpi-online`,                     // inventory and live operation KPIs
+		`kpi-seats`,
+		`kpi-users`,
+		`kpi-traffic`,
+		`Table view`,                     // the chart has a non-visual data equivalent
+		`row.dataset.key=key`,            // background updates retain row identity
+		`document.hidden`,                // stop polling a hidden browser tab
+		`body.lat=null;body.lon=null`,    // explicit paired coordinate deletion
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

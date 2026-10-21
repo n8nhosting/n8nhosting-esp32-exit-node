@@ -11,3 +11,7 @@ firmware/sdkconfig
 .worktrees/
 .superpowers/
 __pycache__/
+# Local Go caches and dashboard browser verification artifacts
+/admin-api/.cache/
+/admin-api/.tmp/
+/output/playwright/
