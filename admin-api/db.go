@@ -67,6 +67,9 @@ var migrations = []string{
 	 actor TEXT NOT NULL DEFAULT '', message TEXT NOT NULL, data TEXT NOT NULL DEFAULT '{}');
 	 CREATE INDEX events_subject ON events(subject_type,subject_id,id);
 	 CREATE INDEX events_kind ON events(kind,id);`,
+	// v6: legacy unassigned boards are eligible for automatic slot reservation;
+	// an explicit operator slot:0 disables automatic assignment from now on.
+	`ALTER TABLE devices ADD COLUMN slot_auto INTEGER NOT NULL DEFAULT 1`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

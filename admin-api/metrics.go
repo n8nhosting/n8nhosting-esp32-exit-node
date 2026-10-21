@@ -159,9 +159,8 @@ func (s *server) sampleTelemetry(now time.Time) {
 	t.sampleMu.Lock()
 	defer t.sampleMu.Unlock()
 	var status brokerSnapshot
-	var nodes []brokerNode
 	statusErr := s.brokerGET("/status", &status)
-	nodesErr := s.brokerGET("/nodes", &nodes)
+	nodes, nodesErr := s.brokerNodesWithRouting()
 	brokerOK := statusErr == nil && nodesErr == nil
 	// Activity owns its own lock and may read stores or emit events.
 	s.observeActivity(nodes, brokerOK, now)

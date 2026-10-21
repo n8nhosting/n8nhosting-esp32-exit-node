@@ -51,6 +51,9 @@ type server struct {
 	// admitMu holds a capacity check (admit) and the binding it allows
 	// together, so two assigns cannot both take the last seat
 	admitMu sync.Mutex
+	// Serializes complete operator/automatic routing changes across SQLite and
+	// broker HTTP, so a stale startup snapshot cannot overwrite an edit.
+	routingMu sync.Mutex
 	// measureMu guards measuring, the MACs with a capacity measurement
 	// running (measure.go); a nil map is an empty set
 	measureMu sync.Mutex
@@ -111,6 +114,7 @@ func main() {
 	mux.HandleFunc("/api/users", s.requireAdmin(s.handleUsers))
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
 	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
+	mux.HandleFunc("/api/slots", s.requireAdmin(s.handleSlots))
 	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
 	mux.HandleFunc("/api/geo/resolve", s.requireAdmin(s.handleGeoResolve))
 
@@ -126,17 +130,8 @@ func main() {
 	s.emit("system.started", "info", "system", "", "system", "Admin API started", nil)
 	go s.runTelemetry()
 
-	// Re-push every recorded slot and pool flag once the broker answers (it
-	// may start after admin-api); failures are logged, startup goes on.
-	go func() {
-		var nodes []brokerNode
-		for i := 0; i < 30 && s.brokerGET("/nodes", &nodes) != nil; i++ {
-			time.Sleep(2 * time.Second)
-		}
-		if failed := s.pushSlotsToBroker(); failed > 0 {
-			log.Printf("startup: %d device slot(s) not pushed to the broker; see above", failed)
-		}
-	}()
+	// The existing telemetry sampler also discovers/reserves/reconciles slots
+	// on every successful broker poll, including its immediate startup sample.
 
 	// Optionally push plugin + service config into GOST on startup.
 	if os.Getenv("GOST_API_URL") != "" {

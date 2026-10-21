@@ -98,6 +98,7 @@ type deviceView struct {
 	Kind                  string   `json:"kind"`
 	Notes                 string   `json:"notes"`
 	Slot                  int      `json:"slot"`
+	SlotAuto              bool     `json:"slot_auto"`
 	Port                  int      `json:"port"` // 3130+slot, 0 when unassigned
 	CapacityMbps          float64  `json:"capacity_mbps"`
 	CapacityMeasuredAt    string   `json:"capacity_measured_at"`
@@ -214,13 +215,14 @@ func (s *server) buildDeviceViewsWithHealth(nodes []brokerNode, rich bool) []dev
 	for _, n := range nodes {
 		users := byMAC[n.MAC]
 		sort.Strings(users)
-		v := deviceView{brokerNode: n, Users: users, Kind: "shared", IPGroup: n.RemoteIP}
+		v := deviceView{brokerNode: n, Users: users, Kind: "shared", IPGroup: n.RemoteIP, SlotAuto: true}
 		if rich {
 			v.Geo = s.geo.lookup(n.RemoteIP)
 		}
 		if d := recs[n.MAC]; d != nil {
 			v.Name, v.Kind, v.Notes = d.Name, d.Kind, d.Notes
 			v.Slot, v.CapacityMbps = d.Slot, d.CapacityMbps
+			v.SlotAuto = d.SlotAuto
 			v.CapacityMeasuredAt, v.CapacityActiveStreams = d.CapacityMeasuredAt, d.CapacityActiveStreams
 			v.Lat, v.Lon = d.Lat, d.Lon
 			v.MapsURL = d.MapsURL
@@ -301,6 +303,8 @@ func (s *server) brokerSetSlot(mac string, slot int, pool bool) error {
 // which may have lost them (a broker volume reset, a forget, a failed
 // rollback). Failures are logged and counted, never fatal.
 func (s *server) pushSlotsToBroker() (failed int) {
+	s.routingMu.Lock()
+	defer s.routingMu.Unlock()
 	for _, d := range s.devices.List() {
 		if err := s.brokerSetSlot(d.MAC, d.Slot, poolFlag(d.Kind)); err != nil {
 			failed++
@@ -385,6 +389,8 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		}
 		defer s.endMeasure(mac)
 	}
+	s.routingMu.Lock()
+	defer s.routingMu.Unlock()
 	if in.Slot != nil && *in.Slot > 0 {
 		holder, err := s.devices.BySlot(*in.Slot)
 		if err == nil && holder.MAC != mac {
@@ -454,6 +460,7 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		}
 		if in.Slot != nil {
 			d.Slot = *in.Slot
+			d.SlotAuto = *in.Slot != 0
 		}
 		if in.CapacityMbps != nil {
 			d.CapacityMbps = *in.CapacityMbps

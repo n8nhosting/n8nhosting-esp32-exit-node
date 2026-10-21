@@ -16,6 +16,7 @@ type Device struct {
 	Name                  string
 	Kind                  string
 	Slot                  int
+	SlotAuto              bool    // explicit slot:0 opts out of automatic reservation
 	CapacityMbps          float64 // 0 = not measured
 	CapacityMeasuredAt    string
 	CapacityActiveStreams int
@@ -30,7 +31,7 @@ type DeviceStore struct{ db *sql.DB }
 func NewDeviceStore(db *sql.DB) *DeviceStore { return &DeviceStore{db: db} }
 
 const deviceCols = `mac, name, kind, slot, capacity_mbps, capacity_measured_at,
-	capacity_active_streams, lat, lon, wifi_password_enc, notes, maps_url`
+	capacity_active_streams, lat, lon, wifi_password_enc, notes, maps_url, slot_auto`
 
 // scanDevice reads one deviceCols row; no row is ErrNotFound. A NULL slot is 0.
 func scanDevice(row interface{ Scan(...any) error }) (*Device, error) {
@@ -38,7 +39,7 @@ func scanDevice(row interface{ Scan(...any) error }) (*Device, error) {
 	var slot sql.NullInt64
 	var lat, lon sql.NullFloat64
 	err := row.Scan(&d.MAC, &d.Name, &d.Kind, &slot, &d.CapacityMbps, &d.CapacityMeasuredAt,
-		&d.CapacityActiveStreams, &lat, &lon, &d.WifiPasswordEnc, &d.Notes, &d.MapsURL)
+		&d.CapacityActiveStreams, &lat, &lon, &d.WifiPasswordEnc, &d.Notes, &d.MapsURL, &d.SlotAuto)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -70,7 +71,7 @@ func deviceArgs(d *Device) []any {
 		lon = *d.Lon
 	}
 	return []any{d.MAC, d.Name, d.Kind, slot, d.CapacityMbps, d.CapacityMeasuredAt,
-		d.CapacityActiveStreams, lat, lon, d.WifiPasswordEnc, d.Notes, d.MapsURL}
+		d.CapacityActiveStreams, lat, lon, d.WifiPasswordEnc, d.Notes, d.MapsURL, d.SlotAuto}
 }
 
 func (s *DeviceStore) Get(mac string) (*Device, error) {
@@ -112,7 +113,7 @@ func (s *DeviceStore) Upsert(mac string, fn func(*Device) error) error {
 	return inTx(ctx, s.db, func(c *sql.Conn) error {
 		d, err := scanDevice(c.QueryRowContext(ctx, `SELECT `+deviceCols+` FROM devices WHERE mac = ?`, mac))
 		if errors.Is(err, ErrNotFound) {
-			d = &Device{MAC: mac, Kind: "shared"}
+			d = &Device{MAC: mac, Kind: "shared", SlotAuto: true}
 		} else if err != nil {
 			return err
 		}
@@ -120,7 +121,16 @@ func (s *DeviceStore) Upsert(mac string, fn func(*Device) error) error {
 			return err
 		}
 		d.MAC = mac
-		_, err = c.ExecContext(ctx, `INSERT OR REPLACE INTO devices (`+deviceCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, deviceArgs(d)...)
+		_, err = c.ExecContext(ctx, deviceUpsertSQL, deviceArgs(d)...)
 		return err
 	})
 }
+
+// Only a MAC conflict updates a record. A conflicting UNIQUE slot must fail,
+// never remove the other board as SQLite INSERT OR REPLACE would do.
+const deviceUpsertSQL = `INSERT INTO devices (` + deviceCols + `) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+ ON CONFLICT(mac) DO UPDATE SET name=excluded.name,kind=excluded.kind,slot=excluded.slot,
+ capacity_mbps=excluded.capacity_mbps,capacity_measured_at=excluded.capacity_measured_at,
+ capacity_active_streams=excluded.capacity_active_streams,lat=excluded.lat,lon=excluded.lon,
+ wifi_password_enc=excluded.wifi_password_enc,notes=excluded.notes,maps_url=excluded.maps_url,
+ slot_auto=excluded.slot_auto`

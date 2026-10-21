@@ -32,6 +32,7 @@ func newTestServer(t *testing.T) (*server, *http.ServeMux) {
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
 	mux.HandleFunc("/webhook/payment", s.handlePayment)
 	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
+	mux.HandleFunc("/api/slots", s.requireAdmin(s.handleSlots))
 	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
 	return s, mux
 }
