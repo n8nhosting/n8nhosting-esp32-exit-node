@@ -200,6 +200,23 @@ async function noPageOverflow(page) {
   await page.keyboard.press('Escape');
   await page.locator('nav a[data-view="users"]').click();
   await page.locator('#utbl[data-loaded="true"]').waitFor();
+  const createdUser=await fetch(meta.url+'/api/users',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({username:'qa-unassigned',password:'fixture-only-password'})});
+  assert.equal(createdUser.status,201);
+  await page.locator('[data-refresh]').click();
+  await page.locator('.user-assignment[data-user="qa-unassigned"]').waitFor();
+  assert.equal(await page.locator('.user-assignment[data-user="qa-unassigned"]').innerText(),'Assign board');
+  assert.ok(await page.getByRole('button',{name:'Change board',exact:true}).count()>0);
+  for(const width of [1440,375]){
+    await page.setViewportSize({width,height:width===375?812:900});await noPageOverflow(page);
+    const controls=await page.locator('.user-device').evaluateAll(groups=>groups.map(group=>{const info=group.querySelector('.user-device-info').getBoundingClientRect(),button=group.querySelector('button').getBoundingClientRect();return {height:button.height,gap:button.top-info.bottom};}));
+    assert.ok(controls.every(c=>c.height>=44&&c.gap>=11),JSON.stringify(controls));
+    await page.screenshot({path:path.join(out,width===375?'users-mobile.png':'users-desktop.png'),fullPage:true});
+  }
+  await page.locator('.user-assignment[data-user="qa-unassigned"]').click();
+  await page.locator('#amodal').waitFor({state:'visible'});
+  assert.match(await page.locator('#amTitle').innerText(),/qa-unassigned/);
+  await page.locator('#amCancel').click();
+  ok('Users Assign board / Change board are separated 44px buttons and open the existing picker on desktop/mobile');
   await noPageOverflow(page);
   await page.screenshot({path: path.join(out, 'users-mobile.png')});
   await page.locator('nav a[data-view="overview"]').click();

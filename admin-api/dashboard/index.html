@@ -167,6 +167,8 @@
   .health-hint{max-width:230px;font-size:13px;line-height:1.6;margin-top:4px;color:var(--muted)}
   .health-hint button{margin-top:6px}
   .row-actions{flex-wrap:wrap;white-space:normal}.row-actions .assign-board{min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap}
+  .user-device{display:grid;justify-items:start;gap:12px;min-width:140px;max-width:260px}.user-device-info{display:grid;gap:2px;overflow-wrap:anywhere;min-width:0}.user-device-info .subline{margin:0}
+  button.user-assignment{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap;text-decoration:none}
   .drawer-sheet{min-height:0;overflow:hidden}.drawer-head{flex:none;padding:20px 24px}.drawer-head .identity{overflow-wrap:anywhere}
   .drawer-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
   .drawer-tabs button,.editor-tabs button{background:transparent;color:var(--muted);font-size:12px;font-weight:500;min-height:44px;padding:8px 4px;border-radius:8px}
@@ -332,7 +334,7 @@
 <script>
 const i18n = {
   name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
-  edit:'Edit', reveal:'Reveal', unmeasured:'Speed not measured', assign:'assign\u2026', change:'change',
+  edit:'Edit', reveal:'Reveal', unmeasured:'Speed not measured', assign:'Assign board', change:'Change board',
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
   coordHint:'Blank fields keep the current position. Use Clear position to remove the stored pin.',
@@ -486,8 +488,8 @@ document.addEventListener('change',e=>{const k=e.target.dataset.sort;if(k){sorts
 function renderCurrentRows(k){if(k==='devices')patchRows(k,window._nodes||[],deviceRow);else patchRows(k,[...usersByName.values()],userRow);}
 function userRow(u){
   const un=esc(u.username),dv=(window._devByMac||{})[u.device_mac],usage=Number(u.usage_gb)||0,over=u.quota_gb>0&&usage>=u.quota_gb,st=u.status||(!u.enabled?'disabled':u.expires_at&&Date.parse(u.expires_at)<Date.now()?'expired':over?'over_quota':'active');
-  const dev=u.device_mac?`<a href="#/devices/${encodeURIComponent(u.device_mac)}">${esc(dv?.name||u.device_mac)}</a><div class="subline mono">${dv?.slot?':'+esc(slotPort(dv.slot)):'No slot'}</div>`:'<span class="muted">Shared pool :3128</span>';
-  return `<td><strong class="mono">${un}</strong>${u.note?`<div class="subline">${esc(u.note)}</div>`:''}</td><td>${statusPill(st)}</td><td>${u.rate_mbps>0?esc(u.rate_mbps)+' Mbps':'≤ capacity'}</td><td>${usage.toFixed(2)} / ${u.quota_gb>0?esc(u.quota_gb):'∞'} GB<div class="usagebar ${over?'over':''}"><i style="width:${u.quota_gb>0?Math.min(100,usage/u.quota_gb*100):0}%"></i></div></td><td>${expiryLabel(u.expires_at)}</td><td>${dev}<button type="button" class="link" data-act="assign" data-user="${un}">${esc(T(u.device_mac?'change':'assign'))}</button></td><td><div class="row-actions"><button type="button" class="sec" data-act="copy" data-user="${un}">${esc(T('connection'))}</button><button type="button" class="sec" data-act="edit" data-user="${un}">${esc(T('edit'))}</button>${moreBtn('user',un,u.username)}</div></td>`;
+  const dev=u.device_mac?`<a href="#/devices/${encodeURIComponent(u.device_mac)}">${esc(dv?.name||u.device_mac)}</a><div class="subline mono">${dv?.slot?':'+esc(slotPort(dv.slot)):'No slot'}</div>`:'<span class="muted">Shared pool</span><span class="mono muted">:3128</span>';
+  return `<td><strong class="mono">${un}</strong>${u.note?`<div class="subline">${esc(u.note)}</div>`:''}</td><td>${statusPill(st)}</td><td>${u.rate_mbps>0?esc(u.rate_mbps)+' Mbps':'≤ capacity'}</td><td>${usage.toFixed(2)} / ${u.quota_gb>0?esc(u.quota_gb):'∞'} GB<div class="usagebar ${over?'over':''}"><i style="width:${u.quota_gb>0?Math.min(100,usage/u.quota_gb*100):0}%"></i></div></td><td>${expiryLabel(u.expires_at)}</td><td><div class="user-device"><div class="user-device-info">${dev}</div><button type="button" class="user-assignment" data-act="assign" data-user="${un}">${esc(T(u.device_mac?'change':'assign'))}</button></div></td><td><div class="row-actions"><button type="button" class="sec" data-act="copy" data-user="${un}">${esc(T('connection'))}</button><button type="button" class="sec" data-act="edit" data-user="${un}">${esc(T('edit'))}</button>${moreBtn('user',un,u.username)}</div></td>`;
 }
 async function viewUsers(){
   if(activeView!=='users')return;const epoch=routeEpoch;

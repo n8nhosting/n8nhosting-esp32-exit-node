@@ -240,3 +240,17 @@ Production rollout of this follow-up:
 - Viewport overrides were reset. Production screenshots are gitignored local
   artifacts: `production-{devices,settings,assign,flasher,deployment}-refinement.jpg`
   and `production-flasher-mobile-refinement.jpg` in `output/playwright/`.
+
+## Users assignment button correction (2026-10-22)
+
+The earlier Assign refinement covered Devices only; Users still had small
+inline assign/change links touching the endpoint text. Users now groups the
+board/pool name and port above a separate primary **Assign board** or **Change
+board** button, with a 12px gap and minimum 44px height. Both buttons retain the
+existing user-first picker and backend assignment behavior.
+
+Local verification: Dashboard Go marker test passes; browser regression passes,
+including a real isolated unassigned account, both button labels, measured
+spacing/height at 1440px and 375px, no page overflow and opening the correct
+user's existing picker. Impeccable detector returns `[]`. Local screenshots are
+`output/playwright/users-desktop.png` and `users-mobile.png`.
