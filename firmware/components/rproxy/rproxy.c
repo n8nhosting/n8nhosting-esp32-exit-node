@@ -687,7 +687,11 @@ static int cpu_load_pct(void)
     for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++)
         idle[i] = (uint32_t)ulTaskGetIdleRunTimeCounterForCore(i);
     int pct = -1;
-    if (prev_t) {
+    /* A gap much longer than the report period (a link outage) resets the
+     * baseline instead of producing a number: the idle counters may have
+     * wrapped meanwhile, and "load over the outage" is not what the
+     * dashboard says it shows. The next sample, 30 s later, is clean. */
+    if (prev_t && now - prev_t < 4 * STATS_PERIOD_US) {
         uint64_t dt = (uint64_t)(now - prev_t) * CONFIG_FREERTOS_NUMBER_OF_CORES;
         uint64_t di = 0;
         for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++) di += (uint32_t)(idle[i] - prev_idle[i]);
