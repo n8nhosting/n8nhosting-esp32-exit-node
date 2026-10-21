@@ -199,6 +199,27 @@ class FwReleaseTest(unittest.TestCase):
         self.assertEqual(e["commit"], "bbbbbbb")
         self.assertEqual(e["title"], "first", "notes survive a re-add")
 
+    def test_chip_suffixed_version_files_under_the_release(self):
+        # firmware 2.4.22 reports 2.4.22-s3 / 2.4.22-c3 so the dashboard FW column
+        # and the flasher say which chip an image is for; the release key is 2.4.22
+        fw.cmd_add(Args(make_build(self.tmp.name, "esp32s3", "2.4.22-s3")))
+        fw.cmd_add(Args(make_build(self.tmp.name, "esp32c3", "2.4.22-c3", filler=b"\xbb")))
+        self.assertTrue(os.path.exists(os.path.join(self.rel_dir, "2.4.22", "esp32c3", APP)))
+        self.assertFalse(os.path.exists(os.path.join(self.rel_dir, "2.4.22-c3")))
+        e = self.entry("2.4.22")
+        self.assertEqual(e["reports"], "2.4.22-s3", "legacy readers see the S3 string")
+        self.assertEqual(e["targets"]["esp32s3"]["reports"], "2.4.22-s3")
+        self.assertEqual(e["targets"]["esp32c3"]["reports"], "2.4.22-c3")
+        self.assertEqual(fw.split_version("2.4.22-c6"), ("2.4.22", "esp32c6"))
+        self.assertEqual(fw.split_version("2.4.21-mux1.4"), ("2.4.21-mux1.4", None))
+
+    def test_chip_suffix_must_match_the_build_target(self):
+        # an esp32s3 build directory holding an image that says -c3 is a mix-up
+        b = make_build(self.tmp.name, "esp32s3", "2.4.22-c3")
+        with self.assertRaises(SystemExit):
+            fw.cmd_add(Args(b))
+        self.assertFalse(os.path.exists(os.path.join(self.rel_dir, "2.4.22")))
+
     def test_add_unknown_target_refused(self):
         b = make_build(self.tmp.name, "esp32p4", "2.4.22")
         with self.assertRaises(SystemExit):

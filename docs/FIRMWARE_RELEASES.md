@@ -18,6 +18,16 @@ flasher/manifest.json                  web flasher default = latest, both chips
 Releases up to 2.4.21-mux1.4 keep their four bins at the version root; the
 tool reads them as `esp32s3` and never moves them.
 
+**The version a board reports carries its chip** (`firmware/CMakeLists.txt`):
+release `2.4.22` is `2.4.22-s3` on the S3 N16R8, `2.4.22-c3` on the C3 Super
+Mini, `2.4.22-c6` on a future C6 — so the dashboard FW column, the broker log
+and the flasher never leave a doubt about which image a board runs. The tool
+files all of them under `releases/2.4.22/<target>/`, records each string in
+`targets.<target>.reports`, and refuses an image whose suffix disagrees with
+the build directory's target (a C3 bin in the S3 folder). The dashboard sends
+the per-chip string as the OTA target version, so a push is only "ok" when the
+board comes back reporting exactly that.
+
 The flasher page (`flash.<domain>`) has a version picker for USB flashing and
 ESP Web Tools picks the build matching the chip it detects; the dashboard's
 **Update FW** lists the same releases and sends each board the image for its

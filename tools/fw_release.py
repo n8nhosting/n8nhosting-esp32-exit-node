@@ -69,10 +69,23 @@ BUILD_PATHS = {"bootloader.bin": ["bootloader/bootloader.bin", "bootloader.bin"]
 VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$")
 
 # IDF target -> ESP Web Tools chipFamily. Adding a board means adding a row.
-CHIP_FAMILY = {"esp32s3": "ESP32-S3", "esp32c3": "ESP32-C3"}
+CHIP_FAMILY = {"esp32s3": "ESP32-S3", "esp32c3": "ESP32-C3", "esp32c6": "ESP32-C6"}
 LEGACY_TARGET = "esp32s3"   # releases before 2.4.22 (bins at the version root)
 # where `latest` puts each target's bins under flasher/firmware/
-LATEST_SUBDIR = {"esp32s3": "", "esp32c3": "esp32c3"}
+LATEST_SUBDIR = {"esp32s3": "", "esp32c3": "esp32c3", "esp32c6": "esp32c6"}
+# The version a board reports carries its chip (firmware/CMakeLists.txt:
+# 2.4.22-s3, 2.4.22-c3, 2.4.22-c6); the release is filed under the part
+# before the suffix. suffix -> target
+CHIP_SUFFIX = {t.replace("esp32", "") or "esp32": t for t in CHIP_FAMILY}
+
+
+def split_version(reported):
+    """'2.4.22-c3' -> ('2.4.22', 'esp32c3'); a version without a chip suffix
+    (every release before 2.4.22) -> (reported, None)."""
+    base, sep, suffix = reported.rpartition("-")
+    if sep and suffix in CHIP_SUFFIX:
+        return base, CHIP_SUFFIX[suffix]
+    return reported, None
 
 
 def app_desc(path):
@@ -185,7 +198,9 @@ def entry_for(version, old=None):
         "sha256": main["sha256"],
         "url": main["url"],
         "manifest": f"firmware/releases/{version}/manifest.json",
-        "targets": {t: {k: v for k, v in info.items() if k != "reports"} for t, info in sorted(tinfo.items())},
+        # per target: url/size/sha256/built and the exact string that board
+        # reports (2.4.22-c3), which the dashboard sends as the OTA target
+        "targets": {t: dict(info) for t, info in sorted(tinfo.items())},
         "title": old.get("title", ""),     # one-line headline (Thai) on the flasher page
         "notes": old.get("notes", ""),     # what changed, shown in the changelog + dashboard
         "status": old.get("status", ""),   # stable | testing | legacy ("" = stable)
@@ -226,9 +241,13 @@ def cmd_add(a):
                 break
         else:
             sys.exit(f"missing {name} in {a.build_dir}")
-    version = app_desc(src[APP])["version"]
+    reported = app_desc(src[APP])["version"]
+    version, suffix_target = split_version(reported)
+    if suffix_target and suffix_target != target:
+        sys.exit(f"{a.build_dir}: the image says it is {reported} but the build directory is for "
+                 f"{target} — wrong bin in the wrong folder, refusing")
     if not VERSION_RE.match(version):
-        sys.exit(f"bad version string in image: {version!r}")
+        sys.exit(f"bad version string in image: {reported!r}")
     if targets_in(version).get(LEGACY_TARGET) == "" and target == LEGACY_TARGET and not a.force:
         sys.exit(f"release {version} exists in the pre-2.4.22 layout; bump PROJECT_VER (or --force)")
     dst = os.path.join(REL_DIR, version, target)

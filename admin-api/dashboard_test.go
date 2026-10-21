@@ -43,6 +43,7 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`targets[chip]`,                  // OTA picker chooses the image built for the board's chip
 		`target: chip`,                   // and tells the broker which chip the image is for
 		`/^https:\/\//.test(custom)`,     // custom OTA URLs must be https (unsigned images)
+		`tgt.reports`,                    // the version a board reports carries its chip (2.4.22-c3)
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

@@ -476,8 +476,10 @@ async function openFw(macs, title){
   // which chips a release has images for: 2.4.22+ lists them in r.targets,
   // older releases are S3-only
   const targetsOf = r => r.targets ? r.targets : (r.url ? {esp32s3:{url:r.url}} : {});
+  // every string a board on this release may report (2.4.22-s3, 2.4.22-c3, …)
+  const reportsOf = r => [r.reports||r.version, ...Object.values(targetsOf(r)).map(t=>t.reports)].filter(Boolean);
   const opts = idx.releases.map((r,i)=>{
-    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', cur.has(r.reports||r.version)?'current':'', r.protocol, Object.keys(targetsOf(r)).join('/')].filter(Boolean).join(', ');
+    const tags=[r.version===idx.latest?'latest':'', r.status==='testing'?'testing':'', reportsOf(r).some(v=>cur.has(v))?'current':'', r.protocol, Object.keys(targetsOf(r)).join('/')].filter(Boolean).join(', ');
     return `<option value="${i}" ${r.version===idx.latest?'selected':''}>${esc(r.version)}${r.title?' · '+esc(r.title):''} (${esc(tags)})</option>`;
   });
   opts.push('<option value="custom">Custom URL…</option>');
@@ -499,8 +501,9 @@ async function openFw(macs, title){
       // each board gets the image built for its own chip; the broker refuses a mismatch too
       const chip = ((window._devs||{})[mac]||{}).chip||'esp32s3';
       let url = custom;
-      if(rel){ const targets = targetsOf(rel), tgt = targets[chip]; if(!tgt){ failed.push(mac+': no '+chip+' image in '+rel.version); continue; } url = flashBase()+'/'+tgt.url; }
-      try{ await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url, version, target: chip})}); }
+      let want = version;
+      if(rel){ const targets = targetsOf(rel), tgt = targets[chip]; if(!tgt){ failed.push(mac+': no '+chip+' image in '+rel.version); continue; } url = flashBase()+'/'+tgt.url; if(tgt.reports) want = tgt.reports; /* 2.4.22-c3: what that board will report */ }
+      try{ await api('/api/devices/'+encodeURIComponent(mac)+'/ota',{method:'POST',body:JSON.stringify({url, version: want, target: chip})}); }
       catch(e){ failed.push(mac+': '+e.message); }
     }
     if(failed.length){ $('#fwErr').textContent='Failed: '+failed.join('; '); return; }

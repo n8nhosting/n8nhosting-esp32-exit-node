@@ -3,32 +3,34 @@
   "releases": [
     {
       "version": "2.4.22",
-      "reports": "2.4.22",
+      "reports": "2.4.22-s3",
       "protocol": "mux1",
-      "built": "Oct 21 2026 17:11:11",
+      "built": "Oct 21 2026 17:30:36",
       "added": "2026-10-21",
       "size": 1264720,
-      "sha256": "2add2188b1acac9ba510de9899db69dc62ad63fd1f32554a31abe624189f582a",
+      "sha256": "742f846f500ece77d1ad6d7456bfcf35cf77fbd1c138705e2716219fdec51395",
       "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.22/manifest.json",
       "targets": {
         "esp32c3": {
           "url": "firmware/releases/2.4.22/esp32c3/esp32_nat_router.bin",
           "size": 1216192,
-          "sha256": "4270bb592d9717f59641bbdc20eb0d9a9fd63d5b90e15c0118e15a32459aebfd",
-          "built": "Oct 21 2026 17:09:57"
+          "sha256": "a088321821f2d965b87c419695a3193c78f5103187bc0003a0f15bf7719bb963",
+          "built": "Oct 21 2026 17:29:25",
+          "reports": "2.4.22-c3"
         },
         "esp32s3": {
           "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
           "size": 1264720,
-          "sha256": "2add2188b1acac9ba510de9899db69dc62ad63fd1f32554a31abe624189f582a",
-          "built": "Oct 21 2026 17:11:11"
+          "sha256": "742f846f500ece77d1ad6d7456bfcf35cf77fbd1c138705e2716219fdec51395",
+          "built": "Oct 21 2026 17:30:36",
+          "reports": "2.4.22-s3"
         }
       },
       "title": "2.4.22: รองรับ ESP32-C3 Super Mini, ตัด web UI เหลือหน้า setup, OTA แบบปิด link ก่อนโหลด",
       "notes": "firmware ชุดเดียวสำหรับ S3 N16R8 และ C3 Super Mini (image แยกตามชิป) ตัด OLED/PCAP/mDNS และหน้าเว็บจัดการออก (เหลือหน้าตั้ง WiFi ตอน AP setup) HELLO บอก window/frame/chip ให้ broker, OTA ตัด stream และปิด link ก่อนดาวน์โหลด (รับเฉพาะ URL https), ปิด WiFi power save ตอน rproxy ทำงาน ต้อง deploy broker 2.4.22 ก่อน: broker เก่ารับ link ได้แต่จะหลุดเมื่อมีเฟรมใหญ่ครั้งแรก (C3 ใช้ window 8 KB / frame 4 KB) รุ่นทดสอบ",
       "status": "testing",
-      "commit": "c10c2b2"
+      "commit": "d878ecf"
     },
     {
       "version": "2.4.21-mux1.4",
@@ -45,7 +47,8 @@
           "url": "firmware/releases/2.4.21-mux1.4/esp32_nat_router.bin",
           "size": 1395216,
           "sha256": "ea3062612facedba55162cca077baba6ca146380353002af0eec0b542c2ace25",
-          "built": "Oct 21 2026 01:47:46"
+          "built": "Oct 21 2026 01:47:46",
+          "reports": "2.4.21-mux1.4"
         }
       },
       "title": "อัปโหลดเร็วขึ้น + ต่อ broker ด้วยโดเมน (ทดลอง)",
@@ -68,7 +71,8 @@
           "url": "firmware/releases/2.4.21-mux1.3/esp32_nat_router.bin",
           "size": 1393872,
           "sha256": "82c239f9e02ad285962267bceb2e2bf33aae1e345fa297d8cf1568151cb8dacb",
-          "built": "Oct 21 2026 01:20:16"
+          "built": "Oct 21 2026 01:20:16",
+          "reports": "2.4.21-mux1.3"
         }
       },
       "title": "ถอยกลับเวอร์ชันเดิมเองอัตโนมัติ (auto-rollback)",
@@ -90,7 +94,8 @@
           "url": "firmware/releases/2.4.21-mux1.2/esp32_nat_router.bin",
           "size": 1393024,
           "sha256": "b01751ace58d9451fdd196085af5b4c86bc204104707965b0d7a3d2377542111",
-          "built": "Oct 21 2026 00:55:26"
+          "built": "Oct 21 2026 00:55:26",
+          "reports": "2.4.21-mux1.2"
         }
       },
       "title": "เร็วขึ้นต่อการเชื่อมต่อ (บัฟเฟอร์ TCP 64 KB)",
@@ -113,7 +118,8 @@
           "url": "firmware/releases/2.4.21-mux1.1/esp32_nat_router.bin",
           "size": 1393008,
           "sha256": "17f689e8c85275c962d2aa689afb5e0023ceffc95de235f474819b5e3623b04c",
-          "built": "Oct 20 2026 22:48:49"
+          "built": "Oct 20 2026 22:48:49",
+          "reports": "2.4.21-mux1.1"
         }
       },
       "title": "40 การเชื่อมต่อพร้อมกันบนลิงก์เดียว",
@@ -136,7 +142,8 @@
           "url": "firmware/releases/2.4.21-mux1/esp32_nat_router.bin",
           "size": 1392608,
           "sha256": "09b138eb2f16d4def5ca0fc952b0a51b84de5565c4b190b1fd9c0f40a46309d8",
-          "built": "Oct 20 2026 21:38:50"
+          "built": "Oct 20 2026 21:38:50",
+          "reports": "2.4.21-mux1"
         }
       },
       "title": "ลิงก์ TLS เส้นเดียว (mux) รุ่นแรก",
@@ -159,7 +166,8 @@
           "url": "firmware/releases/2.4.21-pool/esp32_nat_router.bin",
           "size": 1413520,
           "sha256": "4cc1a12d52c3c76c5c6e0d583f24fdfc654beef2857b23717628a6878e0e61b6",
-          "built": "Oct 20 2026 18:49:52"
+          "built": "Oct 20 2026 18:49:52",
+          "reports": "2.4.21"
         }
       },
       "title": "v1.2 แบบเก่า (pool, ไม่มี mux)",
