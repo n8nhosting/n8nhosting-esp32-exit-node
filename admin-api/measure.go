@@ -166,7 +166,7 @@ func measureDiagnosticUsing(ctx context.Context, proxyURL, target string, parall
 					r.Retries++ // only count the retry actually about to run
 				}
 				if err != nil {
-					if errors.Is(ctx.Err(), context.DeadlineExceeded) && r.Bytes >= measureMinBytes && !errors.Is(err, errMeasureConnectUnavailable) {
+					if expectedMeasureDeadline(ctx, err) && r.Bytes >= measureMinBytes && !errors.Is(err, errMeasureConnectUnavailable) {
 						break
 					}
 					r.Error = strings.ReplaceAll(err.Error(), proxyURL, "proxy")
@@ -225,6 +225,13 @@ func waitMeasureRollover(ctx context.Context, delay time.Duration) bool {
 	}
 }
 
+// A concurrent deadline does not turn an unrelated network/body failure into
+// a valid partial measurement. net/http can wrap its cancellation error; only
+// those typed context errors count, and only when our deadline actually ended.
+func expectedMeasureDeadline(ctx context.Context, err error) bool {
+	return errors.Is(ctx.Err(), context.DeadlineExceeded) && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled))
+}
+
 // measureProxyURL is gost's slot service for slot, as admin-api reaches it
 // inside the compose network. A var so tests can point it at a fake proxy.
 var measureProxyURL = func(slot int) string {
@@ -262,13 +269,23 @@ func measureViaProxy(ctx context.Context, proxyURL, targetURL string, maxBytes i
 	if resp.StatusCode/100 != 2 {
 		return 0, 0, fmt.Errorf("HTTP %s", resp.Status)
 	}
+	return measureResponseBody(ctx, resp.Body, maxBytes)
+}
+
+func measureResponseBody(ctx context.Context, body io.Reader, maxBytes int64) (mbps float64, bytes int64, err error) {
 	start := time.Now()
-	bytes, err = io.Copy(io.Discard, io.LimitReader(resp.Body, maxBytes))
+	bytes, err = io.Copy(io.Discard, io.LimitReader(body, maxBytes))
 	secs := time.Since(start).Seconds()
-	if err != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if err != nil && !expectedMeasureDeadline(ctx, err) {
 		return 0, bytes, err
 	}
 	if bytes < measureMinBytes || secs <= 0 {
+		if err != nil {
+			// A timed worker may already have meaningful data from previous
+			// objects. Keep this final partial read's deadline cause so its
+			// aggregate policy can decide; a single short measurement still fails.
+			return 0, bytes, fmt.Errorf("too little data (%d bytes): %w", bytes, err)
+		}
 		return 0, bytes, fmt.Errorf("too little data (%d bytes)", bytes)
 	}
 	return float64(bytes) * 8 / secs / 1e6, bytes, nil
