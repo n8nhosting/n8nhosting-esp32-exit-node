@@ -2,6 +2,37 @@
   "latest": "2.4.21-mux1.2",
   "releases": [
     {
+      "version": "2.4.25",
+      "reports": "2.4.25-s3",
+      "protocol": "mux1",
+      "built": "Oct 22 2026 05:29:04",
+      "added": "2026-10-22",
+      "size": 1266256,
+      "sha256": "8783174e44e82a8f9a14fa438ced243b9816bbd83388734749bbe5af4bb6fdf5",
+      "url": "firmware/releases/2.4.25/esp32s3/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.25/manifest.json",
+      "targets": {
+        "esp32c3": {
+          "url": "firmware/releases/2.4.25/esp32c3/esp32_nat_router.bin",
+          "size": 1217584,
+          "sha256": "141e47d7a7ff26c9f58770d24090062b3a53fa0aaf87b562e739730df59926c2",
+          "built": "Oct 22 2026 05:25:31",
+          "reports": "2.4.25-c3"
+        },
+        "esp32s3": {
+          "url": "firmware/releases/2.4.25/esp32s3/esp32_nat_router.bin",
+          "size": 1266256,
+          "sha256": "8783174e44e82a8f9a14fa438ced243b9816bbd83388734749bbe5af4bb6fdf5",
+          "built": "Oct 22 2026 05:29:04",
+          "reports": "2.4.25-s3"
+        }
+      },
+      "title": "WiFi signal reports and bounded OTA",
+      "notes": "Testing only: optional RSSI in 30-second STATS; OTA uses a 180-second overall deadline and 10-second fail-safe grace. Hardware acceptance is pending. Latest and stable are unchanged.",
+      "status": "testing",
+      "commit": "13cf3fd"
+    },
+    {
       "version": "2.4.24",
       "reports": "2.4.24-s3",
       "protocol": "mux1",

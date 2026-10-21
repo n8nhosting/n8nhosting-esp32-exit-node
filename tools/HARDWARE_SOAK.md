@@ -62,6 +62,16 @@ for the configured duration; it does not assert a hardware pass or change
 testing/stable/latest status. Review results and run any approved load tests
 separately. A restarted recorder begins a new evidence directory.
 
+Firmware 2.4.25 is a testing release. Its normal overall OTA budget is
+180 seconds, configurable at build time from 30 to 600 seconds. Normal
+timeouts abort the incomplete image and reconnect without resetting. If an
+IDF blocking operation remains stuck, a separate fail-safe restarts the board
+after an additional 10 seconds: **190 seconds with the default setting**.
+The fail-safe does not touch a live TLS handle from another task. Complete
+image/chip verification and the existing rollback mechanism remain in IDF;
+the current boot partition stays selected until verified finish. During a
+canary, record the actual reconnect and reported firmware before acceptance.
+
 Local recorder tests use a simulated short duration and fake responses:
 
 ```powershell
