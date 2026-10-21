@@ -44,6 +44,9 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`target: chip`,                   // and tells the broker which chip the image is for
 		`/^https:\/\//.test(custom)`,     // custom OTA URLs must be https (unsigned images)
 		`tgt.reports`,                    // the version a board reports carries its chip (2.4.22-c3)
+		`id="dmMaps"`,                    // device editor: paste a Google Maps share link
+		`/api/geo/resolve`,               // ... which the server turns into lat/lon
+		`google.com/maps?q=`,             // the location cell opens Google Maps
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)

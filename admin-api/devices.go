@@ -75,6 +75,7 @@ type deviceView struct {
 	Lat                   *float64 `json:"lat"`
 	Lon                   *float64 `json:"lon"`
 	WifiPasswordSet       bool     `json:"wifi_password_set"` // the password itself is never listed
+	MapsURL               string   `json:"maps_url"`          // the pasted Google Maps link, "" = none
 
 	// the broker routes this board differently from the record (slot, or pool
 	// flag when the broker reports one); saving the slot again re-pushes it
@@ -149,6 +150,7 @@ func (s *server) buildDeviceViews(nodes []brokerNode) []deviceView {
 			v.Slot, v.CapacityMbps = d.Slot, d.CapacityMbps
 			v.CapacityMeasuredAt, v.CapacityActiveStreams = d.CapacityMeasuredAt, d.CapacityActiveStreams
 			v.Lat, v.Lon = d.Lat, d.Lon
+			v.MapsURL = d.MapsURL
 			v.WifiPasswordSet = d.WifiPasswordEnc != ""
 		}
 		v.Port = slotPort(v.Slot)
@@ -243,10 +245,21 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		Notes        *string  `json:"notes"`
 		WifiPassword *string  `json:"wifi_password"`
 		Slot         *int     `json:"slot"`
+		MapsURL      *string  `json:"maps_url"` // Google Maps share link; resolved into lat/lon here, "" clears the link
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad json"})
 		return
+	}
+	if in.MapsURL != nil && strings.TrimSpace(*in.MapsURL) != "" {
+		// a pasted link wins over typed coordinates; a link we cannot read
+		// saves nothing, so the operator sees the error with the form intact
+		lat, lon, status, msg := s.resolveMapsURL(r.Context(), *in.MapsURL)
+		if status != http.StatusOK {
+			writeJSON(w, status, map[string]string{"error": msg})
+			return
+		}
+		in.Lat, in.Lon = &lat, &lon
 	}
 	if in.Kind != nil && *in.Kind != "shared" && *in.Kind != "dedicated" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be shared or dedicated"})
@@ -317,6 +330,9 @@ func (s *server) handlePutDevice(w http.ResponseWriter, r *http.Request, mac str
 		}
 		if in.Notes != nil {
 			d.Notes = *in.Notes
+		}
+		if in.MapsURL != nil {
+			d.MapsURL = strings.TrimSpace(*in.MapsURL)
 		}
 		if in.WifiPassword != nil {
 			if *in.WifiPassword == "" {

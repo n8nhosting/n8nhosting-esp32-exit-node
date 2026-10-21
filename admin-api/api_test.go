@@ -17,8 +17,10 @@ import (
 func newTestServer(t *testing.T) (*server, *http.ServeMux) {
 	st := openTestStore(t, filepath.Join(t.TempDir(), "users.json"))
 	s := &server{store: st, devices: NewDeviceStore(st.DB()), adminToken: "admintok", payToken: "paytok", usageMode: "delta", lastSeen: map[string]int64{},
-		geo: &geoCache{data: map[string]geoEntry{}, url: "http://127.0.0.1:1/"}}
+		geo:  &geoCache{data: map[string]geoEntry{}, url: "http://127.0.0.1:1/"},
+		maps: newMapsResolver()} // tests that resolve links swap in fakeMaps()
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/geo/resolve", s.requireAdmin(s.handleGeoResolve))
 	mux.HandleFunc("/gost/auth", s.handleAuth)
 	mux.HandleFunc("/gost/limiter", s.handleLimiter)
 	mux.HandleFunc("/gost/observer", s.handleObserver)

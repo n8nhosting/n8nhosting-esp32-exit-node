@@ -47,6 +47,7 @@ type server struct {
 	lastSeen   map[string]int64
 	lastSeenMu sync.Mutex
 	geo        *geoCache
+	maps       *mapsResolver // Google Maps share link -> coordinates (maps.go)
 	// admitMu holds a capacity check (admit) and the binding it allows
 	// together, so two assigns cannot both take the last seat
 	admitMu sync.Mutex
@@ -79,6 +80,7 @@ func main() {
 		usageMode:  envOr("USAGE_MODE", "delta"),
 		lastSeen:   map[string]int64{},
 		geo:        newGeoCache(),
+		maps:       newMapsResolver(),
 	}
 	if s.adminToken == "" {
 		log.Fatal("ADMIN_TOKEN is required")
@@ -105,6 +107,7 @@ func main() {
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
 	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
 	mux.HandleFunc("/api/devices/", s.requireAdmin(s.handleDeviceAction))
+	mux.HandleFunc("/api/geo/resolve", s.requireAdmin(s.handleGeoResolve))
 
 	// payment webhook
 	mux.HandleFunc("/webhook/payment", s.handlePayment)

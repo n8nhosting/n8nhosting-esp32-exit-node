@@ -125,6 +125,9 @@
     <div class="field"><label for="dmLat">Latitude</label><input id="dmLat" type="number" step="any" min="-90" max="90" /></div>
     <div class="field"><label for="dmLon">Longitude</label><input id="dmLon" type="number" step="any" min="-180" max="180" /></div>
     <div class="muted" id="dmCoordHint" style="margin:-6px 0 12px;font-size:.78rem"></div>
+    <div class="field"><label for="dmMaps">Google Maps link <span class="muted" id="dmMapsHint"></span></label>
+      <div style="display:flex;gap:6px"><input id="dmMaps" autocomplete="off" placeholder="https://maps.app.goo.gl/…" style="flex:1;min-width:0" /><button type="button" class="sec" id="dmMapsGo"></button></div></div>
+    <div class="muted" id="dmMapsMsg" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="field"><label for="dmWifi">WiFi password <span class="muted" id="dmWifiHint"></span></label><input id="dmWifi" type="password" autocomplete="new-password" /></div>
     <div class="field inline"><label for="dmWifiClear"><input id="dmWifiClear" type="checkbox" /> <span id="dmWifiClearLbl"></span></label></div>
     <div class="field"><label for="dmNotes">Notes</label><textarea id="dmNotes" rows="3"></textarea></div>
@@ -153,7 +156,8 @@ const i18n = {
   save:'Save', cancel:'Cancel', editDevice:'Edit device', wifiSet:'(set, blank = keep)',
   wifiClear:'Clear stored WiFi password', notSet:'not set', revealFailed:'Reveal failed: ',
   coordHint:'Coordinates cannot be cleared yet; a blank field keeps the current value.',
-  mbps:'Mbps', openMap:'Open in OpenStreetMap',
+  mbps:'Mbps', openMap:'Open in Google Maps', openMapApprox:'Approximate (geo-IP) — open in Google Maps',
+  mapsHint:'(paste a share link, then Find fills the coordinates)', mapsFind:'Find', mapsFinding:'Finding…', mapsFound:'Coordinates filled from the link; Save to keep them.',
   slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
   measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
   justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: ',
@@ -372,9 +376,13 @@ async function viewDevices(){
       const g = n.geo||{};
       const cityLoc = [g.city,g.country].filter(Boolean).join(', ') || '\u2014';
       const hasPos = typeof n.lat==='number' && typeof n.lon==='number';
+      // operator position: the pasted Google Maps link (keeps the place name) or the pin by
+      // coordinates; no position: the geo-IP estimate, marked approximate
+      const gmaps = (la,lo)=>'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo);
+      const hasGeoPos = typeof g.lat==='number' && typeof g.lon==='number' && (g.lat||g.lon);
       const loc = hasPos
-        ? `<a target="_blank" rel="noopener noreferrer" title="${esc(T('openMap'))}" href="https://www.openstreetmap.org/?mlat=${n.lat}&amp;mlon=${n.lon}#map=16/${n.lat}/${n.lon}">${esc(n.lat.toFixed(4)+', '+n.lon.toFixed(4))}</a>`
-        : esc(cityLoc);
+        ? `<a target="_blank" rel="noopener noreferrer" title="${esc(T('openMap'))}" href="${esc(n.maps_url||gmaps(n.lat,n.lon))}">${esc(n.lat.toFixed(4)+', '+n.lon.toFixed(4))}</a>`
+        : (hasGeoPos ? `<a target="_blank" rel="noopener noreferrer" class="muted" title="${esc(T('openMapApprox'))}" href="${esc(gmaps(g.lat,g.lon))}">≈ ${esc(cityLoc)}</a>` : esc(cityLoc));
       const mac = esc(n.mac);
       const users = (n.users&&n.users.length)? n.users.map(esc).join(', ') : '<span class="muted">\u2014</span>';
       const wifi = `<span data-wifi="${mac}">${esc(n.ssid||'\u2014')} ${n.wifi_password_set
@@ -529,6 +537,7 @@ function openDevice(mac, opener){
   $('#dmName').value = d.name||'';
   $('#dmKind').value = d.kind==='dedicated'?'dedicated':'shared';
   $('#dmLat').value = typeof d.lat==='number'?d.lat:''; $('#dmLon').value = typeof d.lon==='number'?d.lon:'';
+  $('#dmMaps').value = d.maps_url||''; $('#dmMapsHint').textContent=T('mapsHint'); $('#dmMapsGo').textContent=T('mapsFind'); $('#dmMapsMsg').textContent='';
   $('#dmWifi').value=''; $('#dmWifiHint').textContent = d.wifi_password_set?T('wifiSet'):'';
   $('#dmWifiClear').checked=false; $('#dmWifiClear').disabled=!d.wifi_password_set;
   $('#dmWifiClearLbl').textContent=T('wifiClear');
@@ -563,6 +572,10 @@ $('#dmSave').addEventListener('click', async ()=>{
   const lat=$('#dmLat').value.trim(), lon=$('#dmLon').value.trim();
   if(lat!=='' && +lat!==d.lat) body.lat = +lat;
   if(lon!=='' && +lon!==d.lon) body.lon = +lon;
+  // a changed Google Maps link is resolved by the server and overrides lat/lon;
+  // an unchanged one is not re-sent, so Find + Save does not resolve twice
+  const maps=$('#dmMaps').value.trim();
+  if(maps!==(d.maps_url||'')) body.maps_url = maps;
   const slot=slotInput();
   if(Number.isNaN(slot) || slot>SLOT_MAX){ $('#dmErr').textContent=T('slotInvalid'); return; }
   // a slot the broker does not hold is always re-sent, so Save repairs the drift
@@ -580,6 +593,18 @@ $('#dmSave').addEventListener('click', async ()=>{
     if(nb) nb.focus();
   }catch(e){ $('#dmErr').textContent=e.message; }
   finally{ $('#dmSave').disabled=false; }
+});
+// Find: resolve the pasted Google Maps link into coordinates (server side —
+// the browser cannot follow the short link's cross-origin redirect).
+$('#dmMapsGo').addEventListener('click', async ()=>{
+  const link=$('#dmMaps').value.trim(); if(!link){ $('#dmMapsMsg').textContent=''; return; }
+  $('#dmMapsGo').disabled=true; $('#dmMapsGo').textContent=T('mapsFinding'); $('#dmMapsMsg').textContent='';
+  try{
+    const r = await api('/api/geo/resolve',{method:'POST',body:JSON.stringify({url:link})});
+    $('#dmLat').value = r.lat; $('#dmLon').value = r.lon;
+    $('#dmMapsMsg').textContent = T('mapsFound')+' ('+(+r.lat).toFixed(5)+', '+(+r.lon).toFixed(5)+')';
+  }catch(e){ $('#dmMapsMsg').textContent = e.message; }
+  finally{ $('#dmMapsGo').disabled=false; $('#dmMapsGo').textContent=T('mapsFind'); }
 });
 // Reveal the WiFi password for 10 s, then hide it again.
 const revealTimers = {};

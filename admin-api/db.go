@@ -42,6 +42,10 @@ var migrations = []string{
 		wifi_password_enc       TEXT NOT NULL DEFAULT '',
 		notes                   TEXT NOT NULL DEFAULT ''
 	)`,
+	// v3: the Google Maps share link the operator pasted for a board's position
+	// (lat/lon are resolved from it server side; the link is kept so the
+	// dashboard can open the original pin with its place name)
+	`ALTER TABLE devices ADD COLUMN maps_url TEXT NOT NULL DEFAULT ''`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

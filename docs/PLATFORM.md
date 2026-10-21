@@ -122,5 +122,9 @@ Every "growth" feature below is secondary to that.
   exist to keep the service out of that market.
 - **Home WiFi passwords are never uploaded from the device** — the operator may
   enter one in the console; it is stored encrypted and shown masked.
-- **Device GPS is operator-entered lat/long** (no GPS module); geo-IP city
+- **Device position is operator-entered** (no GPS module): paste a Google Maps
+  share link (`https://maps.app.goo.gl/…`) in the device editor and the admin
+  API resolves it server side into lat/long (only google hosts are contacted,
+  over TLS, no page body is read); the Devices table links the position to
+  Google Maps (the original pin when a link was pasted); geo-IP city
   remains the hint.

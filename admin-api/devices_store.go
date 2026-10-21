@@ -22,6 +22,7 @@ type Device struct {
 	Lat, Lon              *float64
 	WifiPasswordEnc       string
 	Notes                 string
+	MapsURL               string // Google Maps share link the operator pasted ("" = none)
 }
 
 type DeviceStore struct{ db *sql.DB }
@@ -29,7 +30,7 @@ type DeviceStore struct{ db *sql.DB }
 func NewDeviceStore(db *sql.DB) *DeviceStore { return &DeviceStore{db: db} }
 
 const deviceCols = `mac, name, kind, slot, capacity_mbps, capacity_measured_at,
-	capacity_active_streams, lat, lon, wifi_password_enc, notes`
+	capacity_active_streams, lat, lon, wifi_password_enc, notes, maps_url`
 
 // scanDevice reads one deviceCols row; no row is ErrNotFound. A NULL slot is 0.
 func scanDevice(row interface{ Scan(...any) error }) (*Device, error) {
@@ -37,7 +38,7 @@ func scanDevice(row interface{ Scan(...any) error }) (*Device, error) {
 	var slot sql.NullInt64
 	var lat, lon sql.NullFloat64
 	err := row.Scan(&d.MAC, &d.Name, &d.Kind, &slot, &d.CapacityMbps, &d.CapacityMeasuredAt,
-		&d.CapacityActiveStreams, &lat, &lon, &d.WifiPasswordEnc, &d.Notes)
+		&d.CapacityActiveStreams, &lat, &lon, &d.WifiPasswordEnc, &d.Notes, &d.MapsURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -69,7 +70,7 @@ func deviceArgs(d *Device) []any {
 		lon = *d.Lon
 	}
 	return []any{d.MAC, d.Name, d.Kind, slot, d.CapacityMbps, d.CapacityMeasuredAt,
-		d.CapacityActiveStreams, lat, lon, d.WifiPasswordEnc, d.Notes}
+		d.CapacityActiveStreams, lat, lon, d.WifiPasswordEnc, d.Notes, d.MapsURL}
 }
 
 func (s *DeviceStore) Get(mac string) (*Device, error) {
@@ -119,7 +120,7 @@ func (s *DeviceStore) Upsert(mac string, fn func(*Device) error) error {
 			return err
 		}
 		d.MAC = mac
-		_, err = c.ExecContext(ctx, `INSERT OR REPLACE INTO devices (`+deviceCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, deviceArgs(d)...)
+		_, err = c.ExecContext(ctx, `INSERT OR REPLACE INTO devices (`+deviceCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, deviceArgs(d)...)
 		return err
 	})
 }
