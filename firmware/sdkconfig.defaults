@@ -38,6 +38,8 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions_example.csv"
 
 # Enable FreeRTOS stats formatting functions, needed for 'tasks' command
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+# CPU load for the health report (rproxy STATS frame): idle-task run time per core
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
 CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
 
 # LWIP

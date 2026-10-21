@@ -42,6 +42,10 @@
 #include "esp_tls.h"
 #include "esp_https_ota.h"
 #include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "esp_image_format.h"
+#include "esp_flash.h"
+#include "freertos/idf_additions.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_system.h"
@@ -377,6 +381,7 @@ static void ota_confirm(const char *why);
  *   WINDOW u32         both ways        credit returned after bytes are written
  *   FIN / RST          both ways        half-close / abort or forget
  *   PING / PONG, OTA   sid 0            keepalive, firmware update
+ *   STATS              sid 0, node -> broker   health sample ("key=value ..."), every 30 s
  *
  * A single task owns the link and every target socket (select loop, target
  * sockets non-blocking), so the TLS session is only touched from one task.
@@ -396,11 +401,12 @@ static void ota_confirm(const char *why);
 #define MUX_DEAD_MS      45000
 #define MUX_DIALERS      CONFIG_RPROXY_DIALERS
 #define MUX_RXCAP        (MUX_HDR + MUX_MAX_PAYLOAD + 2048)
+#define STATS_PERIOD_US  (30 * 1000000LL)        /* health report (STATS frame) interval */
 
 enum {
     F_OPEN = 0x01, F_OPEN_OK = 0x02, F_OPEN_ERR = 0x03, F_DATA = 0x04,
     F_FIN = 0x05, F_RST = 0x06, F_WINDOW = 0x07, F_PING = 0x08,
-    F_PONG = 0x09, F_OTA = 0x0A,
+    F_PONG = 0x09, F_OTA = 0x0A, F_STATS = 0x0B,
 };
 
 typedef enum { ST_FREE = 0, ST_DIALING, ST_OPEN } sstate_t;
@@ -658,12 +664,82 @@ static void mux_reset_streams(void)
         if (r.fd >= 0) close(r.fd);
 }
 
+/* ---- Board health, reported to the broker --------------------------- *
+ * A STATS frame (sid 0; text key=value tokens, like HELLO's options) goes
+ * out right after READY and then every STATS_PERIOD_US: internal heap
+ * (free, low-water, total — the default heap would hide internal-RAM
+ * starvation behind the S3's PSRAM), PSRAM when present, CPU load,
+ * image / OTA partition / flash chip sizes and open streams. The dashboard
+ * shows it in the Health cell; a broker that predates it ignores the frame.
+ */
+static uint32_t s_app_len, s_slot_len, s_flash_len;   /* fixed for the life of the image */
+
+/* CPU load since the previous call: 100 minus the idle tasks' share of the
+ * elapsed time, averaged over the cores. The run-time counters are 32-bit
+ * microseconds (they wrap every 71 min), so every delta is taken as uint32. */
+static int cpu_load_pct(void)
+{
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS
+    static int64_t prev_t;
+    static uint32_t prev_idle[CONFIG_FREERTOS_NUMBER_OF_CORES];
+    int64_t now = esp_timer_get_time();
+    uint32_t idle[CONFIG_FREERTOS_NUMBER_OF_CORES];
+    for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++)
+        idle[i] = (uint32_t)ulTaskGetIdleRunTimeCounterForCore(i);
+    int pct = -1;
+    if (prev_t) {
+        uint64_t dt = (uint64_t)(now - prev_t) * CONFIG_FREERTOS_NUMBER_OF_CORES;
+        uint64_t di = 0;
+        for (int i = 0; i < CONFIG_FREERTOS_NUMBER_OF_CORES; i++) di += (uint32_t)(idle[i] - prev_idle[i]);
+        if (dt > 0) { if (di > dt) di = dt; pct = (int)(100 - (di * 100) / dt); }
+    }
+    prev_t = now;
+    memcpy(prev_idle, idle, sizeof(idle));
+    return pct;
+#else
+    return -1;
+#endif
+}
+
+static void health_init(void)
+{
+    const esp_partition_t *run = esp_ota_get_running_partition();
+    if (run) {
+        s_slot_len = run->size;
+        esp_partition_pos_t pos = { .offset = run->address, .size = run->size };
+        esp_image_metadata_t md;                 /* headers only: no hash, no verify */
+        if (esp_image_get_metadata(&pos, &md) == ESP_OK) s_app_len = md.image_len;
+    }
+    uint32_t fs = 0;
+    if (esp_flash_get_size(NULL, &fs) == ESP_OK) s_flash_len = fs;
+    cpu_load_pct();                              /* baseline, so the first sample carries a value */
+}
+
+static bool health_send(link_t *l)
+{
+    char line[224];
+    int n = snprintf(line, sizeof(line),
+                     "up=%lu heap=%u heapmin=%u heaptot=%u cpu=%d app=%lu slot=%lu flash=%lu streams=%d",
+                     (unsigned long)(esp_timer_get_time() / 1000000ULL),
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                     (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL),
+                     (unsigned)heap_caps_get_total_size(MALLOC_CAP_INTERNAL),
+                     cpu_load_pct(), (unsigned long)s_app_len, (unsigned long)s_slot_len,
+                     (unsigned long)s_flash_len, s_active);
+    size_t ptot = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    if (ptot && n > 0 && n < (int)sizeof(line))
+        n += snprintf(line + n, sizeof(line) - n, " psram=%u psramtot=%u",
+                      (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM), (unsigned)ptot);
+    if (n <= 0 || n >= (int)sizeof(line)) return true;   /* cannot happen; never drop the link for it */
+    return frame_send(l, F_STATS, 0, line, (uint16_t)n);
+}
+
 /* Serve one established link until it fails or rproxy is disabled. */
 static void mux_serve(link_t *l, uint8_t *rx)
 {
     int rxlen = 0;
     int64_t last_rx = esp_timer_get_time();
-    int64_t last_stats = last_rx;
+    int64_t last_stats = last_rx, last_stats_tx = last_rx;
     int lfd = link_fd(l);
     if (lfd < 0) return;
 
@@ -728,6 +804,11 @@ static void mux_serve(link_t *l, uint8_t *rx)
             return;
         }
 
+        if (esp_timer_get_time() - last_stats_tx > STATS_PERIOD_US) {
+            last_stats_tx = esp_timer_get_time();
+            if (!health_send(l)) return;
+        }
+
         /* One stats line a minute: enough to spot a slow leak or heap
          * starvation (the v1.2 pool died with internal RAM exhausted and
          * nothing in the log said so). */
@@ -777,6 +858,7 @@ static void mux_task(void *arg)
     int backoff = BACKOFF_MIN_MS;
     uint8_t *rx = NULL;                       /* link receive buffer, per connection */
 
+    health_init();
     while (s_run) {
         if (!sta_has_ip()) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
 
@@ -836,6 +918,7 @@ static void mux_task(void *arg)
         ESP_LOGI(TAG, "mux link up -> %s:%u (tls=%d, max %d streams, win %d, frame %d)",
                  host, port, tls, RPROXY_MAX_STREAMS, MUX_WINDOW, MUX_MAX_PAYLOAD);
         ota_confirm("mux link up");
+        health_send(&link);                     /* first health sample; then every STATS_PERIOD_US */
 
         mux_serve(&link, rx);
 
