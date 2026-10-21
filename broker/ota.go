@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"sync/atomic"
 	"time"
 )
@@ -34,9 +35,18 @@ func (r *registry) claimOTA(n *node, muxGeneration uint64) (otaClaim, bool) {
 	n.otaClaimID++
 	n.otaClaimActive = n.otaClaimID
 	n.otaDispatching = true
+	previousFrom, previousUptime, previousAt := n.otaFromFW, n.otaUptime, n.OTAAt
 	now := timeNow()
 	n.otaFromFW, n.otaUptime, n.OTAAt = n.Firmware, n.runningUptime(now), now.UTC().Format(time.RFC3339)
-	r.saveLocked()
+	if err := r.saveLocked(); err != nil {
+		// Do not write even one command byte unless restart can recognize the
+		// attempt as potentially dispatched. Keep the durable queue retryable.
+		n.otaClaimActive, n.otaDispatching = 0, false
+		n.otaFromFW, n.otaUptime, n.OTAAt = previousFrom, previousUptime, previousAt
+		n.OTAError = "storage_error"
+		log.Printf("ota: dispatch marker for %s not persisted; command withheld: %v", n.MAC, err)
+		return otaClaim{}, false
+	}
 	return otaClaim{URL: n.PendingOTA, Revision: n.otaRevision, ID: n.otaClaimID,
 		HelloGeneration: n.helloGeneration, FromFW: n.Firmware, Uptime: n.otaUptime}, true
 }
@@ -54,7 +64,7 @@ func (r *registry) completeOTA(n *node, claim otaClaim, written bool) {
 	n.otaDispatching = false
 	if !written {
 		n.OTAError = "write_failed"
-		r.saveLocked()
+		r.saveOTAResultLocked(n)
 		return
 	}
 	now := timeNow()
@@ -67,7 +77,7 @@ func (r *registry) completeOTA(n *node, claim otaClaim, written bool) {
 		// it may have preceded delivery, so wait for fresh evidence or timeout.
 		resolveOTALocked(n, now, false, false)
 	}
-	r.saveLocked()
+	r.saveOTAResultLocked(n)
 }
 
 // A missing legacy OK after a complete command is ambiguous, so keep sent
@@ -77,7 +87,16 @@ func (r *registry) noteOTAUnconfirmed(n *node, claim otaClaim) {
 	defer r.mu.Unlock()
 	if claim.ID != 0 && r.nodes[n.MAC] == n && n.otaRevision == claim.Revision && n.otaClaimID == claim.ID && n.OTAStatus == "sent" {
 		n.OTAError = "ack_unconfirmed"
-		r.saveLocked()
+		r.saveOTAResultLocked(n)
+	}
+}
+
+func (r *registry) saveOTAResultLocked(n *node) {
+	if err := r.saveLocked(); err != nil {
+		// For a completed write the pre-write dispatch marker remains on disk,
+		// so restart will report unconfirmed delivery instead of sending again.
+		n.OTAError = "storage_error"
+		log.Printf("ota: delivery state for %s not persisted: %v", n.MAC, err)
 	}
 }
 

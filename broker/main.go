@@ -852,6 +852,7 @@ func (b *broker) statusMux() *http.ServeMux {
 		}
 		mac, action := strings.ToLower(parts[0]), parts[1]
 		var ok bool
+		var storageErr error
 		switch action {
 		case "ota":
 			var body struct {
@@ -885,9 +886,9 @@ func (b *broker) statusMux() *http.ServeMux {
 					return
 				}
 			}
-			ok = b.reg.setOTA(mac, body.URL, body.Version)
+			ok, storageErr = b.reg.setOTAResult(mac, body.URL, body.Version)
 		case "ota-cancel":
-			ok = b.reg.setOTA(mac, "", "")
+			ok, storageErr = b.reg.setOTAResult(mac, "", "")
 		case "block":
 			ok = b.reg.setBlocked(mac, true)
 		case "allow":
@@ -911,6 +912,13 @@ func (b *broker) statusMux() *http.ServeMux {
 			ok = err == nil
 		default:
 			http.Error(w, "unknown action", http.StatusBadRequest)
+			return
+		}
+		if storageErr != nil {
+			log.Printf("ota: request for %s not persisted: %v", mac, storageErr)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "could not persist OTA request"})
 			return
 		}
 		if !ok {

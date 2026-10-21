@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -247,12 +248,27 @@ func (r *registry) setBlocked(mac string, blocked bool) bool {
 // the version the node should report afterwards ("" = any change counts). An
 // empty url cancels a queued update.
 func (r *registry) setOTA(mac, url, target string) bool {
+	ok, err := r.setOTAResult(mac, url, target)
+	if err != nil {
+		log.Printf("ota: request for %s not persisted: %v", mac, err)
+	}
+	return ok && err == nil
+}
+
+// Preserve the existing request on storage failure. A caller must not receive
+// a successful queue/cancel response for a mutation that cannot survive restart.
+func (r *registry) setOTAResult(mac, url, target string) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n, ok := r.nodes[mac]
 	if !ok {
-		return false
+		return false, nil
 	}
+	previous := struct {
+		pending, target, status, at, reason string
+		revision, active                    uint64
+		dispatching                         bool
+	}{n.PendingOTA, n.OTATarget, n.OTAStatus, n.OTAAt, n.OTAError, n.otaRevision, n.otaClaimActive, n.otaDispatching}
 	n.PendingOTA = url
 	n.otaRevision++
 	n.otaClaimActive = 0
@@ -265,8 +281,12 @@ func (r *registry) setOTA(mac, url, target string) bool {
 	} else {
 		n.OTATarget, n.OTAStatus, n.OTAAt = target, "queued", timeNow().UTC().Format(time.RFC3339)
 	}
-	r.saveLocked()
-	return true
+	if err := r.saveLocked(); err != nil {
+		n.PendingOTA, n.OTATarget, n.OTAStatus, n.OTAAt, n.OTAError = previous.pending, previous.target, previous.status, previous.at, previous.reason
+		n.otaRevision, n.otaClaimActive, n.otaDispatching = previous.revision, previous.active, previous.dispatching
+		return false, err
+	}
+	return true, nil
 }
 
 // chipOf is the chip a node reported in HELLO. Firmware before 2.4.22 never
@@ -426,9 +446,9 @@ type persistedNode struct {
 	OTADispatching bool   `json:"ota_dispatching,omitempty"`
 }
 
-func (r *registry) saveLocked() {
+func (r *registry) saveLocked() error {
 	if r.file == "" {
-		return
+		return nil
 	}
 	list := make([]persistedNode, 0, len(r.nodes))
 	for _, n := range r.nodes {
@@ -438,12 +458,21 @@ func (r *registry) saveLocked() {
 			OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt, OTAFromFW: n.otaFromFW,
 			PendingOTA: n.PendingOTA, OTAUptime: n.otaUptime, OTARevision: n.otaRevision, OTAError: n.OTAError, OTADispatching: n.otaDispatching})
 	}
-	data, _ := json.MarshalIndent(list, "", "  ")
-	os.MkdirAll(filepath.Dir(r.file), 0o755)
-	tmp := r.file + ".tmp"
-	if os.WriteFile(tmp, data, 0o600) == nil {
-		os.Rename(tmp, r.file)
+	data, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode node records: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Dir(r.file), 0o755); err != nil {
+		return fmt.Errorf("create node directory: %w", err)
+	}
+	tmp := r.file + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write node records: %w", err)
+	}
+	if err := os.Rename(tmp, r.file); err != nil {
+		return fmt.Errorf("replace node records: %w", err)
+	}
+	return nil
 }
 
 func (r *registry) load() {
