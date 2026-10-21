@@ -125,6 +125,11 @@ is promoted merely because a recorder finishes.
 - Existing dashboard acceptance: 11 groups passed; device-settings follow-up:
   10 groups passed at desktop and mobile sizes. These use the real isolated
   admin API/SQLite with fake broker/geo data.
+- A final settings run against the integrated binary caught an extra reservation
+  fact row pushing the drawer's Users section below the 900px frame. Reservations
+  now share the existing Board seats row; no information was removed. The final
+  10-group settings run passes, including all ten sections inside the desktop
+  frame, all 50 activity entries, mobile layout and both assignment pickers.
 - Commerce/portal browser verification: **13 groups passed**, 16 screenshots,
   zero uncaught JavaScript errors and zero external provider requests. Admin
   plan CRUD, approvals/download, order retry/cancel, email log and user history

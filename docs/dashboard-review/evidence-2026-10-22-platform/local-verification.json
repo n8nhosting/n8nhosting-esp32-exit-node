@@ -1,0 +1,37 @@
+{
+  "source": "77b65e782f55e3f1355a9f61c77891bbf885d61e",
+  "scope": "Local verification only; no production or external provider transactions",
+  "admin": {
+    "passed": true,
+    "cases": 273,
+    "top_level": 144,
+    "elapsed_sec": 13.513
+  },
+  "admin_race": {
+    "passed": true,
+    "cases": 273,
+    "top_level": 144,
+    "elapsed_sec": 56.031
+  },
+  "admin_vet": "pass (agent final integrated run)",
+  "broker": {
+    "tests": "pass, 17.140s",
+    "vet": "pass",
+    "full_race": "pass, 16.401s",
+    "source": "13cf3fd"
+  },
+  "firmware": {
+    "host_ota_cases": 10,
+    "archive_tests": 10,
+    "c3_build": "pass",
+    "s3_build": "pass",
+    "release_status": "testing"
+  },
+  "browser": {
+    "baseline_groups": 11,
+    "settings_groups": 10,
+    "commerce_groups": 13,
+    "screenshots": 16,
+    "external_provider_requests": 0
+  }
+}
