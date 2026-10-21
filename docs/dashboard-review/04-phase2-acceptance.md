@@ -368,8 +368,30 @@ default picker. Local evidence includes `settings-acceptance.json` and
 `output/playwright/`. Impeccable detector returns `[]`; focused code review
 found no remaining cross-IP admission conditions.
 
-Deployment is pending coordination with an already-running Board 1 OTA. At
-the preflight production check, it remained on 2.4.21-mux1.4 with `updating` to
-2.4.23-s3 since 03:09 +07. Both C3 boards already had 1 Mbps manual capacity
-before this change. No production capacity values or customer bindings were
-modified during verification.
+Deployment was paused while Board 1 showed `updating` to 2.4.23-s3 since
+03:09 +07, while still running 2.4.21-mux1.4. The operator confirmed this was
+a stale status and they were no longer waiting for OTA, so deployment resumed.
+Both C3 boards already had 1 Mbps manual capacity before this change. No
+production capacity values or customer bindings were modified during
+verification.
+
+Production deployment `fhuwrkeregrwrbbxmfs5x3zg` imported
+`46f2af15b41a8b7f4292d5858c504c6336baaef0`; log start 03:22:25 +07, all services
+started by 03:23:47 +07 on 2026-10-22, and deployment finished successfully.
+The reloaded dashboard confirms Board 1 has 1/1 seats and each C3 has 0/1,
+retaining slots/ports 1/3131, 3/3133 and 4/3134. After sampler reconciliation
+there are no routing-mismatch notices. Overview shows 1 occupied and 2 available
+online seats across 3/3 online boards, with the new per-board help text.
+
+For the existing active, unbound `esp32c3` account, the default user-first
+picker shows both C3 boards eligible with 0/1 seats and an enabled Assign button.
+Board-AEC0's board-first picker also shows 0/1 board seats and enables Assign
+for that account. Both dialogs were cancelled; no production assignment was
+submitted. Actual POST assignment success and full-target rejection were
+verified with the real Go handlers in the isolated local tests above.
+
+Production desktop verification used 1440x900; 375x812 has no horizontal
+overflow. Console has no captured errors/warnings; viewport override was reset.
+Screenshots under `output/playwright/`:
+`production-per-board-seats-picker.jpg`, `production-per-board-seats-devices.jpg`
+and `production-per-board-seats-mobile.jpg`. No firmware update was initiated.
