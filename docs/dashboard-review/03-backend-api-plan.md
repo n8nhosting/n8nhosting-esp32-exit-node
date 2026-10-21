@@ -1,5 +1,10 @@
 # Dashboard widgets — backend / API plan
 
+> 2026-10-22: the operator replaced exit-IP seat ownership with independent
+> seats per board. The superseding admission, device counts and Overview contract
+> is [Seats counted per board](../superpowers/specs/2026-10-22-per-board-seats-design.md).
+> Earlier IP-group admission descriptions below are historical.
+
 Repo: `esp32-exit-node-v1.4-mux1.3-relaybuf/repo` (branch `claude/c3-exit-node`), read-only review on 2026-10-21.
 `go test ./...` passes in `admin-api/` and `broker/` (both `ok`, cached) — nothing in the repo was modified.
 

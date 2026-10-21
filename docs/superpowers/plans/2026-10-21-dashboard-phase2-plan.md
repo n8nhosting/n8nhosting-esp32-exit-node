@@ -1,5 +1,10 @@
 # Dashboard phase 2 — implementation plan
 
+> Latest seat-rule revision (2026-10-22): the operator approved independent
+> seats per board/MAC, including the same public IP. This supersedes the older
+> shared-IP/dedicated-IP admission rules in this plan. See
+> [per-board seats](../specs/2026-10-22-per-board-seats-design.md).
+
 > Completed and locally verified 2026-10-22 (Asia/Bangkok).
 > Final behavior, validation evidence and screenshot locations:
 > [`04-phase2-acceptance.md`](../../dashboard-review/04-phase2-acceptance.md).

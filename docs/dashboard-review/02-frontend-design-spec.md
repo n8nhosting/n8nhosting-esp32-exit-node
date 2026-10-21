@@ -1,5 +1,9 @@
 # Admin dashboard restyle — frontend design spec
 
+> 2026-10-22: seat counts and availability now belong to individual boards,
+> even when they share an IP. See the superseding
+> [per-board seat contract](../superpowers/specs/2026-10-22-per-board-seats-design.md).
+
 Target file: `admin-api/dashboard/index.html` (641 lines, one `<style>`, one `<script>`, served byte-for-byte by `embed.go`; no build step).
 Baseline verified 2026-10-21: `cd admin-api && go test -run TestDashboard -count=1 .` → `ok`.
 Everything below was checked against `dashboard_test.go`, the `dataviz` skill (validator run on the real surfaces), and the `ui-ux-pro-max` rules (contrast, 44 px touch, bottom-nav ≤ 5, no emoji icons).

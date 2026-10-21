@@ -164,6 +164,11 @@ admission rule is **0 seats without a positive capacity measurement**, then
 1 seat; the existing ceiling of 3 remains. Dedicated boards retain 1 seat.
 This is an admission allowance, not a promise of 5 Mbps on a C3.
 
+**2026-10-22 superseding decision:** seats and admission are per board/MAC,
+including boards sharing one public IP. `active_users` is board-local;
+dedicated reserves one board, not the whole IP. Keep IP-group metadata for
+information only. See `docs/superpowers/specs/2026-10-22-per-board-seats-design.md`.
+
 Metrics follow the backend spec: a decreased cumulative counter contributes
 its current value after reset; a first sample only establishes a baseline.
 Drawer queries use `entity=node&id=<mac>` for `/api/metrics` and

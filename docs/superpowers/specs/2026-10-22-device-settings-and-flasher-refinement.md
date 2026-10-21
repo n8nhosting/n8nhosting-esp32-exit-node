@@ -3,6 +3,10 @@
 User-requested follow-up to the deployed Phase 2 dashboard (2026-10-22).
 The existing admin visual design and five requested changes are the authority.
 
+Seat ownership was subsequently changed by explicit operator approval to
+[independent seats per board](2026-10-22-per-board-seats-design.md), including
+boards sharing one public IP. Dedicated reserves one board for one account.
+
 ## Behavior
 
 - Device Settings exposes measured speed in Mbps. `PUT /api/devices/<mac>`
