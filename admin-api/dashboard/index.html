@@ -60,7 +60,7 @@
   .meter .k{color:var(--muted)} .meter .bar{height:6px;border-radius:3px;background:var(--panel2);overflow:hidden}
   .meter .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
   .meter.warn .bar i{background:var(--warn)} .meter.warn .v{color:var(--warn)}
-  td.health.muted .meter .bar i{background:var(--muted)}
+  td.health.muted .meter .bar i{background:var(--muted)} td.health.muted .meter.warn .v{color:var(--muted)}
   .micro{font-size:.76rem}
   /* row menu: one shared popover (fixed, so the table's overflow:hidden cannot clip it);
    * destructive items sit last, after a separator, in red text */
@@ -247,7 +247,7 @@ const i18n = {
   slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.',
   health:'Health', ram:'RAM', cpu:'CPU', flash:'Flash', free:'free', freeOf:'free of', lowWater:'lowest since boot',
   cpuHint:'CPU load over the last 30 s, all cores', ramLow:'RAM is running low', cpuHigh:'CPU is saturated',
-  noStats:'RAM / CPU need firmware 2.4.23', lastSeen:'last seen', offline:'offline', stale:'no report for',
+  noStats:'RAM / CPU need firmware 2.4.23', lastSeen:'last seen', offline:'offline', stale:'last report', lastSample:'last sample',
   moreActions:'More actions', updateFw:'Update FW', block:'Block', allow:'Allow', forget:'Forget',
   enable:'Enable', disable:'Disable', extend30:'+30 days', del:'Delete'
 };
@@ -407,6 +407,7 @@ const moreBtn = (kind, id, name) => `<button type="button" class="sec more" data
 let menuOpener=null;
 function openRowMenu(trigger, items, onPick){
   const m=$('#rowmenu');
+  if(menuOpener===trigger){ closeRowMenu(false); return; }   // second click on the same button: close
   m.innerHTML = items.map(it => it.sep ? '<div class="sep" role="separator"></div>'
     : `<button type="button" role="menuitem" class="${it.danger?'danger':''}" data-act="${esc(it.act)}">${esc(it.label)}</button>`).join('');
   m.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ closeRowMenu(true); onPick(b.dataset.act); }));
@@ -430,7 +431,7 @@ $('#rowmenu').addEventListener('keydown',e=>{
   else if(e.key==='ArrowUp'){ e.preventDefault(); bs[(i-1+bs.length)%bs.length].focus(); }
   else if(e.key==='Home'){ e.preventDefault(); bs[0].focus(); }
   else if(e.key==='End'){ e.preventDefault(); bs[bs.length-1].focus(); }
-  else if(e.key==='Tab'){ closeRowMenu(false); }
+  else if(e.key==='Tab'){ closeRowMenu(true); }   // focus returns to the trigger; the browser then tabs on from there
 });
 document.addEventListener('mousedown',e=>{
   const m=$('#rowmenu');
@@ -458,9 +459,11 @@ function healthCell(n){
   const cpu = s.cpu_pct>=0 ? meter(T('cpu'), s.cpu_pct, s.cpu_pct+'%', s.cpu_pct>=85, (s.cpu_pct>=85?T('cpuHigh')+' \u2014 ':'')+T('cpuHint')) : '';
   const psram = s.psram_total>0 ? `<div class="muted micro">PSRAM ${esc(fmtKB(s.psram_free))} ${esc(T('freeOf'))} ${esc(fmtKB(s.psram_total))}</div>` : '';
   const fl = s.flash_bytes>0 ? `<div class="muted micro">${esc(T('flash'))} ${esc(fmtKB(s.app_bytes))} / ${esc(fmtKB(s.slot_bytes))} \u00b7 ${esc(fmtKB(s.flash_bytes))}</div>` : '';
-  // a linked board reports every 30 s; a sample older than 2 min means the report path is stuck
+  // a linked board reports every 30 s: online, a sample older than 2 min means the report path is
+  // stuck; offline, the last sample is kept (what the board looked like before it went) with its age
   const ageMs = Date.now()-Date.parse(s.at);
-  const stale = n.online && ageMs>120000 ? `<div class="muted micro">${esc(T('stale'))} ${esc(fmtAgo(s.at))}</div>` : '';
+  const stale = !n.online ? `<div class="muted micro">${esc(T('lastSample'))} ${esc(fmtAgo(s.at)||'—')}</div>`
+    : (ageMs>120000 ? `<div class="muted micro">${esc(T('stale'))} ${esc(fmtAgo(s.at))}</div>` : '');
   return `<div>${top}</div>${ram}${cpu}${psram}${fl}${stale}`;
 }
 
