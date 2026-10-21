@@ -212,5 +212,31 @@ Local verification:
   gitignored `output/playwright/settings-acceptance.json`, `settings-*.png`,
   `flasher-acceptance.json` and `flasher-*-viewport.png`.
 
-These checks are local verification. Production rollout of this follow-up is
-recorded separately after deployment.
+Production rollout of this follow-up:
+
+- Coolify deployment `xcv9cfxrtzabxa8odqyz4fd9` imported exact commit
+  `0c8083e53b84a1806dcea4fd3b2934df8bbe4dc2` and finished successfully on
+  2026-10-22. Log start 02:32:47 +07; all four new services started by
+  02:34:07 +07 and the build container shut down at 02:34:08 +07.
+- Authenticated production browser confirms `Board-7EB0`, `Board-AEC0`, retained
+  custom `Board 1`, three primary Assign buttons, ten device tabs, and General
+  Settings with the existing 5.3 Mbps value in the editable speed field. Opened
+  Assign for Board-7EB0, confirmed its fixed MAC, slot selection and three users,
+  then cancelled. No production capacity values, C3 slots or user assignments
+  were changed as a test, and no hardware flash/OTA was initiated by this work.
+- The existing startup slot-push race recurred; under the user's explicit prior
+  authorization, re-pushed Board 1's saved shared slot 1 / port 3131. Refreshed
+  Routing has no mismatch/re-push action. This does not fix the startup race;
+  subsequent deployments should check saved routing after boards register.
+- Overview confirms 3/3 online, 3/3 users ready, 1 occupied / 0 available group
+  seats, no critical/warn alerts, and retained pre-deploy metric/activity history.
+  The existing high CPU report on Board-AEC0 was present before this deployment;
+  backend/dashboard changes did not flash or configure its firmware.
+- Production flasher matches the theme, loads all eight releases / nine picker
+  options, and has no horizontal overflow at its checked 1440px and 375x812
+  viewports. Admin production desktop checked at the normal 1920px viewport;
+  exact 1440/1024/800/375 admin coverage is from the isolated local tests above.
+  Browser consoles reported no errors/warnings on either production page.
+- Viewport overrides were reset. Production screenshots are gitignored local
+  artifacts: `production-{devices,settings,assign,flasher,deployment}-refinement.jpg`
+  and `production-flasher-mobile-refinement.jpg` in `output/playwright/`.
