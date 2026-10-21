@@ -8,107 +8,146 @@
 <script type="module" src="https://unpkg.com/esp-web-tools@10.0.0/dist/web/install-button.js?module"></script>
 <style>
   :root {
-    --bg: #0e1116; --panel: #171c24; --panel2: #1e2530; --line: #2a323f;
-    --fg: #e8edf3; --muted: #9aa7b8; --accent: #4b9fff; --accent2: #35d6a4;
-    --warn: #ffcc66; --danger: #ff6b6b; --radius: 14px;
-  }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) {
-      --bg:#f3f5f8; --panel:#ffffff; --panel2:#f0f3f7; --line:#dde3ec;
-      --fg:#121821; --muted:#5a6678; --accent:#1f6feb; --accent2:#0ca678;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg:#0e1116; --panel:#171c24; --panel2:#1e2530; --line:#2a323f;
-    --fg:#e8edf3; --muted:#9aa7b8; --accent:#4b9fff; --accent2:#35d6a4;
+    color-scheme: dark;
+    --bg:#0E1116; --panel:#222631; --panel2:#2F374C; --line:#343c50;
+    --fg:#F2F5FA; --muted:#A0A9C0; --accent:#8595E8; --primary:#455DDC;
+    --accent2:#43D1A7; --warn:#FFAD70; --danger:#F96589; --radius:12px;
   }
   * { box-sizing: border-box; }
+  html { scroll-padding-top: 24px; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
-    line-height: 1.6;
+    font-family:"Segoe UI","Leelawadee UI","Noto Sans Thai","Sarabun",Thonburi,ui-sans-serif,system-ui,-apple-system,Roboto,sans-serif;
+    font-size:14px; line-height:1.65;
   }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
-  header { text-align: center; margin-bottom: 28px; }
-  h1 { font-size: 1.7rem; margin: 0 0 6px; }
-  .sub { color: var(--muted); font-size: .98rem; }
+  .wrap { max-width:1200px; margin:0 auto; padding:0 32px 48px; }
+  .appbar { display:flex; align-items:center; justify-content:space-between; gap:20px; min-height:80px; border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:12px; font-size:15px; font-weight:650; line-height:1.4; }
+  .brand small { display:block; color:var(--muted); font-size:12px; font-weight:400; margin-top:2px; }
+  .brand-mark { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:var(--primary); color:var(--fg); flex:none; }
+  .brand-mark svg { width:20px; height:20px; }
+  .appbar nav { display:flex; flex-wrap:wrap; gap:4px; }
+  .appbar nav a { display:flex; align-items:center; min-height:44px; padding:8px 12px; border-radius:8px; color:var(--muted); }
+  .appbar nav a:hover { background:var(--panel); color:var(--fg); text-decoration:none; }
+  header { padding:30px 0 24px; }
+  h1 { font-size:26px; font-weight:650; letter-spacing:-.02em; line-height:1.35; margin:0 0 10px; }
+  .sub { color:var(--muted); font-size:14px; max-width:78ch; }
+  .sub .pill { margin-top:8px; }
+  main { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:20px; align-items:start; }
+  .setup-guide { display:grid; gap:20px; min-width:0; }
   .card {
     background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 22px; margin: 18px 0;
+    border-radius:var(--radius); padding:24px; min-width:0;
   }
-  .card h2 { font-size: 1.15rem; margin: 0 0 12px; display:flex; align-items:center; gap:10px;}
+  .card h2 { font-size:17px; font-weight:600; margin:0 0 14px; display:flex; align-items:center; gap:12px; line-height:1.5; }
+  .card p { margin:0 0 16px; overflow-wrap:anywhere; }
+  .card p:last-child { margin-bottom:0; }
   .step-n {
-    display:inline-flex; width:26px; height:26px; border-radius:50%;
-    background: var(--accent); color:#fff; align-items:center; justify-content:center;
-    font-size:.9rem; font-weight:700; flex:none;
+    display:inline-flex; width:28px; height:28px; border-radius:8px;
+    background:var(--panel2); color:var(--fg); align-items:center; justify-content:center;
+    font-size:13px; font-weight:600; flex:none;
   }
-  .flash-row { display:flex; justify-content:center; padding: 10px 0; }
-  esp-web-install-button { --esp-tools-button-color: var(--accent); }
+  #installation .step-n { background:var(--primary); }
+  #installation { position:sticky; top:24px; }
+  .flash-row { display:flex; align-items:center; padding:20px 0; }
+  esp-web-install-button { --esp-tools-button-color:var(--primary); width:100%; }
+  esp-web-install-button span { display:block; background:var(--panel2); border-radius:8px; padding:12px 14px; color:var(--fg); }
   button.ghost {
     background: var(--panel2); color: var(--fg); border:1px solid var(--line);
-    border-radius: 10px; padding: 10px 16px; font-size: .95rem; cursor:pointer;
+    border-radius:9px; padding:10px 16px; font-size:14px; font-family:inherit; min-height:44px; cursor:pointer;
   }
   button.ghost:hover { border-color: var(--accent); }
+  button.install { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; background:var(--primary); color:#fff; border:0; border-radius:9px; padding:12px 20px; min-height:48px; font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+  button.install svg { width:20px; height:20px; flex:none; }
+  button.install:hover { background:#384fcb; }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
   .muted { color: var(--muted); }
   .warn { color: var(--warn); }
-  code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code, pre { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:.9em; }
+  code { overflow-wrap:anywhere; }
   pre {
     background: var(--panel2); border:1px solid var(--line); border-radius:10px;
-    padding: 14px; overflow-x:auto; font-size: .9rem; margin: 8px 0;
+    padding:14px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.9rem; margin:8px 0;
   }
-  label { display:block; font-size:.85rem; color:var(--muted); margin: 10px 0 4px; }
+  label { display:block; font-size:13px; color:var(--fg); font-weight:600; margin:22px 0 6px; }
   input, select {
-    width:100%; background: var(--panel2); border:1px solid var(--line);
-    color: var(--fg); border-radius:10px; padding:10px 12px; font-size:.95rem;
+    width:100%; max-width:100%; background:var(--panel2); border:1px solid var(--line);
+    color:var(--fg); border-radius:9px; padding:11px 12px; font-family:inherit; font-size:14px; min-height:46px;
   }
+  #fwnote { font-size:13px; margin:10px 0 0; }
+  #fwline { font-size:13px; border-top:1px solid var(--line); padding-top:16px; }
   .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 560px){ .grid{ grid-template-columns: 1fr; } }
   .cmds { position:relative; }
   .copy-btn { position:absolute; top:8px; right:8px; font-size:.78rem; padding:4px 10px; }
-  a { color: var(--accent); }
-  .pill { display:inline-block; font-size:.75rem; background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:2px 10px; color:var(--muted); }
-  .notice { border-left:3px solid var(--warn); padding-left:12px; }
-  .rel { border-top:1px solid var(--line); padding:12px 0; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .pill { display:inline-block; font-size:12px; line-height:1.6; background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:2px 8px; color:var(--muted); }
+  .notice { border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  ol { padding-left:22px; margin:0 0 18px; }
+  li { padding-left:3px; margin:8px 0; }
+  #changelog { margin-top:24px; }
+  #changelog h2 svg { width:20px; height:20px; color:var(--muted); flex:none; }
+  #changelog > p { max-width:88ch; font-size:13px; }
+  .rel { border-top:1px solid var(--line); padding:20px 0; }
   .rel:first-child { border-top:none; padding-top:4px; }
+  .rel:last-child { padding-bottom:0; }
   .rel-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
   .rel-head b { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .rel p { margin:4px 0 0; font-size:.92rem; }
-  .rel .meta { font-size:.8rem; color:var(--muted); }
+  .rel p { margin:8px 0 0; font-size:14px; max-width:100ch; }
+  .rel .meta { font-size:12px; color:var(--muted); margin-top:8px; overflow-wrap:anywhere; }
   .pill.latest { color:var(--accent2); border-color:var(--accent2); }
   .pill.testing { color:var(--warn); border-color:var(--warn); }
-  footer { text-align:center; color:var(--muted); font-size:.85rem; margin-top:30px; }
+  footer { color:var(--muted); font-size:12px; margin-top:32px; padding-top:20px; border-top:1px solid var(--line); }
+  @media(max-width:800px) {
+    main { grid-template-columns:minmax(0,1fr); }
+    #installation { position:static; }
+    .wrap { padding:0 20px 32px; }
+  }
+  @media(max-width:480px) {
+    .wrap { padding:0 16px 28px; }
+    .appbar { align-items:flex-start; flex-direction:column; gap:8px; padding:18px 0 10px; }
+    .appbar nav { width:100%; }
+    .appbar nav a { padding:8px 10px; }
+    header { padding:24px 0 20px; }
+    h1 { font-size:23px; }
+    .card { padding:20px; }
+    .card h2 { font-size:16px; gap:10px; }
+    .grid { grid-template-columns:1fr; }
+    input,select { font-size:16px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div class="appbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4M12 10v4"/></svg></span><span>ESP32 Proxy Platform<small>Firmware console</small></span></div>
+    <nav aria-label="เมนู Flasher"><a href="#installation">ติดตั้ง Firmware</a><a href="#wifi">ตั้งค่า WiFi</a><a href="#changelog">เวอร์ชันทั้งหมด</a></nav>
+  </div>
   <header>
     <h1>ESP32 Exit Node Flasher</h1>
     <div class="sub">Flash firmware ลงบอร์ด <b>ESP32-S3 N16R8</b> หรือ <b>ESP32-C3 Super Mini</b> แล้วตั้งค่าให้ต่อออกไปหา VPS broker • <span class="pill">Chrome / Edge เท่านั้น</span></div>
   </header>
 
-  <div class="card">
+  <main>
+  <div class="card" id="installation">
     <h2><span class="step-n">1</span> เสียบบอร์ดแล้วกดติดตั้ง</h2>
     <p class="muted">เสียบบอร์ดเข้าพอร์ต USB แล้วกดปุ่มด้านล่าง เลือกพอร์ต Serial ของบอร์ด เบราว์เซอร์จะตรวจว่าเป็นชิป S3 หรือ C3 แล้วเลือก image ให้ถูกรุ่นเอง (S3: ใช้พอร์ต <b>USB</b> ของบอร์ด ถ้าเข้าโหมดแฟลชไม่ได้ให้กด BOOT ค้างแล้วแตะ RST • C3 Super Mini: เสียบ USB-C ได้เลย ไม่ต้องกดปุ่ม)</p>
     <label for="fwver">เวอร์ชัน firmware</label>
     <select id="fwver"><option value="manifest.json">ล่าสุด (แนะนำ)</option></select>
-    <p class="muted" id="fwnote" style="font-size:.85rem;margin:6px 0 0"></p>
+    <p class="muted" id="fwnote"></p>
     <div class="flash-row">
       <esp-web-install-button id="installBtn" manifest="manifest.json">
-        <button slot="activate" class="ghost" style="background:var(--accent);color:#fff;border:none;font-weight:600;padding:12px 22px;font-size:1rem;">⚡ ติดตั้ง Firmware</button>
+        <button slot="activate" class="install"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg>ติดตั้ง Firmware</button>
         <span slot="unsupported">เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์</span>
         <span slot="not-allowed">ต้องเปิดผ่าน HTTPS หรือ http://localhost เท่านั้น</span>
       </esp-web-install-button>
     </div>
-    <p class="muted" id="fwline" style="font-size:.85rem">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, auto-provision, OTA) • บอร์ด: ESP32-S3 N16R8 (40 streams) และ ESP32-C3 Super Mini (4 streams)</p>
+    <p class="muted" id="fwline">เวอร์ชัน firmware: NAT Router v2.4.21-mux1.2 + rproxy mux1 (one multiplexed TLS link, auto-provision, OTA) • บอร์ด: ESP32-S3 N16R8 (40 streams) และ ESP32-C3 Super Mini (4 streams)</p>
   </div>
 
-  <div class="card" id="changelog" hidden>
-    <h2>📋 เวอร์ชันทั้งหมด (ใหม่สุดอยู่บน)</h2>
-    <p class="muted" style="font-size:.88rem;margin-top:0">เลือกเวอร์ชันไหนก็ได้จากช่อง “เวอร์ชัน firmware” ด้านบน รวมถึงถอยกลับไปเวอร์ชันเก่า บอร์ดที่ต่อ VPS อยู่แล้วอัปเดต/ถอยเวอร์ชันผ่าน Dashboard → Devices → Update FW ได้โดยไม่ต้องเสียบสาย</p>
-    <div id="rels"></div>
-  </div>
-
-  <div class="card">
+  <div class="setup-guide">
+  <div class="card" id="wifi">
     <h2><span class="step-n">2</span> ต่อ WiFi บ้าน (STA)</h2>
     <p>หลังแฟลชเสร็จ บอร์ดจะเปิด WiFi ชื่อ <code>ESP32_NAT_Router</code> (เปิด ไม่มีรหัส) พร้อมหน้าตั้งค่า WiFi หน้าเดียว</p>
     <ol>
@@ -130,6 +169,14 @@
     <h2><span class="step-n">4</span> จัดการผู้ใช้ / ขาย</h2>
     <p>เพิ่ม/ลบผู้ใช้ ตั้งความเร็ว โควตา และวันหมดอายุ ผ่าน Admin API หรือ GOST UI</p>
     <p><a id="dash" href="#" target="_blank">เปิด Dashboard →</a> &nbsp;·&nbsp; <a id="gostui" href="#" target="_blank">GOST config UI →</a></p>
+  </div>
+  </div>
+  </main>
+
+  <div class="card" id="changelog" hidden>
+    <h2><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5v17h14V4h-3M9 3h6v4H9zM8 12h8M8 16h6"/></svg>เวอร์ชันทั้งหมด (ใหม่สุดอยู่บน)</h2>
+    <p class="muted">เลือกเวอร์ชันไหนก็ได้จากช่อง “เวอร์ชัน firmware” ด้านบน รวมถึงถอยกลับไปเวอร์ชันเก่า บอร์ดที่ต่อ VPS อยู่แล้วอัปเดต/ถอยเวอร์ชันผ่าน Dashboard → Devices → Update FW ได้โดยไม่ต้องเสียบสาย</p>
+    <div id="rels"></div>
   </div>
 
   <footer>
