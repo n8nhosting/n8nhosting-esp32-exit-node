@@ -149,15 +149,16 @@ func newRegistry(file string) *registry {
 func (r *registry) touch(mac, fw, ip string, uptime uint64, ssid, chip string) *node {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := timeNow().UTC()
+	now := timeNow() // keeps Go's monotonic reading: uptime arithmetic must not follow NTP steps
 	n, ok := r.nodes[mac]
 	if !ok {
-		n = &node{MAC: mac, FirstSeen: now.Format(time.RFC3339), Pool: true}
+		n = &node{MAC: mac, FirstSeen: now.UTC().Format(time.RFC3339), Pool: true}
 		r.nodes[mac] = n
 		r.saveLocked()
 	}
 	n.lastSeenT = now
-	n.LastSeen = now.Format(time.RFC3339)
+	n.LastSeen = now.UTC().Format(time.RFC3339)
+	n.Stats = nil // a new link reports afresh (and a board rolled back below 2.4.23 never will)
 	if fw != "" {
 		n.Firmware = fw
 	}
@@ -284,8 +285,8 @@ func (r *registry) takeOTA(n *node) string {
 	u := n.PendingOTA
 	n.PendingOTA = ""
 	if u != "" {
-		now := timeNow().UTC()
-		n.OTAStatus, n.OTAAt = "sent", now.Format(time.RFC3339)
+		now := timeNow()
+		n.OTAStatus, n.OTAAt = "sent", now.UTC().Format(time.RFC3339)
 		n.otaFromFW, n.otaUptime = n.Firmware, n.runningUptime(now)
 		r.saveLocked()
 	}
@@ -297,23 +298,28 @@ func (r *registry) takeOTA(n *node) string {
 func (r *registry) stats(n *node, st nodeStats) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := timeNow().UTC()
-	st.At = now.Format(time.RFC3339)
+	now := timeNow()
+	st.At = now.UTC().Format(time.RFC3339)
 	if st.UptimeSec > 0 {
 		n.UptimeSec, n.uptimeAt, n.offAt = st.UptimeSec, now, time.Time{}
 	}
 	n.Stats = &st
 }
 
-// linkDown records that the node's link closed: its uptime stops running
-// and last_seen becomes now (until here it was the HELLO time, so a board
-// that ran for days was "last seen" days ago).
+// linkDown records that one of the node's links closed. With no link left
+// its uptime stops running and last_seen becomes now (until here it was the
+// HELLO time, so a board that ran for days was "last seen" days ago). A
+// board that reconnected quickly still has its new link (the old TCP
+// connection is only found dead later): nothing changes then.
 func (r *registry) linkDown(n *node) {
+	if atomic.LoadInt64(&n.Mux) > 0 {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := timeNow().UTC()
+	now := timeNow()
 	n.offAt = now
-	n.LastSeen = now.Format(time.RFC3339)
+	n.LastSeen = now.UTC().Format(time.RFC3339)
 	r.saveLocked()
 }
 

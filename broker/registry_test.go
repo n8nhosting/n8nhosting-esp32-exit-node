@@ -79,3 +79,36 @@ func TestUptimeStoredNodeDoesNotGrow(t *testing.T) {
 		t.Fatalf("stored node: uptime %d stats %+v", v.UptimeSec, v.Stats)
 	}
 }
+
+// A board that reconnects quickly has two sessions for a while: the new one
+// HELLOed before the broker noticed the old TCP connection was dead. The old
+// session's end must not freeze the uptime of a board that is still linked,
+// and a new HELLO drops the previous link's health sample (a board rolled
+// back below 2.4.23 must not keep showing one).
+func TestLinkDownWithAnotherLinkKeepsUptime(t *testing.T) {
+	t0 := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	now := t0
+	timeNow = func() time.Time { return now }
+	defer func() { timeNow = time.Now }()
+
+	r := newRegistry("")
+	n := r.touch("aa:bb:cc:dd:ee:04", "2.4.21-mux1.4", "27.1.1.4", 100, "", "")
+	n.addMux(1) // link A
+	r.stats(n, nodeStats{UptimeSec: 100, HeapFree: 1})
+	now = t0.Add(60 * time.Second)
+	r.touch("aa:bb:cc:dd:ee:04", "2.4.21-mux1.4", "27.1.1.4", 160, "", "") // link B HELLOs
+	n.addMux(1)
+	if n.Stats != nil {
+		t.Fatal("a new HELLO must drop the previous link's sample")
+	}
+	now = t0.Add(90 * time.Second)
+	n.addMux(-1) // the broker finally notices link A is dead
+	r.linkDown(n)
+	now = t0.Add(300 * time.Second)
+	if got := r.list()[0].UptimeSec; got != 400 {
+		t.Fatalf("still linked through B: got %d want 400", got)
+	}
+	if r.list()[0].LastSeen != t0.Add(60*time.Second).Format(time.RFC3339) {
+		t.Fatalf("last_seen must stay the HELLO time while a link is up, got %s", r.list()[0].LastSeen)
+	}
+}
