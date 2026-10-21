@@ -323,6 +323,7 @@ type persistedNode struct {
 	LastSeen  string `json:"last_seen"`
 	UptimeSec uint64 `json:"uptime_sec"`
 	SSID      string `json:"ssid,omitempty"`
+	Chip      string `json:"chip,omitempty"` // esp32s3 / esp32c3; "" before 2.4.22 firmware
 	Blocked   bool   `json:"blocked"`
 	Note      string `json:"note,omitempty"`
 	Slot      int    `json:"slot,omitempty"`
@@ -341,7 +342,7 @@ func (r *registry) saveLocked() {
 	for _, n := range r.nodes {
 		pool := n.Pool
 		list = append(list, persistedNode{MAC: n.MAC, Firmware: n.Firmware, FirstSeen: n.FirstSeen, LastSeen: n.LastSeen,
-			UptimeSec: n.UptimeSec, SSID: n.SSID, Blocked: n.Blocked, Note: n.Note, Slot: n.Slot, Pool: &pool,
+			UptimeSec: n.UptimeSec, SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note, Slot: n.Slot, Pool: &pool,
 			OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt, OTAFromFW: n.otaFromFW})
 	}
 	data, _ := json.MarshalIndent(list, "", "  ")
@@ -371,7 +372,7 @@ func (r *registry) load() {
 		}
 		pool := p.Pool == nil || *p.Pool
 		r.nodes[p.MAC] = &node{MAC: p.MAC, Firmware: p.Firmware, FirstSeen: p.FirstSeen,
-			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot, Pool: pool,
+			LastSeen: p.LastSeen, UptimeSec: p.UptimeSec, SSID: p.SSID, Chip: p.Chip, Blocked: p.Blocked, Note: p.Note, Slot: p.Slot, Pool: pool,
 			OTATarget: p.OTATarget, OTAStatus: p.OTAStatus, OTAAt: p.OTAAt, otaFromFW: p.OTAFromFW}
 		r.nodes[p.MAC].blk.Store(p.Blocked)
 		r.nodes[p.MAC].noPool.Store(!pool)

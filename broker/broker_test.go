@@ -400,12 +400,17 @@ func TestBlockedNodeIsRefused(t *testing.T) {
 func TestRegistryPersistence(t *testing.T) {
 	f := t.TempDir() + "/nodes.json"
 	r := newRegistry(f)
-	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4", 0, "", "")
+	r.touch("11:22:33:44:55:66", "fw1", "1.2.3.4", 0, "", "esp32c3")
 	r.setBlocked("11:22:33:44:55:66", true)
 	r2 := newRegistry(f)
 	l := r2.list()
 	if len(l) != 1 || !l[0].Blocked || l[0].Firmware != "fw1" {
 		t.Fatalf("persistence failed: %+v", l)
+	}
+	// the chip must survive a broker restart, or the OTA target guard treats a
+	// C3 as an S3 until the board HELLOs again
+	if l[0].Chip != "esp32c3" {
+		t.Fatalf("chip not persisted: %q", l[0].Chip)
 	}
 }
 
