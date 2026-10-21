@@ -103,10 +103,10 @@ Generated local artifacts (gitignored) are in `output/playwright/`:
 
 ## Delivery status
 
-Local implementation and acceptance are complete. Production deployment,
-production data migration, real-board acceptance/soak, RSSI firmware, billing,
-orders and external notifications were not part of this delivery. The existing
-firmware release index and latest/stable selections have not been changed.
+Local implementation and acceptance are complete. The subsequent user-authorized
+production deployment is recorded below. Hardware throughput/soak acceptance,
+RSSI firmware, billing, orders and external notifications remain separate work.
+The existing firmware release index and latest/stable selections have not changed.
 
 ## ISP and C3 clarification follow-up (2026-10-22)
 
@@ -122,5 +122,51 @@ firmware release index and latest/stable selections have not been changed.
 - Extended browser acceptance checks for all five loaded local logos, AWN
   aliasing, unknown-provider escaping, similar-name non-matching and old/current
   firmware health hints. Existing desktop/mobile acceptance continues to pass.
-- No board was flashed, measured, or reconfigured by this follow-up. Production
-  deployment remains separate from these locally verified changes.
+- No board was flashed, measured, or reconfigured by this UI follow-up.
+
+## Production deployment (2026-10-22, Asia/Bangkok)
+
+- User explicitly authorized deployment. Pushed `main` from `507bc77` to
+  `50c82260e548df8f3a889729a454ee5f7e2182db`, then triggered Coolify manually.
+- Coolify deployment `vzz99qns9ndckzuhxrzzmgvp` reports **Success / Finished**;
+  its import log confirms the exact commit above. Started 02:04:45 +07;
+  new application started 02:06:28 +07 (duration 1m43s).
+- All four services (admin-api, broker, gost, flasher) started. The existing
+  `j2qrpgae6rhrcuxiferirwn0_admin-data` and `_broker-data` volumes remain mounted
+  at `/data`. No additional volume backup was made: automatic approval review
+  rejected the Backup button because the backup destination was unknown.
+- Authenticated production browser checks at `https://admin.jbacteam.com`
+  confirm the new seven-column Devices UI, all three connected boards, three
+  existing active users, live C3 RAM/CPU, locally loaded AIS SVGs and working
+  device history/activity responses. History correctly starts empty; this does
+  not establish accumulated production traffic history or a throughput soak.
+- After the next 60-second sample, Overview shows **3/3 online**, **3/3 users
+  ready**, **1 occupied seat / 0 available**, and broker TLS uptime. The initial
+  sample preceded board reconnect and briefly showed 0/0 in Overview while the
+  live Devices endpoint already showed three boards.
+- Startup logs showed saved slot pushes arriving before broker registration.
+  Board 1's slot mismatch also existed before deployment. After separate explicit
+  user approval, used **Re-push routing to broker** to send its existing shared,
+  slot 1 / port 3131 settings. The success toast appeared and the mismatch and
+  re-push button disappeared from refreshed device details. No C3 slots were
+  assigned, no capacity tests were run, and no firmware OTA was initiated.
+- The sampler subsequently emitted the routing alert's **cleared** event;
+  Overview has no critical/warn alerts and retains two capacity info alerts.
+- At 02:10 +07 the first closed 5-minute bucket became visible in the real
+  production chart. Keyboard-opened Table view shows prior days as missing
+  (`—`) and the observed day as `0 B`, matching no relayed traffic. This verifies
+  a production metrics flush/read without claiming nonzero throughput or soak.
+- C3s `1c:db:d4:c5:7e:b0` and `ac:a7:04:ba:ae:c0` both have no slot and no
+  measurement. CPU 1% is independent of capacity. All three boards share one
+  exit IP; Board 1's saved 5.3 Mbps measurement permits one shared group seat,
+  currently occupied. A positive C3 measurement does not automatically add
+  capacity beyond this IP group's maximum eligible board limit.
+- Browser console reported no errors/warnings. Production mobile Devices checked
+  at 375x812 has no horizontal page overflow; viewport override was reset.
+  Direct unauthenticated Python HTTP checks received 403; browser verification
+  above succeeded. No raw authenticated API response or customer proxy traffic
+  test was collected, and no independent production schema-version query was run.
+- Screenshots are local, gitignored evidence in `output/playwright/`:
+  `production-deployment-2026-10-22.jpg`, `production-overview-2026-10-22.jpg`,
+  `production-devices-2026-10-22.jpg`, and
+  `production-devices-mobile-2026-10-22.jpg`.

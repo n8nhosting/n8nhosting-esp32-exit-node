@@ -3,7 +3,10 @@
 > Completed and locally verified 2026-10-22 (Asia/Bangkok).
 > Final behavior, validation evidence and screenshot locations:
 > [`04-phase2-acceptance.md`](../../dashboard-review/04-phase2-acceptance.md).
-> Production deployment and hardware acceptance remain separate.
+> Deployed to production 2026-10-22 as `50c8226`; Coolify deployment
+> `vzz99qns9ndckzuhxrzzmgvp` succeeded. Production browser checks and the
+> separately approved Board 1 routing restoration are recorded in that handoff.
+> Hardware throughput/soak acceptance remains separate.
 
 
 > **For agentic workers:** this plan sequences design work that already
