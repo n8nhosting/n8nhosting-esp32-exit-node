@@ -82,14 +82,22 @@ func measureUsers(s *server) []string {
 }
 
 func TestMeasureViaProxyComputesMbps(t *testing.T) {
-	// 1 MiB in 16 chunks of 64 KiB, one every 31.25 ms: 0.5 s, so 16 Mbps
+	// Pacing gives a useful observation window, not a fixed throughput oracle:
+	// concurrent firmware/browser work can delay timers well beyond their gap.
 	targets := make(chan string, 1)
+	bodyTimes := make(chan time.Duration, 1)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targets <- r.URL.Host // a proxy is asked for the absolute URL
+		started := time.Now()
 		serveAtRate(w, r, 1<<20, 64<<10, 31250*time.Microsecond)
+		// Record before the handler returns: the client needs its final EOF,
+		// so this interval is enclosed by the outer client call below.
+		bodyTimes <- time.Since(started)
 	}))
 	defer proxy.Close()
+	started := time.Now()
 	mbps, n, err := measureViaProxy(context.Background(), proxy.URL, "http://speedtest.invalid/speedtest.bin", 8<<20)
+	outerElapsed := time.Since(started)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +107,19 @@ func TestMeasureViaProxyComputesMbps(t *testing.T) {
 	if n != 1<<20 {
 		t.Fatalf("bytes %d, want %d", n, 1<<20)
 	}
-	if mbps < 8 || mbps > 24 {
-		t.Fatalf("mbps %.2f, want 16 ± 50%%", mbps)
+	bodyElapsed := <-bodyTimes
+	// The production timer excludes connection/headers and ends at body EOF.
+	// Bound its interval using observed server/client clocks, allowing modest
+	// scheduling and header/tail overhead. This still rejects bytes/s-as-Mbps,
+	// a missing ×8 conversion, and an incorrect decimal scale.
+	overhead := max(time.Duration(0), outerElapsed-bodyElapsed)
+	fastestWindow := max(bodyElapsed-bodyElapsed/4-overhead, bodyElapsed/2)
+	slowestWindow := outerElapsed + bodyElapsed/4
+	bits := float64(n) * 8
+	minMbps := bits / slowestWindow.Seconds() / 1e6
+	maxMbps := bits / fastestWindow.Seconds() / 1e6
+	if math.IsNaN(mbps) || math.IsInf(mbps, 0) || mbps < minMbps || mbps > maxMbps {
+		t.Fatalf("mbps %.3f outside observed %.3f..%.3f (body=%v, outer=%v, bytes=%d)", mbps, minMbps, maxMbps, bodyElapsed, outerElapsed, n)
 	}
 }
 
