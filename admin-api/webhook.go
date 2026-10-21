@@ -98,8 +98,9 @@ func (s *server) handlePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("payment: activated user=%q +%dd quota=%.0fGB rate=%.0fMbps", req.Username, days, req.QuotaGB, req.RateMbps)
+	s.emit("payment.received", "info", "user", req.Username, "webhook", "Payment activated or extended user", map[string]any{"days": days, "quota_gb": req.QuotaGB, "rate_mbps": req.RateMbps})
 	u, _ := s.store.Get(req.Username)
-	writeJSON(w, http.StatusOK, u.Public())
+	writeJSON(w, http.StatusOK, s.publicUser(u))
 }
 
 func (s *server) verifyWebhook(r *http.Request, body []byte) bool {

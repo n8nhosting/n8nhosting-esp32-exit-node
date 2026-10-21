@@ -46,6 +46,27 @@ var migrations = []string{
 	// (lat/lon are resolved from it server side; the link is kept so the
 	// dashboard can open the original pin with its place name)
 	`ALTER TABLE devices ADD COLUMN maps_url TEXT NOT NULL DEFAULT ''`,
+	// v4: complete metrics schema in one atomic, append-only migration.
+	`CREATE TABLE metrics_fleet (
+	 ts INTEGER NOT NULL, step TEXT NOT NULL, nodes_online REAL NOT NULL, nodes_total INTEGER NOT NULL,
+	 mux_links REAL NOT NULL, users_total INTEGER NOT NULL, users_seated INTEGER NOT NULL,
+	 users_connected INTEGER NOT NULL, users_over_quota INTEGER NOT NULL, users_expired INTEGER NOT NULL,
+	 bytes_up INTEGER NOT NULL, bytes_down INTEGER NOT NULL, dials_ok INTEGER NOT NULL, dials_err INTEGER NOT NULL,
+	 PRIMARY KEY(step,ts));
+	 CREATE TABLE metrics_node (
+	 ts INTEGER NOT NULL, step TEXT NOT NULL, mac TEXT NOT NULL, online_frac REAL NOT NULL,
+	 bytes_up INTEGER NOT NULL, bytes_down INTEGER NOT NULL, dials_ok INTEGER NOT NULL,
+	 dials_err INTEGER NOT NULL, active_max INTEGER NOT NULL, PRIMARY KEY(step,mac,ts));
+	 CREATE TABLE metrics_user (
+	 ts INTEGER NOT NULL, step TEXT NOT NULL, username TEXT NOT NULL, bytes INTEGER NOT NULL,
+	 PRIMARY KEY(step,username,ts));`,
+	// v5: activity and alert transitions share the durable event feed.
+	`CREATE TABLE events (
+	 id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL,
+	 severity TEXT NOT NULL DEFAULT 'info', subject_type TEXT NOT NULL, subject_id TEXT NOT NULL,
+	 actor TEXT NOT NULL DEFAULT '', message TEXT NOT NULL, data TEXT NOT NULL DEFAULT '{}');
+	 CREATE INDEX events_subject ON events(subject_type,subject_id,id);
+	 CREATE INDEX events_kind ON events(kind,id);`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

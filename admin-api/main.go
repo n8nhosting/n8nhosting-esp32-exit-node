@@ -55,6 +55,8 @@ type server struct {
 	// running (measure.go); a nil map is an empty set
 	measureMu sync.Mutex
 	measuring map[string]bool
+	telemetry telemetryState
+	activity  activityState
 }
 
 func envOr(k, def string) string {
@@ -103,6 +105,9 @@ func main() {
 
 	// admin REST (Bearer ADMIN_TOKEN)
 	mux.HandleFunc("/api/overview", s.requireAdmin(s.handleOverview))
+	mux.HandleFunc("/api/metrics", s.requireAdmin(s.handleMetrics))
+	mux.HandleFunc("/api/events", s.requireAdmin(s.handleEvents))
+	mux.HandleFunc("/api/alerts", s.requireAdmin(s.handleAlerts))
 	mux.HandleFunc("/api/users", s.requireAdmin(s.handleUsers))
 	mux.HandleFunc("/api/users/", s.requireAdmin(s.handleUser))
 	mux.HandleFunc("/api/devices", s.requireAdmin(s.handleDevices))
@@ -118,6 +123,8 @@ func main() {
 	mux.Handle("/", dashboardHandler())
 
 	addr := envOr("LISTEN_ADDR", ":8088")
+	s.emit("system.started", "info", "system", "", "system", "Admin API started", nil)
+	go s.runTelemetry()
 
 	// Re-push every recorded slot and pool flag once the broker answers (it
 	// may start after admin-api); failures are logged, startup goes on.

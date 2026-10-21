@@ -174,6 +174,7 @@ func (s *server) handleObserver(w http.ResponseWriter, r *http.Request) {
 		if add > 0 {
 			s.store.AddUsage(e.Client, add, now)
 		}
+		s.recordObserver(e, add, now)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

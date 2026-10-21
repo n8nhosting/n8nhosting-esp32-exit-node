@@ -174,6 +174,7 @@ func (s *server) handleMeasure(w http.ResponseWriter, r *http.Request, mac strin
 		return
 	}
 	log.Printf("measure %s (slot %d): %.1f Mbps, %d bytes, %d active streams", mac, d.Slot, capMbps, n, active)
+	s.emit("device.measured", "info", "device", mac, "admin", "Device capacity measured", map[string]any{"capacity_mbps": capMbps, "active_streams": active, "bytes": n})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"capacity_mbps":  capMbps,
 		"bytes":          n,

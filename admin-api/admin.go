@@ -43,7 +43,7 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			if isReservedUsername(u.Username) {
 				continue // a capacity measurement's throwaway user
 			}
-			out = append(out, u.Public())
+			out = append(out, s.publicUser(u))
 		}
 		writeJSON(w, http.StatusOK, out)
 	case http.MethodPost:
@@ -90,7 +90,8 @@ func (s *server) handleUsers(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		resp := map[string]any{"user": u.Public()}
+		s.emit("user.created", "info", "user", u.Username, "admin", "User created", nil)
+		resp := map[string]any{"user": s.publicUser(u)}
 		if generated != "" {
 			resp["generated_password"] = generated // shown once; not stored in clear
 		}
@@ -125,7 +126,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 			return
 		}
-		writeJSON(w, http.StatusOK, u.Public())
+		writeJSON(w, http.StatusOK, s.publicUser(u))
 	case http.MethodPut:
 		var in userInput
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -138,11 +139,13 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			defer s.admitMu.Unlock()
 			if cur, err := s.store.Get(name); err == nil && cur.DeviceMAC != in.DeviceMAC {
 				if code, body := s.admit(name, in.DeviceMAC); code != 0 {
+					s.emit("user.binding_refused", "warn", "user", name, "admin", "Device binding refused", map[string]any{"mac": in.DeviceMAC, "reason": body})
 					writeJSON(w, code, body)
 					return
 				}
 			}
 		}
+		before, _ := s.store.Get(name)
 		err := s.store.Update(name, func(u *User) error {
 			if in.Password != "" {
 				u.PassHash = hashPassword(in.Password)
@@ -173,12 +176,27 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u, _ := s.store.Get(name)
-		writeJSON(w, http.StatusOK, u.Public())
+		s.emit("user.updated", "info", "user", name, "admin", "User settings updated", nil)
+		if in.Password != "" {
+			s.emit("user.credentials_rotated", "info", "user", name, "admin", "User credentials rotated", nil)
+		}
+		if before != nil && before.Enabled != u.Enabled {
+			kind := "user.disabled"
+			if u.Enabled {
+				kind = "user.enabled"
+			}
+			s.emit(kind, "info", "user", name, "admin", "User access changed", nil)
+		}
+		if before != nil && before.DeviceMAC != u.DeviceMAC {
+			s.emit("user.bound", "info", "user", name, "admin", "User bound to device", map[string]any{"mac": u.DeviceMAC})
+		}
+		writeJSON(w, http.StatusOK, s.publicUser(u))
 	case http.MethodDelete:
 		if err := s.store.Delete(name); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 			return
 		}
+		s.emit("user.deleted", "info", "user", name, "admin", "User deleted", nil)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method"})
@@ -187,6 +205,7 @@ func (s *server) handleUser(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action string) {
 	var err error
+	var eventData any
 	switch action {
 	case "enable":
 		err = s.store.Update(name, func(u *User) error { u.Enabled = true; return nil })
@@ -211,10 +230,12 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		s.admitMu.Lock()
 		defer s.admitMu.Unlock()
 		if code, body := s.admit(name, in.DeviceMAC); code != 0 {
+			s.emit("user.binding_refused", "warn", "user", name, "admin", "Device binding refused", map[string]any{"mac": in.DeviceMAC, "reason": body})
 			writeJSON(w, code, body)
 			return
 		}
 		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = in.DeviceMAC; return nil })
+		eventData = map[string]any{"mac": in.DeviceMAC}
 	case "unassign":
 		err = s.store.Update(name, func(u *User) error { u.DeviceMAC = ""; return nil })
 	case "extend":
@@ -224,6 +245,7 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		if days == 0 {
 			days = 30
 		}
+		eventData = map[string]any{"days": days}
 		err = s.store.Update(name, func(u *User) error {
 			base := time.Now().UTC()
 			if u.ExpiresAt != "" {
@@ -244,7 +266,9 @@ func (s *server) userAction(w http.ResponseWriter, r *http.Request, name, action
 		return
 	}
 	u, _ := s.store.Get(name)
-	writeJSON(w, http.StatusOK, u.Public())
+	eventKinds := map[string]string{"enable": "user.enabled", "disable": "user.disabled", "reset-quota": "user.quota_reset", "assign": "user.bound", "unassign": "user.unbound", "extend": "user.extended"}
+	s.emit(eventKinds[action], "info", "user", name, "admin", "User action: "+action, eventData)
+	writeJSON(w, http.StatusOK, s.publicUser(u))
 }
 
 // handleCredentials returns the connection string for handing to a customer.
@@ -274,7 +298,11 @@ func (s *server) handleCredentials(w http.ResponseWriter, r *http.Request, name 
 	reset := r.URL.Query().Get("reset") == "1"
 	if pw == "" || reset {
 		pw = randToken(8)
-		s.store.Update(name, func(x *User) error { x.PassHash = hashPassword(pw); x.CredEnc = encryptCred(pw); return nil })
+		if err := s.store.Update(name, func(x *User) error { x.PassHash = hashPassword(pw); x.CredEnc = encryptCred(pw); return nil }); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "credential update failed"})
+			return
+		}
+		s.emit("user.credentials_rotated", "info", "user", name, "admin", "User credentials rotated", nil)
 	}
 	conn := ""
 	if host != "" {

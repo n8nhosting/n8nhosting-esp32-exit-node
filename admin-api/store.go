@@ -123,6 +123,8 @@ type User struct {
 
 // PublicUser is what the API returns — never the password hash.
 type PublicUser struct {
+	Status     string  `json:"status"`
+	LiveBPS    float64 `json:"live_bps"`
 	Username   string  `json:"username"`
 	Enabled    bool    `json:"enabled"`
 	ExpiresAt  string  `json:"expires_at,omitempty"`
@@ -137,12 +139,35 @@ type PublicUser struct {
 }
 
 func (u *User) Public() PublicUser {
+	u = effectiveUser(u, time.Now())
 	return PublicUser{
+		Status:   userStatus(u, time.Now()),
 		Username: u.Username, Enabled: u.Enabled, ExpiresAt: u.ExpiresAt,
 		RateMbps: u.RateMbps, QuotaGB: u.QuotaGB, UsageBytes: u.UsageBytes,
 		UsageGB:    float64(u.UsageBytes) / (1024 * 1024 * 1024),
 		UsageMonth: u.UsageMonth, CreatedAt: u.CreatedAt, Note: u.Note, DeviceMAC: u.DeviceMAC,
 	}
+}
+
+// effectiveUser projects a monthly rollover without writing from a GET request.
+func effectiveUser(u *User, now time.Time) *User {
+	v := *u
+	v.rollMonth(now)
+	return &v
+}
+
+func userStatus(u *User, now time.Time) string {
+	if !u.Enabled {
+		return "disabled"
+	}
+	if exp, err := time.Parse(time.RFC3339, u.ExpiresAt); err == nil && now.After(exp) {
+		return "expired"
+	}
+	v := effectiveUser(u, now)
+	if v.QuotaGB > 0 && v.UsageBytes >= int64(v.QuotaGB*1024*1024*1024) {
+		return "over_quota"
+	}
+	return "active"
 }
 
 type Store struct {
