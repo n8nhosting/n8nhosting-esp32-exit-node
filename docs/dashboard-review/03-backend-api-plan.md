@@ -841,3 +841,26 @@ dates immediately; 3–4 are one PR; 5–7 can land in any order after 3. Every 
 endpoints only — the current `index.html` (`/api/overview`, `/api/users`, `/api/devices`,
 `PUT /api/devices/{mac}` with numeric `lat`/`lon`) keeps working at each step, and the OSM link
 can be swapped for the Google link in the same dashboard change that adds the paste field.
+
+## 8. Approved slot automation follow-up (2026-10-22)
+
+Migration v6 adds `devices.slot_auto` (default true). The existing telemetry
+sampler reserves a slot for registered boards without one, including legacy
+unassigned boards. It accounts for all persisted reservations, even boards
+absent from the broker response, and broker-only reservations. Existing positive
+slots and dedicated policy remain intact. Port is derived as `3130 + slot`.
+Manual `PUT slot:N` remains editable; explicit `slot:0` disables automatic
+assignment for that board. No customer binding changes automatically.
+
+`GET /api/slots?mac=<target>` is authenticated and read-only. It returns
+`slot_count`, `port_base`, `current_slot`, `suggested_slot` and
+`available:[{slot,port}]`, retaining the target's own reservation as an option.
+The Assign picker uses this response rather than inferring availability from
+the visible device rows. PUT still performs the authoritative conflict check.
+
+Reservations commit before broker HTTP. Failed pushes retain their reservation
+and reconcile on subsequent successful samples, including after restart, using
+the existing 60-second sampler. A routing mutex serializes reconciliation and
+operator changes. `device.slot_reserved` records each new reservation once;
+stable routing and retries produce no duplicate reservation events. SQLite
+MAC-only UPSERT preserves another board's record on a conflicting unique slot.

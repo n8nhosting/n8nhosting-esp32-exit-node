@@ -268,3 +268,43 @@ startup registration race; refreshed Routing no longer has a mismatch action.
 Only Board 1 and Board-AEC0 were registered at this check; Board-7EB0 was absent
 from the broker list, so this rollout does not claim three-board hardware
 acceptance. No board firmware or C3 routing was changed.
+
+## Automatic slots and complete device details (2026-10-22)
+
+This revision supersedes the tabbed detail sheet described above. All ten
+sections now appear together in three aligned desktop columns; Notes shares
+the Traffic/Activity column to balance the available height. The sheet expands
+up to 1440px. At 1440x900 the checked normal content, including four Activity
+entries, fits entirely inside the frame. Phones use a single column. Scrollbars
+are hidden; long notes, expanded history tables, short windows and phones retain
+wheel/touch/keyboard scrolling rather than losing data. Settings retains its
+existing editor tabs. Devices and the detail header explicitly show Slot/Port.
+
+The user explicitly approved real automatic reservation for existing unassigned
+and newly registered boards. Backend commit `5de2813` introduces migration v6,
+durable reservations, the authenticated read-only `/api/slots?mac=<target>`
+picker contract and reconciliation on the existing sampler. Positive slots and
+dedicated policy remain intact. Offline/absent reservations count as occupied;
+SQL UPSERT cannot delete another board on a slot conflict. Explicitly saving
+slot 0 opts out. Port remains 3130 + slot; no customer is bound automatically.
+The editor explains the derived port and opt-out behavior. Delayed Settings and
+Maps responses cannot overwrite a later device editor.
+
+Local verification: admin-api full `go test ./...` (4.881s) and `go vet ./...`
+pass; broker full tests/vet pass. Focused backend race checks pass (3.161s).
+New tests cover migration, existing metadata preservation, concurrent allocation,
+slot exhaustion, offline reservations, dedicated adoption, failure/restart/retry,
+explicit clear, manual edit versus poll, no repeated reservation events and no
+SQLite transaction held over broker HTTP. Dashboard marker checks pass and
+Impeccable detector returns `[]`.
+
+Combined browser verification: regression passes 11 groups; focused acceptance
+passes 9 groups against the rebuilt Go backend and isolated SQLite. Coverage
+includes every detail section fitting at 1440x900, 375x812 navigation with hidden
+scrollbars, all 50 Activity entries, keyboard/focus and refresh preservation,
+SQL-only offline slot 12 excluded from the real picker, and delayed Settings /
+Assign cancellation races. No uncaught browser errors. Evidence is in
+`output/playwright/settings-acceptance.json` and
+`settings-{drawer-desktop,drawer-mobile,drawer-mobile-bottom,devices-desktop}.png`.
+
+Production validation for this revision is recorded below after deployment.

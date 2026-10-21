@@ -13,10 +13,20 @@ The existing admin visual design and five requested changes are the authority.
   Automatic measurement and manual override cannot race on the same MAC.
 - Empty device names display as `Board-XXXX`, taking the last four MAC hex
   digits in uppercase. Existing names remain intact; no bulk database rename.
-- The 640px device drawer retains all ten information sections inside its frame,
-  using keyboard-accessible tabs. The visible scrollbar is removed; touch,
-  wheel and keyboard scrolling remain available for unusually long content,
-  short windows and zoom. Activity pagination exposes all fetched events.
+- The revised device details sheet shows all ten information sections together,
+  without detail tabs. At desktop width, three aligned columns contain Health,
+  Capacity and Bound users; Traffic history, Activity and Notes; Routing,
+  Location, WiFi and Danger zone. The frame expands up to 1440px and becomes
+  one column on phones. No visible scrollbar; touch, wheel and keyboard scrolling
+  retain access to long content, short windows and zoom. Activity pagination and
+  the chart's table view retain access to every fetched entry.
+- Devices and the detail header explicitly label the actual Slot and Port.
+  Registered boards without a slot receive the lowest available slot and its
+  derived port (3130 + slot), including existing unassigned boards, as explicitly
+  approved by the user. Reservations account for durable offline boards and
+  broker routing. Settings can change the slot; explicitly saving slot 0 opts
+  that board out of automatic assignment. Customer accounts are not assigned
+  automatically. Failed broker pushes retain reservations for reconciliation.
 - Device editing uses General / Location / WiFi / Notes tabs, retaining all
   original fields. Device rows keep all seven desktop columns and gain a
   primary Assign action; other commands remain in the more menu. Narrow screens

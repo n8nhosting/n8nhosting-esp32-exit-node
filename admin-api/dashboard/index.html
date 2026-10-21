@@ -169,16 +169,14 @@
   .row-actions{flex-wrap:wrap;white-space:normal}.row-actions .assign-board{min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap}
   .user-device{display:grid;justify-items:start;gap:12px;min-width:140px;max-width:260px}.user-device-info{display:grid;gap:2px;overflow-wrap:anywhere;min-width:0}.user-device-info .subline{margin:0}
   button.user-assignment{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap;text-decoration:none}
-  .drawer-sheet{min-height:0;overflow:hidden}.drawer-head{flex:none;padding:20px 24px}.drawer-head .identity{overflow-wrap:anywhere}
-  .drawer-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
-  .drawer-tabs button,.editor-tabs button{background:transparent;color:var(--muted);font-size:12px;font-weight:500;min-height:44px;padding:8px 4px;border-radius:8px}
-  .drawer-tabs button[aria-selected="true"],.editor-tabs button[aria-selected="true"]{background:#303852;color:var(--fg)}
-  .drawer-tabs button:hover,.editor-tabs button:hover{background:var(--panel2);color:var(--fg)}
-  .drawer-body{flex:1;min-height:0;padding:24px;overflow-x:hidden;overflow-y:auto;scrollbar-width:none}
+  .drawer-sheet{width:1440px;max-width:calc(100% - 32px);min-height:0;overflow:hidden}.drawer-head{flex:none;padding:16px 24px;align-items:center}.drawer-head .identity{overflow-wrap:anywhere}.drawer-head button{min-height:44px}
+  .editor-tabs button{background:transparent;color:var(--muted);font-size:12px;font-weight:500;min-height:44px;padding:8px 4px;border-radius:8px}
+  .editor-tabs button[aria-selected="true"]{background:#303852;color:var(--fg)}
+  .editor-tabs button:hover{background:var(--panel2);color:var(--fg)}
+  .drawer-body{flex:1;min-height:0;padding:16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;overflow-x:hidden;overflow-y:auto;scrollbar-width:none}
+  .drawer-column{display:grid;gap:12px;min-width:0}.device-routing{font-size:12px;line-height:1.6;color:var(--fg);margin-top:4px}
   .drawer-body::-webkit-scrollbar,#dmodal .modal::-webkit-scrollbar{display:none}
-  .drawer-section{border:0;margin:0;padding:0;min-width:0}.drawer-section[hidden]{display:none}.drawer-section h3{font-size:16px;margin-bottom:18px}
-  .drawer-footer{padding:12px 24px;background:var(--panel);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);flex:none}
-  .drawer-footer button{min-height:44px}.drawer-body:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .drawer-section{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:0;padding:14px;min-width:0}.drawer-section h3{font-size:14px;margin:0 0 12px}.drawer-section .facts{grid-template-columns:minmax(105px,.8fr) minmax(0,1fr);gap:8px 12px}.drawer-section .subline{line-height:1.6}.drawer-section .reason-list{margin-bottom:0}.drawer-section .drawer-actions{margin-top:12px}.drawer-section p:last-child{margin-bottom:0}.drawer-health{margin-top:12px}.drawer-section .meter{grid-template-columns:32px minmax(24px,1fr) minmax(0,1.5fr);white-space:normal}.drawer-body:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px;color:var(--muted);font-size:12px}.pager button{min-height:44px;padding:8px 12px}
   .editor-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;padding-bottom:8px}.editor-tabs button{flex:1}
   #dmodal .modal{width:520px;scrollbar-width:none}#dmodal .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
@@ -197,7 +195,8 @@
     .fleet-table .row-actions{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}.fleet-table .row-actions .assign-board{padding:8px 14px;font-size:13px}.fleet-table .meter{grid-template-columns:30px 48px minmax(0,1fr);white-space:nowrap}.fleet-table .score{white-space:nowrap}.fleet-table .health-hint{max-width:none}.fleet-table .device-id{gap:8px}
   }
   @media(min-width:721px) and (max-width:900px){.fleet-table tbody tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.fleet-table td:nth-child(5){grid-column:1;grid-row:3}.fleet-table td:nth-child(6){grid-column:2;grid-row:3}.fleet-table td:nth-child(7){grid-column:1/-1;grid-row:4}.fleet-table .row-actions{justify-content:flex-start}}
-  @media(max-width:720px){.drawer-head{padding:16px}.drawer-head h2{font-size:18px}.drawer-tabs{padding:8px 12px;gap:2px}.drawer-tabs button{font-size:11px}.drawer-body{padding:20px 16px}.drawer-footer{padding:10px 16px}.fleet-table tbody tr{grid-template-columns:minmax(0,1fr) minmax(96px,auto)}.fleet-table td:nth-child(7){grid-column:1/-1;grid-row:3}.fleet-table td:nth-child(7) .row-actions{justify-content:space-between}.fleet-table .assign-board{min-width:130px}.fleet-table td:nth-child(3){grid-column:1/-1}.row-actions .assign-board{min-height:44px}#dmodal .field-grid{gap:0 10px}.drawer-footer .subline{max-width:190px}}
+  @media(min-width:721px) and (max-width:1100px){.drawer-body{grid-template-columns:repeat(2,minmax(0,1fr))}.drawer-column:last-child{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:720px){.drawer-sheet{max-width:100%}.drawer-head{padding:16px;gap:8px;flex-wrap:wrap}.drawer-head .identity{flex-basis:100%}.drawer-head h2{font-size:18px}.drawer-head #ddClose{margin-left:auto}.drawer-body{padding:16px;grid-template-columns:minmax(0,1fr)}.drawer-section{padding:16px}.fleet-table tbody tr{grid-template-columns:minmax(0,1fr) minmax(96px,auto)}.fleet-table td:nth-child(7){grid-column:1/-1;grid-row:3}.fleet-table td:nth-child(7) .row-actions{justify-content:space-between}.fleet-table .assign-board{min-width:130px}.fleet-table td:nth-child(3){grid-column:1/-1}.row-actions .assign-board{min-height:44px}#dmodal .field-grid{gap:0 10px}}
 </style>
 </head>
 <body>
@@ -258,7 +257,7 @@
     <div class="field"><label for="dmName">Name</label><input id="dmName" autocomplete="off" /></div>
     <div class="field"><label for="dmKind">Kind</label>
       <select id="dmKind"><option value="shared">shared</option><option value="dedicated">dedicated</option></select><p class="subline">Dedicated reserves the whole exit IP for one customer. Shared seats follow measured capacity.</p></div>
-    <div class="field"><label for="dmSlot">Slot <span class="muted">(blank = none, 1–30)</span></label><input id="dmSlot" type="number" step="1" min="1" max="30" inputmode="numeric" /></div>
+    <div class="field"><label for="dmSlot">Slot <span class="muted">(blank = none, 1–30)</span></label><input id="dmSlot" type="number" step="1" min="1" max="30" inputmode="numeric" aria-describedby="dmSlotHint dmPort" /><p class="subline" id="dmSlotHint">Assigned automatically. Change the slot to change its port; clearing it disables automatic assignment for this board.</p></div>
     <div class="muted" id="dmPort" style="margin:-6px 0 12px;font-size:.78rem"></div>
     <div class="field"><label for="dmCapacity">Measured speed (Mbps)</label><input id="dmCapacity" type="number" min="0" max="100000" step="any" inputmode="decimal" aria-describedby="dmCapacityHint" /><p id="dmCapacityHint" class="subline">Set capacity manually. 0 means unmeasured. This changes seat admission, not the board's CPU or WiFi speed.</p></div>
     </section>
@@ -330,7 +329,7 @@
   </div>
 </div>
 
-<div id="ddrawer" hidden><section class="drawer-sheet" role="dialog" aria-modal="true" aria-labelledby="ddTitle"><header class="drawer-head"><div class="identity"><h2 id="ddTitle">Device</h2><div id="ddIdentity" class="subline mono"></div></div><button type="button" class="sec" id="ddEdit">Settings</button><button type="button" class="sec" id="ddClose" aria-label="Close device details">✕</button></header><div class="drawer-tabs" id="ddTabs" role="tablist" aria-label="Device details"></div><div class="drawer-body" id="ddBody" tabindex="0"></div><footer class="drawer-footer"><span class="subline">Proxy slot &amp; user assignment</span><button type="button" id="ddAssign">Assign</button></footer></section></div>
+<div id="ddrawer" hidden><section class="drawer-sheet" role="dialog" aria-modal="true" aria-labelledby="ddTitle"><header class="drawer-head"><div class="identity"><h2 id="ddTitle">Device</h2><div id="ddIdentity" class="subline mono"></div></div><button type="button" id="ddAssign">Assign</button><button type="button" class="sec" id="ddEdit">Settings</button><button type="button" class="sec" id="ddClose" aria-label="Close device details">✕</button></header><div class="drawer-body" id="ddBody" tabindex="0"></div></section></div>
 <script>
 const i18n = {
   name:'Name', kind:'Kind', location:'Location', wifi:'WiFi', capacity:'Capacity', users:'Users',
@@ -697,9 +696,9 @@ let boardAssign=null,boardAssignOpener=null,boardAssignUsers=[],boardAssignBoard
 async function openBoardAssign(mac,opener){
   const request=++boardAssignRequest;boardAssignOpener=opener||document.activeElement;boardAssign=null;
   $('#baTitle').textContent='Assign '+boardName(window._devs?.[mac]||{mac});$('#baSummary').textContent='Loading current board and users…';$('#baErr').textContent='';$('#baHint').textContent='';$('#baSlot').innerHTML='';$('#baUser').innerHTML='<option value="">Set up slot only</option>';$('#baSlot').disabled=true;$('#baUser').disabled=true;$('#baSave').disabled=true;$('#bamodal').style.display='flex';$('#baCancel').focus();
-  try{const [boards,people]=await Promise.all([api('/api/devices'),api('/api/users')]);if(request!==boardAssignRequest)return;const d=boards.find(n=>n.mac===mac);if(!d)throw new Error('This device is no longer listed. Refresh Devices and try again.');boardAssign=d;boardAssignBoards=boards;boardAssignUsers=people||[];
-    const occupied=new Set(boards.filter(n=>n.mac!==mac&&n.slot>0).map(n=>n.slot));const slots=Array.from({length:SLOT_MAX},(_,i)=>i+1).filter(s=>!occupied.has(s));const chosen=d.slot||slots[0]||0;
-    $('#baSlot').innerHTML='<option value="0">No slot</option>'+slots.map(s=>`<option value="${s}">Slot ${s} · :${slotPort(s)}</option>`).join('');$('#baSlot').value=String(chosen);
+  try{const [boards,people,slotOptions]=await Promise.all([api('/api/devices'),api('/api/users'),api('/api/slots?mac='+encodeURIComponent(mac))]);if(request!==boardAssignRequest)return;const d=boards.find(n=>n.mac===mac);if(!d)throw new Error('This device is no longer listed. Refresh Devices and try again.');boardAssign=d;boardAssignBoards=boards;boardAssignUsers=people||[];
+    const slots=(slotOptions.available||[]).map(option=>option.slot);const chosen=slotOptions.current_slot||slotOptions.suggested_slot||0;d.slot=slotOptions.current_slot||0;
+    $('#baSlot').innerHTML='<option value="0">'+(slots.length?'No slot':'All slots reserved')+'</option>'+slots.map(s=>`<option value="${s}">Slot ${s} · :${slotPort(s)}</option>`).join('');$('#baSlot').value=String(chosen);
     $('#baUser').innerHTML='<option value="">Set up slot only</option>'+boardAssignUsers.map(person=>`<option value="${esc(person.username)}">${esc(person.username)}${person.status&&person.status!=='active'?' · '+esc(person.status):''}${person.device_mac===mac?' · assigned here':''}</option>`).join('');
     $('#baSummary').innerHTML=`<strong>${esc(boardName(d))}</strong><div class="mono">${esc(d.mac)}</div><div>${capacityLabel(d)} · ${esc(d.active_users??0)} / ${esc(d.max_users??0)} group seats</div>`;updateBoardAssign();$('#baSlot').focus();
   }catch(e){if(request===boardAssignRequest){$('#baErr').textContent=e.message;$('#baSummary').textContent='Could not load assignment options.';}}
@@ -793,10 +792,11 @@ function ispCell(raw){
   return `<span class="isp-brand" data-isp="${brand.id}" title="${esc(raw)}">${failedIspLogos.has(src)?'':`<img class="isp-logo" src="${src}" alt="" width="58" height="25" decoding="async">`}<span>${brand.label}</span></span>`;
 }
 document.addEventListener('error',e=>{const img=e.target;if(img instanceof HTMLImageElement&&img.classList.contains('isp-logo')){failedIspLogos.add(img.getAttribute('src'));img.hidden=true;}},true);
+function routingLabel(n){return n.slot>0?'Slot '+n.slot+' \u00b7 Port '+slotPort(n.slot):n.slot_auto?'Slot pending \u00b7 Port pending':'Slot unassigned \u00b7 Port unassigned';}
 function deviceRow(n){
   const mac=esc(n.mac),g=n.geo||{},city=[g.city,g.region||g.country].filter(Boolean).join(', ')||'Location unknown',hasPos=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPos?n.lat:g.lat,lo=hasPos?n.lon:g.lon,hasGeo=typeof la==='number'&&typeof lo==='number'&&(la||lo),map=hasGeo?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'',full=n.max_users>0&&n.active_users>=n.max_users;
   const loc=map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer" title="${esc(T(hasPos?'openMap':'openMapApprox'))}">${hasPos?'':'≈ '}${esc(city)} ↗</a>`:esc(city);
-  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(boardName(n))}</a><div class="mono muted">${mac}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${capacityLabel(n)}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div>${ispCell(g.isp)}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="assign-board" data-act="assign-board" data-mac="${mac}">Assign</button><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
+  return `<td class="device-cell"><div class="device-id"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div><a class="device-title" href="#/devices/${encodeURIComponent(n.mac)}" data-device-link="${mac}">${esc(boardName(n))}</a><div class="mono muted">${mac}</div><div class="device-routing mono">${esc(routingLabel(n))}</div></div></div><span class="pill off">${esc(n.chip||'esp32s3')}</span> <span class="subline">${esc(n.kind||'shared')}</span></td><td>${nodeState(n)}</td><td><strong class="${full?'warn':''}">${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> <span class="muted">seats</span><div class="seatbar"><i style="width:${n.max_users>0?Math.min(100,n.active_users/n.max_users*100):0}%"></i></div><div class="subline">${capacityLabel(n)}</div>${n.next_expiry?`<div class="subline">Next: ${esc(new Date(n.next_expiry).toLocaleDateString())}</div>`:''}${n.slot_mismatch?`<div class="subline">${esc(T('slotMismatch'))}</div>`:''}</td><td>${loc}<div>${ispCell(g.isp)}</div>${n.ip_group_size>1?`<span class="pill off">${esc(n.ip_group_size)} boards · shared IP</span>`:''}</td><td class="health${n.online?'':' muted'}">${healthCell(n)}</td><td><span class="mono">${esc(n.firmware||'Unknown')}</span><div>${otaPill(n)}</div></td><td><div class="row-actions"><button type="button" class="assign-board" data-act="assign-board" data-mac="${mac}">Assign</button><button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>${moreBtn('mac',mac,n.name||n.mac)}</div></td>`;
 }
 async function viewDevices(){
   if(activeView!=='devices')return;const epoch=routeEpoch;
@@ -811,17 +811,8 @@ document.addEventListener('click',e=>{
 });
 async function safeDevAction(mac,action){try{await devAction(mac,action);}catch(e){showToast(e.message,true);}}
 /* ---- Device detail sheet: stable sections, hash navigation, history ---- */
-let drawerMAC='',drawerOpener=null,drawerRequest=0,drawerTab='ddHealth',drawerEvents=[],drawerEventPage=0,drawerHistory=null;
-const drawerSections=[['ddHealth','Health'],['ddHistory','History'],['ddCapacity','Capacity'],['ddRouting','Routing'],['ddLocation','Location'],['ddWifi','WiFi'],['ddUsers','Users'],['ddNotes','Notes'],['ddActivity','Activity'],['ddDanger','Danger']];
-function selectDrawerTab(id,focus=false){
-  drawerTab=id;$('#ddTabs').querySelectorAll('[role="tab"]').forEach(b=>{const active=b.dataset.panel===id;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});
-  $('#ddBody').querySelectorAll('.drawer-section').forEach(el=>{el.hidden=el.id!==id;});$('#ddBody').scrollTop=0;
-  if(id==='ddHistory'&&drawerHistory&&$('#ddHistory .history-content'))renderChart($('#ddHistory .history-content'),drawerHistory,'Device traffic, last 24 hours');
-  if(focus)$('#ddTabs [data-panel="'+id+'"]')?.focus();
-}
+let drawerMAC='',drawerOpener=null,drawerRequest=0,drawerEvents=[],drawerEventPage=0,drawerHistory=null;
 function tabsKeyboard(e,buttons,select){const keys=['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Home','End'];if(!keys.includes(e.key))return;e.preventDefault();const i=buttons.indexOf(e.target),next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(['ArrowLeft','ArrowUp'].includes(e.key)?-1:1)+buttons.length)%buttons.length;select(buttons[next]);}
-$('#ddTabs').addEventListener('click',e=>{const b=e.target.closest('[data-panel]');if(b)selectDrawerTab(b.dataset.panel);});
-$('#ddTabs').addEventListener('keydown',e=>tabsKeyboard(e,[...$('#ddTabs').querySelectorAll('[role="tab"]')],b=>selectDrawerTab(b.dataset.panel,true)));
 function renderDrawerActivity(){const size=4,total=drawerEvents.length;drawerEventPage=Math.min(drawerEventPage,Math.max(0,Math.ceil(total/size)-1));const from=drawerEventPage*size;$('#ddActivity').innerHTML='<h3>Activity</h3>'+feedHTML(drawerEvents.slice(from,from+size),size)+(total>size?`<div class="pager"><button type="button" class="sec" data-activity-page="-1"${!from?' disabled':''}>Previous</button><span>${from+1}–${Math.min(total,from+size)} of ${total}</span><button type="button" class="sec" data-activity-page="1"${from+size>=total?' disabled':''}>Next</button></div>`:'');}
 $('#ddBody').addEventListener('click',e=>{const b=e.target.closest('[data-activity-page]');if(b){drawerEventPage+=+b.dataset.activityPage;renderDrawerActivity();$('#ddBody').scrollTop=0;$('#ddBody').focus();}});
 function hideDrawer(refocus=true){if(!$('#ddrawer')||$('#ddrawer').hidden)return;drawerMAC='';drawerRequest++;$('#ddrawer').hidden=true;$('#ddrawer').inert=false;$('#ddBody').innerHTML='';Object.keys(revealTimers).forEach(k=>{clearTimeout(revealTimers[k]);delete revealTimers[k];});$('#app').inert=false;if(refocus&&drawerOpener?.isConnected)drawerOpener.focus();drawerOpener=null;}
@@ -831,10 +822,8 @@ function facts(pairs){return '<dl class="facts">'+pairs.map(([k,v])=>`<dt>${esc(
 async function openDrawer(mac){
   if(drawerMAC===mac&&!$('#ddrawer').hidden){updateDrawer();return;}
   drawerOpener=document.activeElement;drawerMAC=mac;$('#ddrawer').hidden=false;$('#app').inert=true;
-  drawerTab='ddHealth';drawerEvents=[];drawerEventPage=0;drawerHistory=null;
-  $('#ddTabs').innerHTML=drawerSections.map(([id,label])=>`<button type="button" role="tab" id="tab-${id}" data-panel="${id}" aria-controls="${id}" aria-selected="${id===drawerTab}" tabindex="${id===drawerTab?0:-1}">${label}</button>`).join('');
-  $('#ddBody').innerHTML=drawerSection('ddHealth','Health','')+drawerSection('ddHistory','Traffic · last 24 hours','<div class="skeleton"></div>')+drawerSection('ddCapacity','Capacity','')+drawerSection('ddRouting','Routing','')+drawerSection('ddLocation','Location','')+drawerSection('ddWifi','WiFi','')+drawerSection('ddUsers','Bound users','')+drawerSection('ddNotes','Notes','')+drawerSection('ddActivity','Activity','<div class="skeleton"></div>')+drawerSection('ddDanger','Danger zone','','danger-zone');
-  $('#ddBody').querySelectorAll('.drawer-section').forEach(el=>{el.setAttribute('role','tabpanel');el.setAttribute('aria-labelledby','tab-'+el.id);});selectDrawerTab(drawerTab);
+  drawerEvents=[];drawerEventPage=0;drawerHistory=null;
+  $('#ddBody').innerHTML='<div class="drawer-column">'+drawerSection('ddHealth','Health','')+drawerSection('ddCapacity','Capacity','')+drawerSection('ddUsers','Bound users','')+'</div><div class="drawer-column">'+drawerSection('ddHistory','Traffic \u00b7 last 24 hours','<div class="skeleton"></div>')+drawerSection('ddActivity','Activity','<div class="skeleton"></div>')+drawerSection('ddNotes','Notes','')+'</div><div class="drawer-column">'+drawerSection('ddRouting','Routing','')+drawerSection('ddLocation','Location','')+drawerSection('ddWifi','WiFi','')+drawerSection('ddDanger','Danger zone','','danger-zone')+'</div>';
   updateDrawer(true);$('#ddClose').focus();const request=++drawerRequest;
   const results=await Promise.allSettled([api('/api/metrics?entity=node&id='+encodeURIComponent(mac)+'&range=24h&fields=bytes_down,bytes_up'),api('/api/events?subject='+encodeURIComponent(mac)+'&limit=50')]);
   if(request!==drawerRequest||drawerMAC!==mac||!TOKEN)return;
@@ -844,16 +833,16 @@ async function openDrawer(mac){
 function updateDrawer(initial=false){
   if(!drawerMAC)return;const n=window._devs?.[drawerMAC];if(!n){$('#ddTitle').textContent='Device unavailable';$('#ddBody').innerHTML=empty('Device is no longer listed','Close details and refresh the device list.');return;}
   const mac=esc(n.mac),g=n.geo||{},section=(id,title,html)=>{const el=$('#'+id);if(el&&!el.contains(document.activeElement)&&!(menuOpener&&el.contains(menuOpener)))el.innerHTML='<h3>'+esc(title)+'</h3>'+html;};
-  $('#ddTitle').textContent=boardName(n);$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3');
+  $('#ddTitle').textContent=boardName(n);$('#ddIdentity').textContent=n.mac+' · '+(n.chip||'esp32s3')+' | '+routingLabel(n);
   section('ddHealth','Health',nodeState(n)+`<div class="drawer-health">${healthCell(n)}</div><ul class="reason-list">${(n.health?.reasons||[]).map(r=>'<li>'+esc(r)+'</li>').join('')}</ul>`);
-  section('ddCapacity','Capacity',facts([['Measured capacity',capacityLabel(n)],['Source',n.capacity_source==='manual'?'Set manually':n.capacity_mbps>0?'Speed test':'Not measured'],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Measure speed tests the internet connection through this board. Assign a proxy slot first. RAM and CPU arrive separately in health reports.</p><p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
+  section('ddCapacity','Capacity',facts([['Measured capacity',capacityLabel(n)],['Source',n.capacity_source==='manual'?'Set manually':n.capacity_mbps>0?'Speed test':'Not measured'],['Last measured',esc(fmtAgo(n.capacity_measured_at)||'—')],['Streams during test',esc(n.capacity_active_streams||0)],['Group seats',esc(n.active_users??0)+' / '+esc(n.max_users??0)]])+`<p class="subline">Test this board's internet speed${!n.slot?'. Assign a slot first':''}. RAM / CPU are reported separately.</p><p class="subline">Shared: 1 seat after measurement, then one per 5 Mbps, up to 3. Dedicated: 1 customer per exit IP.${n.capacity_active_streams>0?' Measurement under load is a lower bound.':''}</p><div class="drawer-actions"><button type="button" data-act="measure" data-mac="${mac}"${!slotPort(n.slot)||measuring.has(n.mac)?' disabled':''}>${measuring.has(n.mac)?'Measuring…':T('measure')}</button></div><div class="err" data-merr="${mac}" role="alert"></div>`);
   section('ddRouting','Routing',facts([['Mode',esc(n.kind||'shared')],['Slot / port',n.slot?esc(n.slot)+' / :'+esc(slotPort(n.slot)):'Not assigned'],['Exit IP','<span class="mono">'+esc(n.remote_ip||'Unknown')+'</span>'],['IP group',esc(n.ip_group_size||1)+' board(s)'],['Streams',esc(n.active_dials||0)+(n.max_streams?' / '+esc(n.max_streams):'')],['Relayed traffic','↑ '+esc(fmtBytes(n.bytes_up))+' · ↓ '+esc(fmtBytes(n.bytes_down))]])+(n.slot_mismatch?`<div class="drawer-actions"><button type="button" class="sec" data-repush="${mac}">Re-push routing to broker</button></div>`:''));
   const hasPin=typeof n.lat==='number'&&typeof n.lon==='number',la=hasPin?n.lat:g.lat,lo=hasPin?n.lon:g.lon,map=typeof la==='number'&&typeof lo==='number'&&(la||lo)?'https://www.google.com/maps?q='+encodeURIComponent(la+','+lo):'';
   section('ddLocation','Location',facts([['Location',esc([g.city,g.region,g.country].filter(Boolean).join(', ')||'Unknown')],['ISP',ispCell(g.isp)],['Coordinates',hasPin?esc(n.lat.toFixed(6)+', '+n.lon.toFixed(6)):'Approximate geo-IP only']])+`<div class="drawer-actions">${map?`<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>`:''}</div>`);
-  if(initial||!$('#ddWifi [data-wifi]'))section('ddWifi','WiFi',`<span data-wifi="${mac}">${esc(n.ssid||'Unknown network')} · ${n.wifi_password_set?`•••• <button type="button" class="sec" data-act="reveal" data-mac="${mac}">Reveal for 10 seconds</button>`:'No stored password'}</span><p class="subline">Passwords stay hidden in the device list. Edit to set or clear a stored password.</p>`);
+  if(initial||!$('#ddWifi [data-wifi]'))section('ddWifi','WiFi',`<span data-wifi="${mac}">${esc(n.ssid||'Unknown network')} · ${n.wifi_password_set?`•••• <button type="button" class="sec" data-act="reveal" data-mac="${mac}">Reveal for 10 seconds</button>`:'No stored password'}</span><p class="subline">Settings can replace or clear the stored password.</p>`);
   section('ddUsers','Bound users',(n.users||[]).length?(n.users||[]).map(user=>'<div class="subline">'+esc(user)+'</div>').join(''):'<span class="muted">No users assigned</span>');
   section('ddNotes','Notes','<p style="white-space:pre-wrap;font-size:13px">'+esc(n.notes||'No notes')+'</p>');
-  section('ddDanger','Danger zone',`<p class="subline">Blocking stops new traffic. Forget removes this board from the broker registry.</p><div class="drawer-actions"><button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow device':'Block device'}</button><button type="button" class="danger drawer-forget" data-act="forget" data-mac="${mac}">Forget device</button></div>`);
+  section('ddDanger','Danger zone',`<p class="subline">Block stops new traffic; Forget removes this board.</p><div class="drawer-actions"><button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow device':'Block device'}</button><button type="button" class="danger drawer-forget" data-act="forget" data-mac="${mac}">Forget device</button></div>`);
 }
 $('#ddClose').addEventListener('click',closeDrawer);$('#ddEdit').addEventListener('click',()=>openDevice(drawerMAC,$('#ddEdit')));$('#ddAssign').addEventListener('click',()=>openBoardAssign(drawerMAC,$('#ddAssign')));$('#ddrawer').addEventListener('click',e=>{if(e.target===$('#ddrawer'))closeDrawer();});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-repush]');if(!b)return;const n=window._devs?.[b.dataset.repush];if(!n)return;b.disabled=true;try{await api('/api/devices/'+encodeURIComponent(n.mac),{method:'PUT',body:JSON.stringify({slot:n.slot,kind:n.kind})});showToast('Routing sent to broker');await viewDevices();}catch(error){showToast(error.message,true);}finally{b.disabled=false;}});
@@ -954,12 +943,13 @@ async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))re
   await api('/api/devices/'+encodeURIComponent(mac)+'/'+a,{method:'POST'}); viewDevices(); }
 
 /* ---- Device editor ---- */
-let editDev=null, dmOpener=null, clearPosition=false;
+let editDev=null, dmOpener=null, clearPosition=false,dmRequest=0,dmSavingRequest=0;
 function selectEditorTab(name,focus=false){$('#dmodal').querySelectorAll('[data-editor-tab]').forEach(b=>{const active=b.dataset.editorTab===name;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;$('#'+b.getAttribute('aria-controls')).hidden=!active;if(active&&focus)b.focus();});$('#dmodal .modal').scrollTop=0;}
 $('#dmodal .editor-tabs').addEventListener('click',e=>{const b=e.target.closest('[data-editor-tab]');if(b)selectEditorTab(b.dataset.editorTab);});
 $('#dmodal .editor-tabs').addEventListener('keydown',e=>tabsKeyboard(e,[...$('#dmodal').querySelectorAll('[data-editor-tab]')],b=>selectEditorTab(b.dataset.editorTab,true)));
 function openDevice(mac, opener){
   const d = (window._devs||{})[mac]; if(!d) return;
+  dmRequest++;$('#dmSave').disabled=false;$('#dmMapsGo').disabled=false;
   clearPosition=false; editDev = d; dmOpener = opener||document.activeElement;
   $('#dmTitle').textContent = 'Settings · '+boardName(d);
   $('#dmName').value = d.name||'';
@@ -980,6 +970,7 @@ function openDevice(mac, opener){
   $('#dmName').focus();
 }
 function closeDevice(keepFocus){
+  dmRequest++;
   $('#dmodal').style.display='none'; editDev=null;
   $('#app').inert = !$('#ddrawer').hidden; $('#ddrawer').inert=false;
   if(keepFocus!==true && dmOpener && dmOpener.isConnected) dmOpener.focus();
@@ -992,9 +983,9 @@ function updPort(){ const s=slotInput(), p=slotPort(s); $('#dmPort').textContent
 $('#dmSlot').addEventListener('input',updPort);
 $('#dmCancel').addEventListener('click',closeDevice);
 $('#dmSave').addEventListener('click', async ()=>{
-  if(!editDev) return;
+  if(!editDev||dmSavingRequest===dmRequest) return;
   // Send only fields that differ from what the modal was opened with.
-  const d = editDev, body = {};
+  const d = editDev, request=dmRequest, body = {};
   const name=$('#dmName').value.trim(), kind=$('#dmKind').value, notes=$('#dmNotes').value;
   if(name!==(d.name||'')) body.name = name;
   if(kind!==(d.kind==='dedicated'?'dedicated':'shared')) body.kind = kind;
@@ -1016,29 +1007,34 @@ $('#dmSave').addEventListener('click', async ()=>{
   if(slot!==(d.slot>0?d.slot:0) || d.slot_mismatch) body.slot = slot;
   if($('#dmWifiClear').checked) body.wifi_password = '';
   else if($('#dmWifi').value) body.wifi_password = $('#dmWifi').value;
-  $('#dmErr').textContent=''; $('#dmSave').disabled=true;
+  $('#dmErr').textContent=''; $('#dmSave').disabled=true;dmSavingRequest=request;
   try{
-    await api('/api/devices/'+encodeURIComponent(editDev.mac),{method:'PUT',body:JSON.stringify(body)});
+    await api('/api/devices/'+encodeURIComponent(d.mac),{method:'PUT',body:JSON.stringify(body)});
+    if(request!==dmRequest){showToast(boardName(d)+' settings saved');await viewDevices();return;}
     const mac = d.mac;
     closeDevice(true);
+    const closedRequest=dmRequest;
     await viewDevices();
+    if(closedRequest!==dmRequest)return;
     // The table was re-rendered, so the original opener is gone: focus its replacement.
     const nb = [...document.querySelectorAll('#dtbl button[data-act="edit"]')].find(x=>x.dataset.mac===mac);
     if(!$('#ddrawer').hidden)$('#ddEdit').focus();else if(nb) nb.focus();
-  }catch(e){ $('#dmErr').textContent=e.message; }
-  finally{ $('#dmSave').disabled=false; }
+  }catch(e){if(request===dmRequest)$('#dmErr').textContent=e.message;else showToast(boardName(d)+': '+e.message,true);}
+  finally{if(dmSavingRequest===request)dmSavingRequest=0;if(request===dmRequest||!editDev)$('#dmSave').disabled=false;}
 });
 // Find: resolve the pasted Google Maps link into coordinates (server side —
 // the browser cannot follow the short link's cross-origin redirect).
 $('#dmMapsGo').addEventListener('click', async ()=>{
   const link=$('#dmMaps').value.trim(); if(!link){ $('#dmMapsMsg').textContent=''; return; }
+  const request=dmRequest;
   $('#dmMapsGo').disabled=true; $('#dmMapsGo').textContent=T('mapsFinding'); $('#dmMapsMsg').textContent='';
   try{
     const r = await api('/api/geo/resolve',{method:'POST',body:JSON.stringify({url:link})});
+    if(request!==dmRequest||$('#dmMaps').value.trim()!==link)return;
     $('#dmLat').value = r.lat; $('#dmLon').value = r.lon;
     $('#dmMapsMsg').textContent = T('mapsFound')+' ('+(+r.lat).toFixed(5)+', '+(+r.lon).toFixed(5)+')';
-  }catch(e){ $('#dmMapsMsg').textContent = e.message; }
-  finally{ $('#dmMapsGo').disabled=false; $('#dmMapsGo').textContent=T('mapsFind'); }
+  }catch(e){if(request===dmRequest)$('#dmMapsMsg').textContent = e.message;}
+  finally{if(request===dmRequest){$('#dmMapsGo').disabled=false;$('#dmMapsGo').textContent=T('mapsFind');}}
 });
 // Reveal the WiFi password for 10 s, then hide it again.
 const revealTimers = {};
