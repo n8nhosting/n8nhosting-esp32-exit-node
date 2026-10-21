@@ -208,6 +208,21 @@ func (r *registry) setOTA(mac, url, target string) bool {
 	return true
 }
 
+// chipOf is the chip a node reported in HELLO. Firmware before 2.4.22 never
+// said, and every such board is an ESP32-S3, so "" reads as esp32s3.
+func (r *registry) chipOf(mac string) (chip string, ok bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n, ok := r.nodes[mac]
+	if !ok {
+		return "", false
+	}
+	if n.Chip == "" {
+		return "esp32s3", true
+	}
+	return n.Chip, true
+}
+
 // takeOTA returns and clears a pending OTA URL for the node.
 func (r *registry) takeOTA(n *node) string {
 	r.mu.Lock()

@@ -828,15 +828,32 @@ func (b *broker) statusMux() *http.ServeMux {
 			var body struct {
 				URL     string `json:"url"`
 				Version string `json:"version"` // expected firmware afterwards (optional)
+				Target  string `json:"target"`  // chip the image was built for (optional; esp32s3 / esp32c3)
 			}
 			json.NewDecoder(r.Body).Decode(&body)
 			if !strings.HasPrefix(body.URL, "http://") && !strings.HasPrefix(body.URL, "https://") {
 				http.Error(w, "url required", http.StatusBadRequest)
 				return
 			}
-			if len(body.URL) >= 256 || len(body.Version) > 32 {
-				http.Error(w, "url or version too long", http.StatusBadRequest)
+			if len(body.URL) >= 256 || len(body.Version) > 32 || len(body.Target) > 16 {
+				http.Error(w, "url, version or target too long", http.StatusBadRequest)
 				return
+			}
+			// An image for the wrong chip would be rejected by the bootloader
+			// anyway, but refusing it here keeps the dashboard honest and the
+			// board out of a pointless download + reboot.
+			if body.Target != "" {
+				chip, known := b.reg.chipOf(mac)
+				if !known {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				if chip != body.Target {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					json.NewEncoder(w).Encode(map[string]string{"error": "target mismatch", "chip": chip})
+					return
+				}
 			}
 			ok = b.reg.setOTA(mac, body.URL, body.Version)
 		case "ota-cancel":

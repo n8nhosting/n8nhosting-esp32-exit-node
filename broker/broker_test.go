@@ -500,3 +500,51 @@ func TestOTAStatusTracking(t *testing.T) {
 		t.Fatalf("cancel: %q %q", n.PendingOTA, n.OTAStatus)
 	}
 }
+
+// postOTA sends POST /nodes/{mac}/ota with body to the broker's status API.
+func postOTA(b *broker, mac, body string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	b.statusMux().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/nodes/"+mac+"/ota", strings.NewReader(body)))
+	return rec
+}
+
+// An OTA push names the image's target chip; the broker refuses it when the
+// node reported a different chip. Nodes that never sent chip= (firmware before
+// 2.4.22) are S3 boards, and a push without a target (older dashboard) is let
+// through as today.
+func TestOTATargetGuard(t *testing.T) {
+	b := newBroker(config{token: "tok"}, 64)
+	c3, s3old := "aa:bb:cc:00:00:c3", "aa:bb:cc:00:00:53"
+	b.reg.touch(c3, "2.4.22", "1.2.3.4", 10, "", "esp32c3")
+	b.reg.touch(s3old, "2.4.21-mux1.2", "1.2.3.4", 10, "", "")
+
+	cases := []struct {
+		mac, target string
+		code        int
+	}{
+		{c3, "esp32s3", http.StatusConflict},
+		{c3, "esp32c3", http.StatusOK},
+		{s3old, "esp32s3", http.StatusOK},
+		{s3old, "esp32c3", http.StatusConflict},
+		{c3, "", http.StatusOK},
+	}
+	for _, c := range cases {
+		b.reg.setOTA(c.mac, "", "") // clear whatever the previous case queued
+		rec := postOTA(b, c.mac, fmt.Sprintf(`{"url":"https://flash.example/fw.bin","version":"2.4.22","target":%q}`, c.target))
+		if rec.Code != c.code {
+			t.Errorf("%s target %q: status %d, want %d (%s)", c.mac, c.target, rec.Code, c.code, strings.TrimSpace(rec.Body.String()))
+		}
+		pending := b.reg.nodes[c.mac].PendingOTA
+		if c.code == http.StatusOK && pending == "" {
+			t.Errorf("%s target %q: accepted but nothing queued", c.mac, c.target)
+		}
+		if c.code == http.StatusConflict {
+			if pending != "" {
+				t.Errorf("%s target %q: refused but queued %q", c.mac, c.target, pending)
+			}
+			if !strings.Contains(rec.Body.String(), "target mismatch") {
+				t.Errorf("%s target %q: body %q lacks the reason", c.mac, c.target, rec.Body.String())
+			}
+		}
+	}
+}
