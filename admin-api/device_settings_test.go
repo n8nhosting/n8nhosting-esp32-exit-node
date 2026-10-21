@@ -88,7 +88,7 @@ func TestManualCapacityValidationAndMeasurementConflict(t *testing.T) {
 	}
 }
 
-func TestManualCapacityUsesExistingGroupAdmission(t *testing.T) {
+func TestManualCapacityUsesIndependentBoardAdmission(t *testing.T) {
 	s, mux, fb := newTestServerWithBroker(t)
 	const a, b = "aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02"
 	fb.nodes = []brokerNode{{MAC: a, RemoteIP: "27.1.1.1"}, {MAC: b, RemoteIP: "27.1.1.1"}}
@@ -107,9 +107,13 @@ func TestManualCapacityUsesExistingGroupAdmission(t *testing.T) {
 		if rr, out := doJSON(t, mux, "PUT", "/api/devices/"+mac, "admintok", map[string]any{"capacity_mbps": 2.6}); rr.Code != 200 {
 			t.Fatalf("save capacity: %d %v", rr.Code, out)
 		}
+		if mac == a {
+			assign("second", b, 409) // neighbor's measurement never supplies this board's capacity
+		}
 	}
 	assign("first", a, 200)
-	assign("second", b, 409) // one IP still has only one seat
+	assign("second", b, 200) // each measured C3 has a seat, even on one IP
+	assign("first", b, 409)  // transferring to a full board is still refused
 	if rr, _ := doJSON(t, mux, "PUT", "/api/devices/"+b, "admintok", map[string]any{"capacity_mbps": 10}); rr.Code != 200 {
 		t.Fatal("could not raise capacity")
 	}

@@ -113,12 +113,12 @@ type deviceView struct {
 	// flag when the broker reports one); saving the slot again re-pushes it
 	SlotMismatch bool `json:"slot_mismatch"`
 
-	// devices behind one public IP share a group (one household line)
+	// Public IP grouping is informational; seat limits belong to each MAC.
 	IPGroup     string `json:"ip_group"`
 	IPGroupSize int    `json:"ip_group_size"`
 	MaxUsers    int    `json:"max_users"`
-	ActiveUsers int    `json:"active_users"`
-	Seats       int    `json:"-"` // seats taken on this board alone (admission)
+	ActiveUsers int    `json:"active_users"` // seats taken on this MAC, independent of public IP
+	Seats       int    `json:"-"`            // seats taken on this board alone (admission)
 }
 
 // maxUsers is how many users a device may take: one for a dedicated board,
@@ -234,15 +234,12 @@ func (s *server) buildDeviceViewsWithHealth(nodes []brokerNode, rich bool) []dev
 		v.SlotMismatch = n.Slot != v.Slot || (n.Pool != nil && *n.Pool != poolFlag(v.Kind))
 		v.MaxUsers = maxUsers(v.Kind, v.CapacityMbps)
 		v.Seats = activeByMAC[n.MAC]
+		v.ActiveUsers = v.Seats
 		v.NextExpiry = nextExpiry[n.MAC]
 		if macs := group[n.RemoteIP]; len(macs) > 0 {
 			v.IPGroupSize = len(macs)
-			for _, m := range macs {
-				v.ActiveUsers += activeByMAC[m]
-			}
 		} else {
 			v.IPGroupSize = 1
-			v.ActiveUsers = activeByMAC[n.MAC]
 		}
 		v.Status, v.Tags = deviceStatus(v, now)
 		if rich {
@@ -639,47 +636,18 @@ func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// IPs are the sellable unit: use the strongest eligible board's limit, not
-// the sum of multiple boards sharing a household connection.
+// Each eligible, routable board contributes its own free seats, even when
+// multiple boards use the same public IP.
 func availableSeats(views []deviceView) int {
-	type group struct {
-		seated, shared               int
-		dedicated, occupiedDedicated bool
-	}
-	groups := map[string]*group{}
-	for _, v := range views {
-		key := v.IPGroup
-		if key == "" {
-			key = "mac:" + v.MAC
-		}
-		g := groups[key]
-		if g == nil {
-			g = &group{}
-			groups[key] = g
-		}
-		g.seated += v.Seats
-		if v.Kind == "dedicated" && v.Seats > 0 {
-			g.occupiedDedicated = true
-		}
-		if !v.Online || v.Blocked || v.Status == "updating" {
-			continue
-		}
-		if v.Kind == "dedicated" {
-			g.dedicated = true
-		} else if v.CapacityMbps > 0 && v.MaxUsers > g.shared {
-			g.shared = v.MaxUsers
-		}
-	}
 	free := 0
-	for _, g := range groups {
-		if g.occupiedDedicated {
+	for _, v := range views {
+		if !v.Online || v.Blocked || v.Status == "updating" || v.Slot <= 0 || v.SlotMismatch {
 			continue
 		}
-		n := g.shared - g.seated
-		if g.dedicated && g.seated == 0 && n < 1 {
-			n = 1
+		if v.Kind != "dedicated" && v.CapacityMbps <= 0 {
+			continue
 		}
-		if n > 0 {
+		if n := v.MaxUsers - v.Seats; n > 0 {
 			free += n
 		}
 	}

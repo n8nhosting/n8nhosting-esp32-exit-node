@@ -316,19 +316,21 @@ func TestDeviceStatusPrecedenceAndC3Capacity(t *testing.T) {
 		t.Fatal("dedicated changed")
 	}
 }
-func TestSeatAvailabilityGroupCeiling(t *testing.T) {
-	a := deviceView{brokerNode: brokerNode{MAC: "a", Online: true}, Kind: "shared", IPGroup: "same", CapacityMbps: 10, MaxUsers: 2, Seats: 1, Status: "online"}
+func TestSeatAvailabilityPerBoardEvenOnSameIP(t *testing.T) {
+	a := deviceView{brokerNode: brokerNode{MAC: "a", Online: true}, Slot: 1, Kind: "shared", IPGroup: "same", CapacityMbps: 10, MaxUsers: 2, Seats: 1, Status: "online"}
 	b := a
 	b.MAC = "b"
+	b.Slot = 2
 	b.Seats = 0
 	b.MaxUsers = 3
-	if n := availableSeats([]deviceView{a, b}); n != 2 {
-		t.Fatalf("group was summed: %d", n)
+	if n := availableSeats([]deviceView{a, b}); n != 4 {
+		t.Fatalf("independent free board seats were not summed: %d", n)
 	}
 	b.Kind = "dedicated"
+	b.MaxUsers = 1
 	b.Seats = 1
-	if n := availableSeats([]deviceView{a, b}); n != 0 {
-		t.Fatal("occupied dedicated group admitted", n)
+	if n := availableSeats([]deviceView{a, b}); n != 1 {
+		t.Fatal("dedicated occupancy affected another board", n)
 	}
 	a.IPGroup = ""
 	b.IPGroup = ""
@@ -337,6 +339,35 @@ func TestSeatAvailabilityGroupCeiling(t *testing.T) {
 	b.Seats = 0
 	if n := availableSeats([]deviceView{a, b}); n != 2 {
 		t.Fatal("unknown IP groups collapsed", n)
+	}
+}
+
+func TestSeatAvailabilityRequiresEligibleRoutableBoard(t *testing.T) {
+	base := deviceView{brokerNode: brokerNode{MAC: "a", Online: true}, Slot: 1, Kind: "shared", CapacityMbps: 10, MaxUsers: 2, Seats: 1, Status: "online"}
+	for _, tc := range []struct {
+		name string
+		edit func(*deviceView)
+		want int
+	}{
+		{"normal", func(v *deviceView) {}, 1},
+		{"offline", func(v *deviceView) { v.Online = false }, 0},
+		{"blocked", func(v *deviceView) { v.Blocked = true }, 0},
+		{"updating", func(v *deviceView) { v.Status = "updating" }, 0},
+		{"no slot", func(v *deviceView) { v.Slot = 0 }, 0},
+		{"routing mismatch", func(v *deviceView) { v.SlotMismatch = true }, 0},
+		{"unmeasured", func(v *deviceView) { v.CapacityMbps = 0 }, 0},
+		{"full", func(v *deviceView) { v.Seats = 2 }, 0},
+		{"overbooked", func(v *deviceView) { v.Seats = 3 }, 0},
+		{"dedicated without measurement", func(v *deviceView) { v.Kind = "dedicated"; v.MaxUsers = 1; v.Seats = 0; v.CapacityMbps = 0 }, 1},
+		{"measured C3", func(v *deviceView) { v.CapacityMbps = 2.6; v.MaxUsers = 1; v.Seats = 0 }, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := base
+			tc.edit(&v)
+			if got := availableSeats([]deviceView{v}); got != tc.want {
+				t.Fatalf("available=%d want%d", got, tc.want)
+			}
+		})
 	}
 }
 func TestUserStatusMonthlyProjection(t *testing.T) {
@@ -431,9 +462,9 @@ func TestSamplerSerializesOverlappingTicks(t *testing.T) {
 func TestOverviewSeatAndStatusContracts(t *testing.T) {
 	s, mux, fb := newTestServerWithBroker(t)
 	now := time.Now()
-	fb.nodes = []brokerNode{{MAC: "a", Online: true, RemoteIP: "same"}, {MAC: "b", Online: true, RemoteIP: "same"}}
-	for _, mac := range []string{"a", "b"} {
-		if err := s.devices.Upsert(mac, func(d *Device) error { d.CapacityMbps = 15; return nil }); err != nil {
+	fb.nodes = []brokerNode{{MAC: "a", Online: true, RemoteIP: "same", Slot: 1}, {MAC: "b", Online: true, RemoteIP: "same", Slot: 2}}
+	for i, mac := range []string{"a", "b"} {
+		if err := s.devices.Upsert(mac, func(d *Device) error { d.CapacityMbps = 15; d.Slot = i + 1; return nil }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -448,7 +479,7 @@ func TestOverviewSeatAndStatusContracts(t *testing.T) {
 		t.Fatal(rr.Code, rr.Body)
 	}
 	seats := out["seats"].(map[string]any)
-	if seats["occupied"] != float64(1) || seats["available"] != float64(2) {
+	if seats["occupied"] != float64(1) || seats["available"] != float64(5) {
 		t.Fatalf("same IP seats %+v", seats)
 	}
 	users := out["users"].(map[string]any)

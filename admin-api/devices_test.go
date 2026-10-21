@@ -263,8 +263,8 @@ func TestDeviceIPGroupAndMaxUsers(t *testing.T) {
 	if by[a]["max_users"] != float64(2) || by[b]["max_users"] != float64(0) || by[c]["max_users"] != float64(1) {
 		t.Fatalf("max_users: %v", list)
 	}
-	// group {a,b}: u1 (a) + u2 (b) active; u3 expired, _measure-x and u5 excluded
-	if by[a]["active_users"] != float64(2) || by[b]["active_users"] != float64(2) || by[c]["active_users"] != float64(1) {
+	// Occupancy is per board; u3 expired, _measure-x and disabled u5 excluded.
+	if by[a]["active_users"] != float64(1) || by[b]["active_users"] != float64(1) || by[c]["active_users"] != float64(1) {
 		t.Fatalf("active_users: %v", list)
 	}
 	if by[a]["port"] != float64(3132) || by[b]["port"] != float64(0) {

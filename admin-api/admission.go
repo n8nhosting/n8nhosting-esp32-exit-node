@@ -1,5 +1,5 @@
-// admission.go - binding users to boards: who takes a seat on a board's IP
-// group, the capacity rule a binding must pass, and the bound board the gost
+// admission.go - binding users to boards: who takes a seat on each board,
+// the capacity rule a binding must pass, and the bound board the gost
 // plugins and /credentials look up.
 package main
 
@@ -55,13 +55,11 @@ func (s *server) boundDevice(u *User) (*Device, error) {
 }
 
 // admit applies the capacity rule to binding username to the board mac. Seats
-// are counted over mac's IP group exactly as the device list shows it (broker
-// /nodes), not counting username itself. The sellable unit is the exit IP: a
-// user on a dedicated board owns the whole group, so a dedicated board takes a
-// user only while the rest of its group is empty, and no board in the group
-// takes anyone while a dedicated board there is held. It returns 0 when the
-// binding may proceed, else the status and body to answer with. Callers hold
-// admitMu until the binding is written.
+// are counted only on that MAC, not counting username itself when already
+// bound to the target. Shared public IPs are informational and do not combine
+// limits or confer ownership over other boards. It returns 0 when the binding
+// may proceed, else the status and body to answer with. Callers hold admitMu
+// until the binding is written.
 func (s *server) admit(username, mac string) (int, map[string]string) {
 	u, err := s.store.Get(username)
 	if errors.Is(err, ErrNotFound) {
@@ -84,7 +82,7 @@ func (s *server) admit(username, mac string) (int, map[string]string) {
 		} else if err != nil {
 			return http.StatusInternalServerError, map[string]string{"error": "store: " + err.Error()}
 		}
-		nodes = append(nodes, brokerNode{MAC: mac}) // a group of its own
+		nodes = append(nodes, brokerNode{MAC: mac})
 	}
 	views := s.buildDeviceViews(nodes)
 	var v deviceView
@@ -93,40 +91,18 @@ func (s *server) admit(username, mac string) (int, map[string]string) {
 			v = dv
 		}
 	}
-	// seats in mac's IP group held by others: on mac itself, on the group's
-	// other boards, and on those of them that are dedicated
-	self := takesSeat(u, time.Now())
-	onTarget, elsewhere, onDedicated := 0, 0, 0
-	for _, dv := range views {
-		if dv.MAC != mac && (v.IPGroup == "" || dv.IPGroup != v.IPGroup) {
-			continue
-		}
-		n := dv.Seats
-		if self && dv.MAC == u.DeviceMAC {
-			n--
-		}
-		if dv.MAC == mac {
-			onTarget = n
-			continue
-		}
-		elsewhere += n
-		if dv.Kind == "dedicated" {
-			onDedicated += n
-		}
+	taken := v.Seats
+	if u.DeviceMAC == mac && takesSeat(u, time.Now()) {
+		taken-- // self-reassignment does not consume a second seat
 	}
-	taken := onTarget + elsewhere // the group's active_users, less this user
 	reason := ""
 	switch {
-	case v.Kind == "dedicated" && onTarget >= v.MaxUsers:
+	case v.Kind == "dedicated" && taken >= v.MaxUsers:
 		reason = "dedicated device already has a user"
-	case onDedicated > 0:
-		reason = "IP is dedicated to another user"
-	case v.Kind == "dedicated" && elsewhere > 0:
-		reason = "IP already shared"
 	case v.Kind != "dedicated" && v.CapacityMbps <= 0:
 		reason = "capacity not measured"
 	case v.Kind != "dedicated" && taken >= v.MaxUsers:
-		reason = fmt.Sprintf("shared IP full (%d/%d)", taken, v.MaxUsers)
+		reason = fmt.Sprintf("shared device full (%d/%d)", taken, v.MaxUsers)
 	}
 	if reason != "" {
 		return http.StatusConflict, map[string]string{"error": "capacity", "reason": reason}

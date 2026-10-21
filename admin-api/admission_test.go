@@ -72,17 +72,19 @@ func TestAssignRespectsCapacityRule(t *testing.T) {
 		}
 	}
 
-	// shared capacity 12 Mbps: min(3, 12/5) = 2 seats for the whole IP group {a, b}
+	// Each board at 12 Mbps has two independent seats, despite one public IP.
 	ok("u1", a)
 	ok("u2", b)
-	full := map[string]any{"error": "capacity", "reason": "shared IP full (2/2)"}
-	refused("u3", a, http.StatusConflict, full)
-	refused("u3", b, http.StatusConflict, full)
-	// moving a user within their group does not count them twice
-	ok("u1", b)
+	ok("u3", a)
+	ok("u4", b)
+	full := map[string]any{"error": "capacity", "reason": "shared device full (2/2)"}
+	refused("u5", a, http.StatusConflict, full)
+	refused("u5", b, http.StatusConflict, full)
+	ok("u1", a)                                 // self-reassignment does not take a second seat
+	refused("u1", b, http.StatusConflict, full) // transfers need room on target
 	// PUT device_mac is held to the same rule
-	if rr, out := doJSON(t, mux, "PUT", "/api/users/u3", "admintok", map[string]any{"device_mac": a}); rr.Code != http.StatusConflict || out["reason"] != "shared IP full (2/2)" {
-		t.Fatalf("PUT device_mac into a full group: %d %v", rr.Code, out)
+	if rr, out := doJSON(t, mux, "PUT", "/api/users/u5", "admintok", map[string]any{"device_mac": a}); rr.Code != http.StatusConflict || out["reason"] != "shared device full (2/2)" {
+		t.Fatalf("PUT device_mac into a full board: %d %v", rr.Code, out)
 	}
 
 	// dedicated: exactly one user
@@ -98,7 +100,7 @@ func TestAssignRespectsCapacityRule(t *testing.T) {
 	refused("nobody", a, http.StatusNotFound, map[string]any{"error": "not found"})
 
 	// refused assignments leave the user where they were
-	for name, want := range map[string]string{"u3": ded, "u4": "", "u5": ""} {
+	for name, want := range map[string]string{"u1": a, "u3": ded, "u4": b, "u5": ""} {
 		u, err := s.store.Get(name)
 		if err != nil || u.DeviceMAC != want {
 			t.Fatalf("%s bound to %q (%v), want %q", name, u.DeviceMAC, err, want)
@@ -107,6 +109,7 @@ func TestAssignRespectsCapacityRule(t *testing.T) {
 
 	// a device known only from its record is assignable
 	ok("u4", recordOnly)
+	ok("u1", b) // moving to another board works after that board frees a seat
 	// unassign is unchanged
 	if rr, out := doJSON(t, mux, "POST", "/api/users/u1/unassign", "admintok", nil); rr.Code != http.StatusOK || out["device_mac"] != nil {
 		t.Fatalf("unassign: %d %v", rr.Code, out)
@@ -114,19 +117,20 @@ func TestAssignRespectsCapacityRule(t *testing.T) {
 	ok("u5", a) // a seat freed up
 }
 
-// The sellable unit is the exit IP: a user on a dedicated board owns every
-// board behind that IP, and a dedicated board cannot join an IP already shared.
-func TestDedicatedIPExcludesWholeGroup(t *testing.T) {
+// Dedicated ownership covers exactly one board, never others sharing its IP.
+func TestDedicatedBoardsHaveIndependentSeatsOnSameIP(t *testing.T) {
 	s, mux, fb := newTestServerWithBroker(t)
-	ded, shared := "aa:bb:cc:dd:ee:11", "aa:bb:cc:dd:ee:12" // one household line
-	fb.nodes = []brokerNode{{MAC: ded, RemoteIP: "27.2.2.2"}, {MAC: shared, RemoteIP: "27.2.2.2"}}
-	if err := s.devices.Upsert(ded, func(d *Device) error { d.Kind = "dedicated"; return nil }); err != nil {
-		t.Fatal(err)
+	ded, other, shared := "aa:bb:cc:dd:ee:11", "aa:bb:cc:dd:ee:12", "aa:bb:cc:dd:ee:13"
+	fb.nodes = []brokerNode{{MAC: ded, RemoteIP: "27.2.2.2"}, {MAC: other, RemoteIP: "27.2.2.2"}, {MAC: shared, RemoteIP: "27.2.2.2"}}
+	for _, mac := range []string{ded, other} {
+		if err := s.devices.Upsert(mac, func(d *Device) error { d.Kind = "dedicated"; return nil }); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := s.devices.Upsert(shared, func(d *Device) error { d.CapacityMbps = 20; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"u1", "u2", "u3", "off"} {
+	for _, name := range []string{"u1", "u2", "u3", "u4", "u5", "off"} {
 		createUser(t, mux, map[string]any{"username": name, "password": "pw"})
 	}
 	// neither a disabled user nor a measurement user on the shared board is "active"
@@ -144,19 +148,20 @@ func TestDedicatedIPExcludesWholeGroup(t *testing.T) {
 	}
 
 	assign("u1", ded, http.StatusOK, "")
-	// the dedicated user owns the IP: nobody joins the shared board behind it
-	assign("u2", shared, http.StatusConflict, "IP is dedicated to another user")
-	assign("u2", ded, http.StatusConflict, "dedicated device already has a user")
-	// the holder is not "another user": they may move within their IP
-	assign("u1", shared, http.StatusOK, "")
 	assign("u2", shared, http.StatusOK, "")
-	// the reverse: a dedicated board cannot take a user while its IP is shared
-	assign("u3", ded, http.StatusConflict, "IP already shared")
-	// once the IP is empty the dedicated board is sellable again
-	for _, name := range []string{"u1", "u2"} {
-		doJSON(t, mux, "POST", "/api/users/"+name+"/unassign", "admintok", nil)
+	assign("u3", other, http.StatusOK, "")
+	assign("u1", ded, http.StatusOK, "")
+	assign("u2", ded, http.StatusConflict, "dedicated device already has a user")
+	assign("u2", other, http.StatusConflict, "dedicated device already has a user")
+	assign("u4", shared, http.StatusOK, "")
+	assign("u5", shared, http.StatusOK, "") // independent shared board reaches 3
+	assign("u1", shared, http.StatusConflict, "shared device full (3/3)")
+	u, _ := s.store.Get("u1")
+	if u.DeviceMAC != ded {
+		t.Fatal("failed transfer changed the dedicated holder")
 	}
-	assign("u3", ded, http.StatusOK, "")
+	doJSON(t, mux, "POST", "/api/users/u3/unassign", "admintok", nil)
+	assign("u2", other, http.StatusOK, "") // shared IP occupancy does not block it
 }
 
 func TestAuthScopedToSlotPort(t *testing.T) {
