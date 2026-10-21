@@ -30,28 +30,46 @@ func (s *server) brokerGET(path string, v any) error {
 	return json.NewDecoder(resp.Body).Decode(v)
 }
 
+// nodeStats mirrors the broker's latest STATS sample from a board (firmware
+// 2.4.23+, every 30 s); absent for older firmware.
+type nodeStats struct {
+	At         string `json:"at"`
+	UptimeSec  uint64 `json:"uptime_sec"`
+	HeapFree   uint32 `json:"heap_free"` // internal heap, bytes
+	HeapMin    uint32 `json:"heap_min"`
+	HeapTotal  uint32 `json:"heap_total"`
+	PSRAMFree  uint32 `json:"psram_free,omitempty"`
+	PSRAMTotal uint32 `json:"psram_total,omitempty"`
+	CPUPct     int    `json:"cpu_pct"` // -1 = unknown
+	AppBytes   uint32 `json:"app_bytes"`
+	SlotBytes  uint32 `json:"slot_bytes"`
+	FlashBytes uint32 `json:"flash_bytes"`
+	Streams    int    `json:"streams"`
+}
+
 // brokerNode mirrors the broker's /nodes JSON.
 type brokerNode struct {
-	MAC        string `json:"mac"`
-	Online     bool   `json:"online"`
-	Blocked    bool   `json:"blocked"`
-	RemoteIP   string `json:"remote_ip"`
-	Firmware   string `json:"firmware"`
-	SSID       string `json:"ssid"`
-	Chip       string `json:"chip"` // esp32s3 / esp32c3 from HELLO; "" for firmware before 2.4.22 (all S3)
-	UptimeSec  uint64 `json:"uptime_sec"`
-	FirstSeen  string `json:"first_seen"`
-	LastSeen   string `json:"last_seen"`
-	IdleConns  int64  `json:"idle_conns"`
-	Active     int64  `json:"active_dials"`
-	DialsOK    int64  `json:"dials_ok"`
-	DialsErr   int64  `json:"dials_err"`
-	BytesUp    int64  `json:"bytes_up"`
-	BytesDown  int64  `json:"bytes_down"`
-	PendingOTA string `json:"pending_ota,omitempty"`
-	OTATarget  string `json:"ota_target,omitempty"`
-	OTAStatus  string `json:"ota_status,omitempty"`
-	OTAAt      string `json:"ota_at,omitempty"`
+	MAC        string     `json:"mac"`
+	Online     bool       `json:"online"`
+	Blocked    bool       `json:"blocked"`
+	RemoteIP   string     `json:"remote_ip"`
+	Firmware   string     `json:"firmware"`
+	SSID       string     `json:"ssid"`
+	Chip       string     `json:"chip"`       // esp32s3 / esp32c3 from HELLO; "" for firmware before 2.4.22 (all S3)
+	UptimeSec  uint64     `json:"uptime_sec"` // running (the broker carries it between reports)
+	FirstSeen  string     `json:"first_seen"`
+	LastSeen   string     `json:"last_seen"`
+	IdleConns  int64      `json:"idle_conns"`
+	Active     int64      `json:"active_dials"`
+	DialsOK    int64      `json:"dials_ok"`
+	DialsErr   int64      `json:"dials_err"`
+	BytesUp    int64      `json:"bytes_up"`
+	BytesDown  int64      `json:"bytes_down"`
+	PendingOTA string     `json:"pending_ota,omitempty"`
+	OTATarget  string     `json:"ota_target,omitempty"`
+	OTAStatus  string     `json:"ota_status,omitempty"`
+	OTAAt      string     `json:"ota_at,omitempty"`
+	Stats      *nodeStats `json:"stats,omitempty"` // board health; nil before firmware 2.4.23
 	// routing the broker holds for the board; a device view's own "slot" (the
 	// record's) shadows Slot in JSON
 	Slot int   `json:"slot"`

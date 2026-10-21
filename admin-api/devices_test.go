@@ -279,3 +279,29 @@ func TestDeviceIPGroupAndMaxUsers(t *testing.T) {
 		}
 	}
 }
+
+// The broker's health sample (firmware 2.4.23+) reaches the dashboard as-is;
+// a board on older firmware has no stats object at all.
+func TestDevicesCarryStats(t *testing.T) {
+	_, mux, fb := newTestServerWithBroker(t)
+	fb.nodes = []brokerNode{
+		{MAC: "aa:bb:cc:dd:ee:09", Online: true, UptimeSec: 3600, Stats: &nodeStats{At: "2026-10-21T12:00:00Z", UptimeSec: 3600,
+			HeapFree: 140000, HeapMin: 26000, HeapTotal: 320000, CPUPct: 12, AppBytes: 1245184, SlotBytes: 2031616, FlashBytes: 4194304, Streams: 2}},
+		{MAC: "aa:bb:cc:dd:ee:08", Online: true, UptimeSec: 50},
+	}
+	_, list := doJSONList(t, mux, "GET", "/api/devices", "admintok")
+	byMac := map[string]map[string]any{}
+	for _, d := range list {
+		byMac[d["mac"].(string)] = d
+	}
+	st, _ := byMac["aa:bb:cc:dd:ee:09"]["stats"].(map[string]any)
+	if st == nil || st["heap_free"].(float64) != 140000 || st["cpu_pct"].(float64) != 12 || st["flash_bytes"].(float64) != 4194304 || st["at"] != "2026-10-21T12:00:00Z" {
+		t.Fatalf("stats: %v", byMac["aa:bb:cc:dd:ee:09"]["stats"])
+	}
+	if v, has := byMac["aa:bb:cc:dd:ee:08"]["stats"]; has && v != nil {
+		t.Fatalf("old firmware must not get a stats object: %v", v)
+	}
+	if byMac["aa:bb:cc:dd:ee:09"]["uptime_sec"].(float64) != 3600 {
+		t.Fatal("uptime must pass through")
+	}
+}
