@@ -395,3 +395,64 @@ overflow. Console has no captured errors/warnings; viewport override was reset.
 Screenshots under `output/playwright/`:
 `production-per-board-seats-picker.jpg`, `production-per-board-seats-devices.jpg`
 and `production-per-board-seats-mobile.jpg`. No firmware update was initiated.
+
+## OTA confirmation and real C3 checks (2026-10-22, in progress)
+
+The operator approved fixing OTA tracking and testing actual C3 transfers,
+parallel connections and reconnection. This section supersedes the earlier
+statement that no firmware action was initiated. Customer bindings are retained.
+See [OTA and diagnostics contract](../superpowers/specs/2026-10-22-ota-confirmation-and-diagnostics.md).
+
+At 03:50:37 +07 the production broker sent the archived testing image
+`2.4.23/esp32c3/esp32_nat_router.bin` to Board-AEC0 (`ac:a7:04:ba:ae:c0`,
+slot 4 / 3134). Its mux link closed immediately and returned at 03:50:55;
+HELLO reported `2.4.23-c3` and OTA became `ok`. This is a confirmed C3 OTA
+and 18-second reconnect, not merely a successful HTTP enqueue. The latest/stable
+release pointer remains unchanged. Screenshot: `ota-aec0-success.jpg`.
+
+Normal **Measure speed** ran through the real production gost slot and board,
+using the built-in temporary seatless measurement account:
+
+| Board | Port | Actual object | Stored result | Completion (+07) |
+|---|---:|---:|---:|---|
+| AEC0 | 3134 | 8,388,608 bytes | 2.4 Mbps | 03:54:07 |
+| 7EB0 | 3133 | 8 MiB object | 1.6 Mbps | approximately 03:55 |
+
+Both remain at 1/1 board seats. These real measurements replace their previous
+1 Mbps manual capacities; no customer was reassigned. AEC0's relayed counters
+increased by 8 MiB; RAM/CPU reports now appear. Screenshots and sanitized broker
+chronology are under `output/playwright/ota-*`.
+
+Open observations: Board 1 still runs `2.4.21-mux1.4`; its previous S3 OTA was
+sent at 03:33:37 but has not confirmed the target. The old dashboard incorrectly
+keeps its firmware pill at “updating” after 15 minutes. AEC0 reports 100% CPU
+even in a later zero-stream sample, while 7EB0 returns to 1% after load; this
+is recorded telemetry, not yet an established firmware fault. Separately,
+7EB0's uptime reset around 03:53:05–03:53:07 before its measurement. The agent
+did not initiate that reset or open serial; the cause is unconfirmed.
+
+OTA reliability changes and bounded diagnostics are being validated locally;
+they are not yet claimed deployed by this section. Parallel and longer-duration
+hardware acceptance remains open until actual results below are recorded.
+
+Local verification completed before deployment: broker full tests/vet plus
+targeted OTA/storage/race cases; admin full tests (5.878s)/vet plus targeted
+diagnostic and OTA race cases. Failure fixtures prove no command is sent when
+the durable dispatch marker cannot be saved, including mkdir/write/rename
+failures. New diagnostics cover strict bounded options, actual parallel bytes,
+wall-clock aggregate rate, partial failure, cancellation, temporary-account
+cleanup and unchanged capacity for `persist:false`.
+
+One existing speed test initially failed during simultaneous ESP-IDF builds:
+its fixed “16 Mbps” expectation assumed scheduler sleeps were exact. Commit
+`0699ae9` checks returned Mbps against observed transfer timing and byte counts
+instead; no production formula changed. The corrected full suite passes.
+
+Browser regression passes 11 groups; settings/per-board-seat regression passes
+10 groups. The additional connection/OTA helper passes 5 groups, covering
+truthful status/reason copy, post-OTA Health focus refresh, bounded request
+payload, incomplete-stream results, 524 recovery, refresh pausing, Stop/late
+responses, mobile layout, Escape and navigation cancellation. Diagnostic
+responses in this local helper are explicitly simulated; they are not hardware
+throughput evidence. Impeccable detector returns `[]`. Local screenshots and
+`connection-acceptance.json` are under `output/playwright/`.

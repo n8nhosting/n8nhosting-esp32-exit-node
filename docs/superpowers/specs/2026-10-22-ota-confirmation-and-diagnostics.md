@@ -38,7 +38,8 @@ single download and stores capacity. Optional JSON accepts only:
 Parallelism is 1, 2 or 4. Duration is 0 for one download per worker, or 30–300
 seconds for repeated downloads. The origin remains the configured fixed
 `SPEEDTEST_URL`; clients cannot choose a destination or proxy. Each request is
-capped at 8 MiB. Use one temporary, uncapped, seatless account bound to the
+capped at 8 MiB, with a 512 MiB total budget per worker. Use one temporary,
+uncapped, seatless account bound to the
 specific board, then clean it up on success, failure or cancellation.
 
 Return aggregate bytes/rate and per-worker results, with actual elapsed time.
@@ -47,7 +48,9 @@ the intended duration deadline from client cancellation or a transport failure.
 `persist:false` must not change capacity, seats or customer assignments.
 
 The dashboard exposes this as **Connection test** in the device actions menu,
-with bounded options, elapsed time, Stop and readable per-stream results.
+with 30/60/90-second options, elapsed time, Stop and readable per-stream results.
+Longer internal checks avoid public reverse-proxy request deadlines; the HTTP
+handler itself remains bounded at 300 seconds and stops on client cancellation.
 Starting or closing another test must invalidate late responses. Existing
 modal focus handling and refresh pausing apply.
 
@@ -57,6 +60,12 @@ Keep local unit/race/browser checks, actual production deployment, actual board
 OTA confirmation and hardware load duration as separate evidence. A five-minute
 diagnostic is not a 24-hour soak. Keep testing releases marked testing and leave
 the stable/latest pointer unchanged until hardware acceptance is complete.
+
+Firmware 2.4.24 adds a 100 ms yield only when the console returns NULL/EOF.
+In ESP-IDF 5.5.2, disconnected USB Serial/JTAG reads can return immediately;
+the previous main console loop retried without blocking and consumed idle CPU.
+Keep the existing CPU counter formula so before/after hardware readings can
+confirm this fix. Valid console commands and network configuration are unchanged.
 
 Record current results in `docs/dashboard-review/04-phase2-acceptance.md` and
 sanitized artifacts under `output/playwright/`; never store credentials.
