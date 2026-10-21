@@ -5,30 +5,30 @@
       "version": "2.4.22",
       "reports": "2.4.22",
       "protocol": "mux1",
-      "built": "Oct 21 2026 15:04:11",
+      "built": "Oct 21 2026 17:11:11",
       "added": "2026-10-21",
-      "size": 1264608,
-      "sha256": "82e10133b88cffad27c7bb073ab7cbefa70e47390e1f7598ae2498453dc87de2",
+      "size": 1264720,
+      "sha256": "2add2188b1acac9ba510de9899db69dc62ad63fd1f32554a31abe624189f582a",
       "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
       "manifest": "firmware/releases/2.4.22/manifest.json",
       "targets": {
         "esp32c3": {
           "url": "firmware/releases/2.4.22/esp32c3/esp32_nat_router.bin",
-          "size": 1216032,
-          "sha256": "d63b78af4cdfef0d761515437b61dfda41f92c595a6f205b1c815ef57bab3f23",
-          "built": "Oct 21 2026 16:31:02"
+          "size": 1216192,
+          "sha256": "4270bb592d9717f59641bbdc20eb0d9a9fd63d5b90e15c0118e15a32459aebfd",
+          "built": "Oct 21 2026 17:09:57"
         },
         "esp32s3": {
           "url": "firmware/releases/2.4.22/esp32s3/esp32_nat_router.bin",
-          "size": 1264608,
-          "sha256": "82e10133b88cffad27c7bb073ab7cbefa70e47390e1f7598ae2498453dc87de2",
-          "built": "Oct 21 2026 16:35:14"
+          "size": 1264720,
+          "sha256": "2add2188b1acac9ba510de9899db69dc62ad63fd1f32554a31abe624189f582a",
+          "built": "Oct 21 2026 17:11:11"
         }
       },
       "title": "2.4.22: รองรับ ESP32-C3 Super Mini, ตัด web UI เหลือหน้า setup, OTA แบบปิด link ก่อนโหลด",
-      "notes": "firmware ชุดเดียวสำหรับ S3 N16R8 และ C3 Super Mini (image แยกตามชิป) ตัด OLED/PCAP/mDNS และหน้าเว็บจัดการออก (เหลือหน้าตั้ง WiFi ตอน AP setup) HELLO บอก window/frame/chip ให้ broker, OTA ตัด stream และปิด link ก่อนดาวน์โหลด ต้องใช้ broker 2.4.22 เพื่อให้ C3 ใช้ window 8 KB (broker เก่ายังรับได้) รุ่นทดสอบ",
+      "notes": "firmware ชุดเดียวสำหรับ S3 N16R8 และ C3 Super Mini (image แยกตามชิป) ตัด OLED/PCAP/mDNS และหน้าเว็บจัดการออก (เหลือหน้าตั้ง WiFi ตอน AP setup) HELLO บอก window/frame/chip ให้ broker, OTA ตัด stream และปิด link ก่อนดาวน์โหลด (รับเฉพาะ URL https), ปิด WiFi power save ตอน rproxy ทำงาน ต้อง deploy broker 2.4.22 ก่อน: broker เก่ารับ link ได้แต่จะหลุดเมื่อมีเฟรมใหญ่ครั้งแรก (C3 ใช้ window 8 KB / frame 4 KB) รุ่นทดสอบ",
       "status": "testing",
-      "commit": "5f63694"
+      "commit": "c10c2b2"
     },
     {
       "version": "2.4.21-mux1.4",
