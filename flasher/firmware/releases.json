@@ -2,6 +2,37 @@
   "latest": "2.4.21-mux1.2",
   "releases": [
     {
+      "version": "2.4.23",
+      "reports": "2.4.23-s3",
+      "protocol": "mux1",
+      "built": "Oct 21 2026 19:12:08",
+      "added": "2026-10-21",
+      "size": 1265696,
+      "sha256": "4caaaddac3ffa5efd9f64257e5eacf51c9f552113029a69ac99ac1e782af04ae",
+      "url": "firmware/releases/2.4.23/esp32s3/esp32_nat_router.bin",
+      "manifest": "firmware/releases/2.4.23/manifest.json",
+      "targets": {
+        "esp32c3": {
+          "url": "firmware/releases/2.4.23/esp32c3/esp32_nat_router.bin",
+          "size": 1217184,
+          "sha256": "de56a49a9b60c381da97260133ff0f93f422e0a745bbb4d77a8aecb48b2a7015",
+          "built": "Oct 21 2026 19:08:44",
+          "reports": "2.4.23-c3"
+        },
+        "esp32s3": {
+          "url": "firmware/releases/2.4.23/esp32s3/esp32_nat_router.bin",
+          "size": 1265696,
+          "sha256": "4caaaddac3ffa5efd9f64257e5eacf51c9f552113029a69ac99ac1e782af04ae",
+          "built": "Oct 21 2026 19:12:08",
+          "reports": "2.4.23-s3"
+        }
+      },
+      "title": "สุขภาพบอร์ดบน dashboard: RAM, CPU, flash ทุก 30 วินาที และ uptime เดินต่อเนื่อง",
+      "notes": "บอร์ดส่งเฟรม STATS ทันทีหลังต่อ broker และทุก 30 วินาที (RAM ภายในที่ว่าง/ต่ำสุด/ทั้งหมด, PSRAM, โหลด CPU, ขนาดอิมเมจ/พาร์ติชัน/แฟลช, จำนวน stream) dashboard แสดงในช่อง Health ต้องใช้ broker 2.4.23 ขึ้นไปจึงจะเห็นค่า broker เก่าจะเพิกเฉยเฟรมนี้ uptime ต่ำกว่า 1 นาทีแสดงเป็นวินาที",
+      "status": "testing",
+      "commit": "3a64dda"
+    },
+    {
       "version": "2.4.22",
       "reports": "2.4.22-s3",
       "protocol": "mux1",
