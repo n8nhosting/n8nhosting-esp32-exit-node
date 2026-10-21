@@ -34,15 +34,17 @@ type nodeStats struct {
 
 // node is one ESP32 exit device, identified by its WiFi STA MAC address.
 type node struct {
-	MAC       string `json:"mac"`
-	Firmware  string `json:"firmware,omitempty"`
-	RemoteIP  string `json:"remote_ip,omitempty"` // public IP the node dials from (= exit IP)
-	FirstSeen string `json:"first_seen"`
-	LastSeen  string `json:"last_seen"`
-	UptimeSec uint64 `json:"uptime_sec"` // last reported; runningUptime() is what /nodes shows
-	SSID      string `json:"ssid,omitempty"`
-	Chip      string `json:"chip,omitempty"` // esp32s3 / esp32c3 from HELLO chip=; "" for firmware that predates it
-	Blocked   bool   `json:"blocked"`
+	MAC        string `json:"mac"`
+	Firmware   string `json:"firmware,omitempty"`
+	RemoteIP   string `json:"remote_ip,omitempty"` // public IP the node dials from (= exit IP)
+	FirstSeen  string `json:"first_seen"`
+	LastSeen   string `json:"last_seen"`
+	UptimeSec  uint64 `json:"uptime_sec"` // last reported; runningUptime() is what /nodes shows
+	SSID       string `json:"ssid,omitempty"`
+	Chip       string `json:"chip,omitempty"` // esp32s3 / esp32c3 from HELLO chip=; "" for firmware that predates it
+	MaxStreams int    `json:"max_streams"`    // accepted limit of the most recent successful mux link; live only
+	LinkSince  string `json:"link_since"`     // latest successful READY mux1, empty without a live mux link
+	Blocked    bool   `json:"blocked"`
 	// Stats is the latest STATS sample; nil until the first one (firmware
 	// before 2.4.23 never sends one).
 	Stats      *nodeStats `json:"stats,omitempty"`
@@ -62,16 +64,17 @@ type node struct {
 	otaUptime uint64 // uptime when the OTA was delivered
 
 	// live counters (atomic)
-	Idle      int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
-	Mux       int64 `json:"mux_links"`    // live multiplexed links
-	Active    int64 `json:"active_dials"` // relays in progress
-	DialsOK   int64 `json:"dials_ok"`
-	DialsErr  int64 `json:"dials_err"`
-	BytesUp   int64 `json:"bytes_up"`
-	BytesDown int64 `json:"bytes_down"`
-	lastSeenT time.Time
-	blk       atomic.Bool // mirror of Blocked for lock-free readers
-	noPool    atomic.Bool // mirror of !Pool for lock-free readers
+	Idle               int64 `json:"idle_conns"`   // parked connections right now (legacy one-shot links)
+	Mux                int64 `json:"mux_links"`    // live multiplexed links
+	Active             int64 `json:"active_dials"` // relays in progress
+	DialsOK            int64 `json:"dials_ok"`
+	DialsErr           int64 `json:"dials_err"`
+	DialsPinnedOffline int64 `json:"dials_pinned_offline"`
+	BytesUp            int64 `json:"bytes_up"`
+	BytesDown          int64 `json:"bytes_down"`
+	lastSeenT          time.Time
+	blk                atomic.Bool // mirror of Blocked for lock-free readers
+	noPool             atomic.Bool // mirror of !Pool for lock-free readers
 }
 
 func (n *node) isBlocked() bool { return n.blk.Load() }
@@ -120,12 +123,14 @@ func (n *node) snapshot() *node {
 	return &node{MAC: n.MAC, Firmware: n.Firmware, RemoteIP: n.RemoteIP, FirstSeen: n.FirstSeen,
 		LastSeen: n.LastSeen, UptimeSec: n.runningUptime(timeNow()), SSID: n.SSID, Chip: n.Chip, Blocked: n.Blocked, Note: n.Note,
 		Stats:      n.Stats,
+		MaxStreams: n.MaxStreams, LinkSince: n.LinkSince,
 		PendingOTA: n.PendingOTA, Slot: n.Slot, Pool: n.Pool,
 		OTATarget: n.OTATarget, OTAStatus: n.OTAStatus, OTAAt: n.OTAAt,
 		lastSeenT: n.lastSeenT,
 		Idle:      atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
-		BytesUp: atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
+		DialsPinnedOffline: atomic.LoadInt64(&n.DialsPinnedOffline),
+		BytesUp:            atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
 }
 
 type nodeView struct {
@@ -306,18 +311,31 @@ func (r *registry) stats(n *node, st nodeStats) {
 	n.Stats = &st
 }
 
+// muxUp publishes only successfully accepted mux links. The count and metadata
+// share the registry lock with linkDown, so closing an older link cannot clear
+// the new link's timestamp or freeze its uptime.
+func (r *registry) muxUp(n *node, maxStreams int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n.MaxStreams = maxStreams
+	n.LinkSince = timeNow().UTC().Format(time.RFC3339)
+	n.offAt = time.Time{}
+	n.addMux(1)
+}
+
 // linkDown records that one of the node's links closed. With no link left
 // its uptime stops running and last_seen becomes now (until here it was the
 // HELLO time, so a board that ran for days was "last seen" days ago). A
 // board that reconnected quickly still has its new link (the old TCP
 // connection is only found dead later): nothing changes then.
 func (r *registry) linkDown(n *node) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if atomic.LoadInt64(&n.Mux) > 0 {
 		return
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	now := timeNow()
+	n.LinkSince = ""
 	n.offAt = now
 	n.LastSeen = now.UTC().Format(time.RFC3339)
 	r.saveLocked()

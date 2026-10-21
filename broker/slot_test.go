@@ -178,6 +178,9 @@ func TestSlotOfflineIsRefusedNotRerouted(t *testing.T) {
 		t.Fatalf("pool node must stay untouched: %+v", a.node)
 	}
 	st := statusOf(t, b)
+	if got := nodeRow(t, b, macGone).DialsPinnedOffline; got != 1 {
+		t.Fatalf("known offline board counter = %d, want 1 (unassigned slot has no board)", got)
+	}
 	if st["dials_pinned_offline"] != float64(2) || st["slots_assigned"] != float64(1) || st["dials_err"] != float64(0) {
 		t.Fatalf("status: dials_pinned_offline=%v slots_assigned=%v dials_err=%v (want 2, 1, 0)",
 			st["dials_pinned_offline"], st["slots_assigned"], st["dials_err"])

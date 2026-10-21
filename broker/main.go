@@ -290,6 +290,7 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	}
 	c.SetReadDeadline(time.Time{})
 	s := newMuxSession(c, br, n, o)
+	b.reg.muxUp(n, s.maxStreams)
 	s.evicted, s.idleClosed = &b.streamsEvicted, &b.streamsIdleClosed
 	s.pollOTA = func() string { return b.reg.takeOTA(n) }
 	s.onStats = func(st nodeStats) { b.reg.stats(n, st) }
@@ -300,7 +301,6 @@ func (b *broker) serveMux(c net.Conn, br *bufio.Reader, n *node, o helloOpts) {
 	b.muxMu.Lock()
 	b.muxes = append(b.muxes, s)
 	b.muxMu.Unlock()
-	n.addMux(1)
 	log.Printf("mux link up: %s (max %d streams, win %d, frame %d, chip %q)", n.MAC, s.maxStreams, s.window, s.frame, n.Chip)
 
 	s.run()
@@ -377,6 +377,7 @@ func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool, p
 			}
 			if pin != nil {
 				atomic.AddInt64(&b.dialsPinnedOffline, 1)
+				atomic.AddInt64(&pin.DialsPinnedOffline, 1)
 				log.Printf("socks: slot device %s has no usable link for %s:%d", pin.MAC, host, port)
 				return nil, repHostFail, true
 			}
