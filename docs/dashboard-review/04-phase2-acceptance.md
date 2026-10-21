@@ -456,3 +456,42 @@ responses, mobile layout, Escape and navigation cancellation. Diagnostic
 responses in this local helper are explicitly simulated; they are not hardware
 throughput evidence. Impeccable detector returns `[]`. Local screenshots and
 `connection-acceptance.json` are under `output/playwright/`.
+
+Initial production deployment `ezzouvfz4hxitljhemvthnhd` imported
+`4302ca7ebeb82a45072c6da131064668a4dc31db`, started at 04:06:53 +07 and finished
+with all four services started by 04:08:20. Production reconnect exposed an
+existing storage defect: `/data` inside the broker volume was mode 0755,
+UID/GID 0/0, and `/data/nodes.json` did not exist. The broker runs as UID10001;
+the old image never prepared a writable data directory, and its old save path
+ignored errors. Broker-only OTA metadata was absent after this redeploy, and
+the verified permissions explain why writes by this runtime could not succeed.
+Admin SQLite retained slots 1/3/4, names, capacities and customer assignments.
+
+Commit `de24873` prepares `/data` owned by `app` before switching to the nonroot
+runtime, matching the admin image. Existing-volume ownership repair and a second
+deployment are required before claiming OTA/restart persistence on production.
+The repair targets only this application's verified broker volume, with no
+volume deletion, content reset or broad permission changes.
+
+The runtime repair verified Docker mount
+`j2qrpgae6rhrcuxiferirwn0_broker-data` at `/data`, then changed only that
+directory's owner to UID/GID10001. Mode remains0755. The next genuine OTA
+request created `/data/nodes.json` mode0600 owned10001, containing slots1/3/4,
+AEC0 target24-c3/ok and S3 target24-s3/sent. No existing file was erased.
+
+After firmware builds passed for both targets, source commit `7d9d75a` and
+testing archive `c12fdf3` preserved all53 old binaries/manifests. Chip versions,
+hashes and unchanged partitions are verified in
+`output/playwright/firmware-2.4.24-validation.json`. Firmware archive tests10/10
+pass. Latest remains `2.4.21-mux1.2`.
+
+AEC0 canary: command written04:11:26 +07; origin logged an actual ESP32 HTTP
+Client GET with200/1,217,232bytes at04:11:28; link returned04:11:45 reporting
+`2.4.24-c3`/OTAok. Reconnect took19seconds. Its previously persistent idle100%
+CPU became1% on successive30/60-second reports, with141KiB free of285KiB and
+116KiB boot low-water. CPU counter formula was unchanged. This confirms the
+disconnected-console yield fixes the observed standalone C3 idle saturation.
+
+S3 received one24-s3 request at04:12:26. The broker confirms a full command
+write; at the following check it still reported21-mux1.4 and had not confirmed
+the target. Do not claim successful download, rollback or completed update.
