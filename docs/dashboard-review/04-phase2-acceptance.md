@@ -335,3 +335,41 @@ Reloaded production confirms reservations 1/3/4 persisted through restart,
 current slot 3 remains selected, and occupied 1/2/4 are absent from its picker.
 Production was rechecked at exact 1440x900 and 375x812; console has no captured
 errors/warnings. Viewport overrides are reset after verification.
+
+## Independent seats per board (2026-10-22)
+
+The operator explicitly selected independent seats per board even when public
+IPs are identical. This supersedes earlier same-IP shared ceilings and
+dedicated-IP ownership in this handoff. Backend commit `7b30608` counts
+`active_users` only on the target MAC, admits against that board's own limit,
+and sums free seats independently across routable online boards. Dedicated
+reserves one board for one account; IP-group fields remain informational.
+Shared still requires a positive measured/manual capacity for any seat.
+
+Devices and Capacity now show board occupancy and capacity using the same unit;
+an unused unmeasured C3 displays 0/0, and an unused 1 Mbps C3 displays 0/1.
+Both assignment pickers use local limits and no longer exempt a transfer merely
+because its source shares the target's IP. The user-first picker also shows
+partially occupied boards with room. Settings, Overview and assignment help
+describe the new board ownership model.
+
+Local backend verification: full admin-api tests pass (5.479s), vet passes,
+targeted race tests pass (9.120s), and the focused unmeasured-neighbor check
+passes (1.459s). Broker tests/vet pass. No database migration, user reassignment,
+capacity override, firmware operation or history rewrite is required.
+
+Combined browser verification passes 11 regression groups and 10 focused
+groups against the real rebuilt Go API with isolated SQLite and fake broker.
+The same-IP scenario proves both pickers can assign an empty measured C3 while
+Board 1 is full; unmeasured C3 remains 0/0; full C3 rejects with 409; moving an
+existing Board 1 user cannot bypass the C3 limit; and a 1/2 C3 appears in the
+default picker. Local evidence includes `settings-acceptance.json` and
+`settings-same-ip-c3-{available-desktop,desktop,partial-desktop}.png` under
+`output/playwright/`. Impeccable detector returns `[]`; focused code review
+found no remaining cross-IP admission conditions.
+
+Deployment is pending coordination with an already-running Board 1 OTA. At
+the preflight production check, it remained on 2.4.21-mux1.4 with `updating` to
+2.4.23-s3 since 03:09 +07. Both C3 boards already had 1 Mbps manual capacity
+before this change. No production capacity values or customer bindings were
+modified during verification.
