@@ -361,6 +361,9 @@ static int dial_target(const char *host, uint16_t port)
 }
 
 static void start_ota(const char *url);
+static volatile bool s_ota_busy;     /* ota_task running                                   */
+static volatile bool s_ota_wanted;   /* broker sent OTA: drain streams, drop the link, then start_ota() */
+static char s_ota_url[256];          /* kept across the link drop; the broker does not resend it */
 static void ota_confirm(const char *why);
 
 /* ---- multiplexed link ("mux1") ------------------------------------------
@@ -545,6 +548,7 @@ static void handle_open(link_t *l, uint32_t sid, const uint8_t *p, int len)
     memcpy(req, p, len); req[len] = 0;
     if (sscanf(req, "%199s %u", host, &port) != 2 || port == 0 || port > 65535) err = "badreq";
     else if (port_is_blocked((uint16_t)port)) err = "blocked";
+    else if (s_ota_wanted) err = "busy";              /* draining for an OTA */
 
     mstream_t *st = NULL;
     if (!err) {
@@ -577,11 +581,14 @@ static bool handle_frame(link_t *l, uint8_t typ, uint32_t sid, const uint8_t *p,
 {
     if (sid == 0) {
         if (typ == F_PING) return frame_send(l, F_PONG, 0, p, len);
-        if (typ == F_OTA && len > 0 && len < 256) {
-            char url[256];
-            memcpy(url, p, len); url[len] = 0;
-            ESP_LOGW(TAG, "OTA requested by broker");
-            start_ota(url);
+        if (typ == F_OTA && len > 0 && len < (int)sizeof(s_ota_url) && !s_ota_busy && !s_ota_wanted) {
+            /* Not started here: the download needs a second TLS session (and the
+             * public CA bundle) that does not fit next to a live link and its
+             * streams on a board without PSRAM. mux_serve sees the flag, refuses
+             * new OPENs, returns, and mux_task downloads with the link closed. */
+            memcpy(s_ota_url, p, len); s_ota_url[len] = 0;
+            ESP_LOGW(TAG, "OTA requested by broker: %s", s_ota_url);
+            s_ota_wanted = true;
         }
         return true;
     }
@@ -645,6 +652,10 @@ static void mux_serve(link_t *l, uint8_t *rx)
     if (lfd < 0) return;
 
     while (s_run) {
+        if (s_ota_wanted) {
+            ESP_LOGW(TAG, "OTA: draining %d stream(s) and closing the link", s_active);
+            return;                                /* mux_task frees everything, then start_ota() */
+        }
         dial_res_t r;
         while (xQueueReceive(s_res_q, &r, 0) == pdTRUE) handle_dial_result(l, &r);
 
@@ -808,6 +819,18 @@ static void mux_task(void *arg)
         link_close(&link);
         link_buffers_free(&rx);
         ESP_LOGW(TAG, "mux link down");
+        if (s_ota_wanted) {
+            /* Streams gone, link buffers freed: now the TLS download has the heap.
+             * Success reboots inside ota_task; failure clears s_ota_busy and we
+             * reconnect (the broker marks the push failed when the old version
+             * shows up again). */
+            ESP_LOGW(TAG, "OTA: link closed, %u B internal heap free",
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+            start_ota(s_ota_url);
+            while (s_ota_busy) vTaskDelay(pdMS_TO_TICKS(500));
+            s_ota_wanted = false;
+            ESP_LOGW(TAG, "OTA: not applied, reconnecting");
+        }
         if (s_run) vTaskDelay(pdMS_TO_TICKS(BACKOFF_MIN_MS));
     }
 
@@ -877,9 +900,10 @@ static void ota_verify_start(void)
         ota_confirm("no memory for self-test");
 }
 
-/* ---- OTA pulled on command from the broker ------------------------------ */
-
-static volatile bool s_ota_busy;
+/* ---- OTA pulled on command from the broker ------------------------------ *
+ * Sequence: F_OTA stores the URL (s_ota_url, s_ota_wanted) -> mux_serve stops
+ * accepting OPENs and returns -> mux_task closes the link and frees its
+ * buffers -> start_ota() here. s_ota_busy is declared with the flags above. */
 
 static void ota_task(void *arg)
 {
