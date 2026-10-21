@@ -125,6 +125,8 @@ type muxStream struct {
 	reset   bool   // RST received or session gone
 	credit  int    // bytes we may still send to the node
 	pending int    // bytes written to the client but not yet granted back
+
+	onBytes func(up, down int64) // installed before relay starts; payload only
 }
 
 func newMuxSession(c net.Conn, br *bufio.Reader, n *node, o helloOpts) *muxSession {
@@ -153,6 +155,13 @@ func (s *muxSession) writeFrame(typ byte, sid uint32, payload []byte) error {
 // Keep the full-write bit for OTA: a transport error after all bytes were
 // written is ambiguous and must not trigger an automatic duplicate command.
 func (s *muxSession) writeFrameResult(typ byte, sid uint32, payload []byte) (bool, error) {
+	n, err := s.writeFrameBytes(typ, sid, payload)
+	return n == muxHeaderLen+len(payload), err
+}
+
+// Return actual wire bytes too, so a partial DATA frame counts only payload
+// bytes that reached the connection, never its header or declared length.
+func (s *muxSession) writeFrameBytes(typ byte, sid uint32, payload []byte) (int, error) {
 	var hdr [muxHeaderLen]byte
 	hdr[0] = typ
 	binary.BigEndian.PutUint16(hdr[2:4], uint16(len(payload)))
@@ -169,7 +178,7 @@ func (s *muxSession) writeFrameResult(typ byte, sid uint32, payload []byte) (boo
 	if err != nil {
 		s.conn.Close()
 	}
-	return written, err
+	return n, err
 }
 
 func (s *muxSession) active() int {
@@ -494,11 +503,18 @@ func (st *muxStream) Write(p []byte) (int, error) {
 		n := min(len(p), st.credit, st.s.frame)
 		st.credit -= n
 		st.mu.Unlock()
-		if err := st.s.writeFrame(frameData, st.id, p[:n]); err != nil {
+		wireBytes, err := st.s.writeFrameBytes(frameData, st.id, p[:n])
+		payloadBytes := max(0, min(n, wireBytes-muxHeaderLen))
+		if payloadBytes > 0 {
+			st.touch()
+			written += payloadBytes
+			if st.onBytes != nil {
+				st.onBytes(int64(payloadBytes), 0)
+			}
+		}
+		if err != nil {
 			return written, err
 		}
-		st.touch()
-		written += n
 		p = p[n:]
 	}
 	return written, nil
@@ -514,13 +530,20 @@ func (st *muxStream) relay(client net.Conn) (up, down int64) {
 		for {
 			n, err := st.Read(buf)
 			if n > 0 {
-				if _, werr := client.Write(buf[:n]); werr != nil {
+				written, werr := client.Write(buf[:n])
+				if written > 0 {
+					down += int64(written)
+					if st.onBytes != nil {
+						st.onBytes(0, int64(written))
+					}
+					st.consumed(written)
+				}
+				if werr != nil || written != n {
 					st.s.writeFrame(frameRst, st.id, nil)
 					st.markReset()
+					client.Close()
 					break
 				}
-				down += int64(n)
-				st.consumed(n)
 			}
 			if err == io.EOF {
 				closeWrite(client)

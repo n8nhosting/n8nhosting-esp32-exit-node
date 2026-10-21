@@ -696,9 +696,8 @@ func (b *broker) handleSocks(c net.Conn) {
 	ic.node.addActive(1)
 	socksReply(c, repSuccess)
 
-	up, down := b.pipe(c, ic.c, ic.br)
+	b.pipe(c, ic.c, ic.br, ic.node)
 	ic.node.addActive(-1)
-	ic.node.addStats(0, 0, up, down)
 }
 
 // dialSlot serves a "slot-N" customer on the board holding slot N only. A slot
@@ -727,12 +726,10 @@ func (b *broker) finishMux(c net.Conn, st *muxStream, rep byte) {
 	atomic.AddInt64(&b.dialsOK, 1)
 	n.addStats(1, 0, 0, 0)
 	n.addActive(1)
+	st.onBytes = func(up, down int64) { b.addRelayBytes(n, up, down) }
 	socksReply(c, repSuccess)
-	up, down := st.relay(c)
+	st.relay(c)
 	n.addActive(-1)
-	n.addStats(0, 0, up, down)
-	atomic.AddInt64(&b.bytesUp, up)
-	atomic.AddInt64(&b.bytesDown, down)
 }
 
 func readSocksAddr(br *bufio.Reader, atyp byte) (string, error) {
@@ -777,32 +774,24 @@ func closeWrite(c net.Conn) {
 	}
 }
 
-func (b *broker) pipe(gost net.Conn, esp net.Conn, espRd *bufio.Reader) (up, down int64) {
+func (b *broker) pipe(gost net.Conn, esp net.Conn, espRd *bufio.Reader, n *node) (up, down int64) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if n := espRd.Buffered(); n > 0 {
-			buf := make([]byte, n)
-			espRd.Read(buf)
-			gost.Write(buf)
-			atomic.AddInt64(&down, int64(n))
-		}
-		n, _ := io.Copy(gost, esp)
-		atomic.AddInt64(&down, n)
+		// Reading through espRd includes payload buffered with the DIAL reply.
+		// Every byte, buffered or fresh, passes through the same counted writer.
+		down, _ = io.Copy(relayWriter{gost, func(written int) { b.addRelayBytes(n, 0, int64(written)) }}, espRd)
 		closeWrite(gost)
 	}()
 	go func() {
 		defer wg.Done()
-		n, _ := io.Copy(esp, gost)
-		atomic.AddInt64(&up, n)
+		up, _ = io.Copy(relayWriter{esp, func(written int) { b.addRelayBytes(n, int64(written), 0) }}, gost)
 		closeWrite(esp)
 	}()
 	wg.Wait()
 	esp.Close()
 	gost.Close()
-	atomic.AddInt64(&b.bytesUp, up)
-	atomic.AddInt64(&b.bytesDown, down)
 	return up, down
 }
 
