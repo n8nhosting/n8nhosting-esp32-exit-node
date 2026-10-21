@@ -54,6 +54,28 @@
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px;width:380px}
   .modal h3{margin:0 0 14px}
   .modal.wide{width:460px;max-width:94vw}
+  /* connection sheet: one row per field, each with its own copy button */
+  .copyrow{display:grid;grid-template-columns:88px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+  .copyrow .k{color:var(--muted);font-size:.82rem}
+  .copyrow .v{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;word-break:break-all;user-select:all}
+  .copyrow button{padding:4px 10px;font-size:.8rem;min-height:30px}
+  .msgcard{margin-top:14px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+  .msgcard pre{margin:0 0 10px;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.84rem;line-height:1.55;user-select:all}
+  /* assign picker: a listbox of boards; the recommended one is preselected */
+  .pick-list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow:auto;margin:10px 0}
+  .pick{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);cursor:pointer}
+  .pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .pick[aria-selected="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:rgba(75,159,255,.08)}
+  .pick[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
+  .pick .t{font-weight:600} .pick .s{color:var(--muted);font-size:.8rem;grid-column:1/-1}
+  .pick .why{color:var(--warn);font-size:.8rem;grid-column:1/-1}
+  .pick .meta{text-align:right;font-size:.8rem;color:var(--muted);white-space:nowrap}
+  .toggle{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--muted);cursor:pointer;line-height:1.4}
+  .toggle input{margin-top:3px;flex:none}
+  /* transient confirmations (3 s), never a blocking alert */
+  #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:10px;padding:10px 16px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20;max-width:92vw}
+  #toast.show{opacity:1;transform:translate(-50%,0)} #toast.err{border-left-color:var(--bad)}
+  @media (prefers-reduced-motion:reduce){#toast{transition:none}}
   .field.inline label{display:flex;gap:8px;align-items:center}
   .field.inline input{width:auto;margin:0}
   button.link{background:none;border:none;padding:0;color:var(--muted);font-weight:400;cursor:pointer;font-size:inherit;text-decoration:underline}
@@ -137,6 +159,36 @@
 </div>
 
 <!-- firmware update modal -->
+<!-- connection details: what the operator sends to a customer, copyable per field or as one message -->
+<div class="modal-bg" id="cmodal">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
+    <h3 id="cmTitle"></h3>
+    <div id="cmRows"></div>
+    <div class="msgcard">
+      <div class="muted" id="cmMsgHint" style="font-size:.78rem;margin-bottom:6px"></div>
+      <pre id="cmMsg"></pre>
+      <div class="row-actions"><button type="button" id="cmCopyMsg"></button><button type="button" class="sec" id="cmTogglePass"></button></div>
+    </div>
+    <div class="muted" id="cmMeta" style="font-size:.8rem;margin-top:10px"></div>
+    <div class="row-actions" style="margin-top:14px"><button type="button" class="sec" id="cmClose"></button></div>
+  </div>
+</div>
+<!-- assign a user to a board: pick from the boards that can take them -->
+<div class="modal-bg" id="amodal">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+    <h3 id="amTitle"></h3>
+    <div id="amCurrent" class="muted" style="font-size:.84rem;margin-bottom:8px"></div>
+    <label class="toggle"><input type="checkbox" id="amShowAll" /> <span id="amShowAllLbl"></span></label>
+    <div id="amList" class="pick-list" role="listbox" aria-labelledby="amTitle" tabindex="-1"></div>
+    <div class="err" id="amErr" role="alert"></div>
+    <div class="row-actions" style="margin-top:12px">
+      <button type="button" id="amGo"></button>
+      <button type="button" class="sec" id="amUnassign"></button>
+      <button type="button" class="sec" id="amCancel"></button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
 <div class="modal-bg" id="fwmodal">
   <div class="modal" style="width:440px">
     <h3 id="fwTitle">Update firmware</h3>
@@ -158,6 +210,13 @@ const i18n = {
   coordHint:'Coordinates cannot be cleared yet; a blank field keeps the current value.',
   mbps:'Mbps', openMap:'Open in Google Maps', openMapApprox:'Approximate (geo-IP) — open in Google Maps',
   mapsHint:'(paste a share link, then Find fills the coordinates)', mapsFind:'Find', mapsFinding:'Finding…', mapsFound:'Coordinates filled from the link; Save to keep them.',
+  connection:'Connection', connTitle:'Connection details', copy:'Copy', copied:'Copied', copyMsg:'Copy message', copyFailed:'Copy failed — select the text and copy it by hand',
+  msgHint:'Ready to paste to the customer (LINE / email):', showPass:'Show password', hidePass:'Hide password', close:'Close',
+  assignTitle:'Assign a board to', freeBoards:'Boards with no user yet', showAll:'Show all boards, with the reason a board cannot take this user',
+  noFree:'No free board right now. Tick "show every board" to see why, or measure capacity on a shared board.', recommended:'Recommended',
+  currentBoard:'Currently on', assignGo:'Assign', assigning:'Assigning…', unassign:'Unassign', assigned:'Assigned', unassigned:'Unassigned',
+  reasonBlocked:'blocked', reasonNoSlot:'no slot / port yet', reasonOwned:'dedicated board already has its user', reasonUnmeasured:'capacity not measured',
+  reasonFull:'full', reasonOffline:'offline', hasUsers:'users', seats:'seats', userCreated:'User created', saved:'Saved', noOnline:'No online devices.',
   slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
   measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
   justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: ',
@@ -246,7 +305,6 @@ async function viewUsers(){
   try{
     const [users, devices] = await Promise.all([api('/api/users'), api('/api/devices').catch(()=>[])]);
     usersByName = new Map(users.map(u=>[u.username,u]));
-    window._deviceMacs = (devices||[]).map(d=>d.mac);
     window._devByMac = Object.fromEntries((devices||[]).map(d=>[d.mac,d]));
     if(!users.length){ $('#utbl').innerHTML='<p class="muted">No users yet.</p>'; return; }
     const rows = users.map(u=>{
@@ -276,7 +334,7 @@ async function viewUsers(){
         <td>${exp?exp.toISOString().slice(0,10):'never'}</td>
         <td>${dev}</td>
         <td class="right row-actions">
-          <button type="button" data-act="copy" data-user="${un}">Copy conn</button>
+          <button type="button" data-act="copy" data-user="${un}">${esc(T('connection'))}</button>
           <button type="button" class="sec" data-act="edit" data-user="${un}">Edit</button>
           <button type="button" class="sec" data-act="${u.enabled?'disable':'enable'}" data-user="${un}">${u.enabled?'Disable':'Enable'}</button>
           <button type="button" class="sec" data-act="extend" data-user="${un}">+30d</button>
@@ -286,48 +344,149 @@ async function viewUsers(){
     $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
     $('#utbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
       const name=b.dataset.user, act=b.dataset.act;
-      if(act==='copy') copyCreds(name);
+      if(act==='copy') openCreds(name);
       else if(act==='edit'){ const u=usersByName.get(name); if(u) openUser(u); }
-      else if(act==='assign') assignDevice(name);
+      else if(act==='assign') openAssign(name);
       else if(act==='delete') delUser(name);
       else userAction(name,act); // enable | disable | extend
     }));
   }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 
-// Copy a ready-to-send connection string (user:pass@host:port) to the clipboard.
-async function copyCreds(username){
-  try{
-    const c = await api('/api/users/'+encodeURIComponent(username)+'/credentials',{method:'POST'});
-    const lines = [
-      'Proxy (HTTP/SOCKS5):',
-      '  host: '+c.host, '  port: '+c.port,
-      '  user: '+c.username, '  pass: '+c.password,
-      '  '+(c.connection||('<set PROXY_PUBLIC_HOST>')),
-      '  HTTP:   '+c.http_url, '  SOCKS5: '+c.socks5_url,
-      'Rate: '+(c.rate_mbps>0?c.rate_mbps+' Mbps':'unlimited'),
-      'Quota: '+(c.quota_gb>0?c.quota_gb+' GB/mo':'unlimited')+'  (used '+(c.usage_gb||0).toFixed(2)+' GB)',
-      'Expires: '+(c.expires_at?new Date(c.expires_at).toLocaleDateString():'never'),
-    ].join('\n');
-    try{ await navigator.clipboard.writeText(c.connection||lines); }catch(_){}
-    alert('Copied connection to clipboard.\n\n'+lines);
-  }catch(e){ alert('Error: '+e.message); }
+/* ---- Toast: a 3 s confirmation that never blocks and never hides text behind a button ---- */
+let toastTimer=null;
+function showToast(msg, isErr){
+  const t=$('#toast'); t.textContent=msg; t.classList.toggle('err', !!isErr); t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), isErr?5000:3000);
+}
+// Copy text; on a browser without the clipboard API fall back to selecting the element so the operator can copy by hand.
+async function copyText(text, label, el){
+  try{ await navigator.clipboard.writeText(text); showToast(T('copied')+(label?' — '+label:'')); return true; }
+  catch(_){ if(el){ const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); } showToast(T('copyFailed'), true); return false; }
 }
 
-async function assignDevice(username){
-  const macs = window._deviceMacs||[];
-  const hint = macs.length? '\nKnown devices:\n'+macs.join('\n') : '\n(no devices seen yet)';
-  const mac = prompt('Assign user "'+username+'" to device MAC (blank = unassign):'+hint, '');
-  if(mac===null) return;
-  const action = mac.trim()? 'assign' : 'unassign';
-  try{
-    await api('/api/users/'+encodeURIComponent(username)+'/'+action,{method:'POST',body:JSON.stringify({device_mac:mac.trim()})});
-  }catch(e){
-    const reason = e.body && e.body.error==='capacity' && e.body.reason ? T('capacityReason')+e.body.reason : e.message;
-    showUsersErr(reason); return;
-  }
-  viewUsers();
+/* ---- Connection sheet (replaces the alert box): every field has its own Copy, plus one paste-ready message ---- */
+let credsCur=null, credsShowPass=false;
+async function openCreds(username){
+  try{ credsCur = await api('/api/users/'+encodeURIComponent(username)+'/credentials',{method:'POST'}); }
+  catch(e){ showToast(e.message, true); return; }
+  credsShowPass=false;
+  $('#cmTitle').textContent = T('connTitle')+' · '+username;
+  $('#cmMsgHint').textContent = T('msgHint');
+  $('#cmCopyMsg').textContent = T('copyMsg'); $('#cmClose').textContent = T('close');
+  renderCreds();
+  $('#cmodal').style.display='flex'; $('#app').inert=true; $('#cmCopyMsg').focus();
 }
+function credsMessage(c, mask){
+  const pass = mask ? '•'.repeat(8) : c.password;
+  const url = (scheme)=>scheme+'://'+encodeURIComponent(c.username)+':'+(mask?pass:encodeURIComponent(c.password))+'@'+c.host+':'+c.port;
+  return [
+    'ข้อมูลเชื่อมต่อ Proxy',
+    'Host: '+c.host, 'Port: '+c.port, 'User: '+c.username, 'Pass: '+pass,
+    'HTTP:   '+url('http'), 'SOCKS5: '+url('socks5h'),
+    'ความเร็ว: '+(c.rate_mbps>0?c.rate_mbps+' Mbps':'ไม่จำกัด')
+      +' · โควตา: '+(c.quota_gb>0?c.quota_gb+' GB/เดือน':'ไม่จำกัด')
+      +' · หมดอายุ: '+(c.expires_at?new Date(c.expires_at).toISOString().slice(0,10):'ไม่กำหนด'),
+  ].join('\n');
+}
+function renderCreds(){
+  const c=credsCur; if(!c) return;
+  const mask = !credsShowPass;
+  const rows = [
+    ['Host', c.host], ['Port', String(c.port)], ['User', c.username],
+    ['Password', mask ? '•'.repeat(8) : c.password, c.password],
+    ['HTTP', mask ? c.http_url.replace(encodeURIComponent(c.password), '••••') : c.http_url, c.http_url],
+    ['SOCKS5', mask ? c.socks5_url.replace(encodeURIComponent(c.password), '••••') : c.socks5_url, c.socks5_url],
+  ];
+  $('#cmRows').innerHTML = rows.map(([k,shown,real],i)=>`<div class="copyrow"><span class="k">${esc(k)}</span><span class="v" id="cmV${i}">${esc(shown)}</span><button type="button" class="sec" data-copy="${i}">${esc(T('copy'))}</button></div>`).join('');
+  $('#cmRows').querySelectorAll('button[data-copy]').forEach(b=>b.addEventListener('click',()=>{ const [k,,real]=rows[+b.dataset.copy]; copyText(real||rows[+b.dataset.copy][1], k, $('#cmV'+b.dataset.copy)); }));
+  $('#cmMsg').textContent = credsMessage(c, mask);
+  $('#cmTogglePass').textContent = mask ? T('showPass') : T('hidePass');
+  $('#cmMeta').textContent = (c.rate_mbps>0?c.rate_mbps+' Mbps':'unlimited rate')+' · '+(c.quota_gb>0?c.quota_gb+' GB/mo':'unlimited quota')+' (used '+(c.usage_gb||0).toFixed(2)+' GB) · '+(c.expires_at?'expires '+new Date(c.expires_at).toISOString().slice(0,10):'never expires');
+}
+function closeCreds(){ $('#cmodal').style.display='none'; $('#app').inert=false; credsCur=null; }
+$('#cmCopyMsg').addEventListener('click', ()=>{ if(credsCur) copyText(credsMessage(credsCur,false), T('copyMsg'), $('#cmMsg')); });
+$('#cmTogglePass').addEventListener('click', ()=>{ credsShowPass=!credsShowPass; renderCreds(); });
+$('#cmClose').addEventListener('click', closeCreds);
+
+/* ---- Assign picker (no more typing a MAC): choose from the boards that can take this user ---- */
+let assignUser=null, assignSel=null, assignBoards=[];
+// Mirrors the server's admission rule (admission.go admit()); the server still decides.
+function pickReason(d, username){
+  const users=d.users||[];
+  if(d.blocked) return T('reasonBlocked');
+  if(!(d.slot>0)) return T('reasonNoSlot');
+  if(d.kind==='dedicated'){ if(users.length && !users.includes(username)) return T('reasonOwned'); }
+  else {
+    if(!(d.capacity_mbps>0)) return T('reasonUnmeasured');
+    if(d.max_users>0 && d.active_users>=d.max_users && !users.includes(username)) return T('reasonFull')+' ('+d.active_users+'/'+d.max_users+')';
+  }
+  return '';
+}
+async function openAssign(username){
+  assignUser=username; assignSel=null;
+  let devs;
+  try{ devs = await api('/api/devices') || []; }catch(e){ showToast(e.message, true); return; }
+  const u = usersByName.get(username)||{};
+  assignBoards = devs.map(d=>({d, reason: pickReason(d, username), free: !(d.users||[]).length}))
+    .sort((a,b)=> (b.d.online-a.d.online) || ((b.d.capacity_mbps||0)-(a.d.capacity_mbps||0)) || ((a.d.active_users||0)-(b.d.active_users||0)));
+  $('#amTitle').textContent = T('assignTitle')+' '+username;
+  const cur = u.device_mac ? devs.find(d=>d.mac===u.device_mac) : null;
+  $('#amCurrent').textContent = u.device_mac ? T('currentBoard')+' '+((cur&&cur.name)||u.device_mac)+(cur&&cur.slot>0?' · :'+slotPort(cur.slot):'') : '';
+  $('#amShowAllLbl').textContent = T('showAll'); $('#amShowAll').checked=false;
+  $('#amGo').textContent=T('assignGo'); $('#amCancel').textContent=T('cancel'); $('#amUnassign').textContent=T('unassign');
+  $('#amUnassign').style.display = u.device_mac ? '' : 'none';
+  $('#amErr').textContent='';
+  renderAssign();
+  $('#amodal').style.display='flex'; $('#app').inert=true;
+  const first=$('#amList').querySelector('.pick[aria-selected="true"]')||$('#amList').querySelector('.pick:not([aria-disabled="true"])'); (first||$('#amCancel')).focus();
+}
+function renderAssign(){
+  const all=$('#amShowAll').checked;
+  const list = assignBoards.filter(b=> all || (b.free && !b.reason));
+  if(!assignSel){ const rec=list.find(b=>!b.reason && b.d.online) || list.find(b=>!b.reason); assignSel = rec ? rec.d.mac : null; }
+  const rec = list.find(b=>!b.reason && b.d.online) || list.find(b=>!b.reason);
+  $('#amList').innerHTML = list.length ? list.map(b=>{
+    const d=b.d, dis=!!b.reason, mac=esc(d.mac);
+    const pills = [d.online?'<span class="pill ok">online</span>':'<span class="pill off">offline</span>', d.chip?`<span class="pill off">${esc(d.chip)}</span>`:'', rec&&rec.d.mac===d.mac?`<span class="pill ok">${esc(T('recommended'))}</span>`:''].filter(Boolean).join(' ');
+    const seats = d.kind==='dedicated' ? 'dedicated' : `${esc(d.active_users??0)}/${esc(d.max_users??0)} ${esc(T('seats'))}`;
+    const cap = d.capacity_mbps>0 ? esc(d.capacity_mbps)+' Mbps' : (d.kind==='dedicated' ? '' : esc(T('unmeasured')));
+    const where = [d.geo&&d.geo.city, d.geo&&d.geo.isp].filter(Boolean).map(esc).join(' · ');
+    const who = (d.users||[]).length ? `${(d.users||[]).length} ${esc(T('hasUsers'))}: ${(d.users||[]).map(esc).join(', ')}` : '';
+    return `<div class="pick" role="option" tabindex="${dis?-1:0}" data-mac="${mac}" aria-selected="${assignSel===d.mac}" aria-disabled="${dis}">
+      <div class="t">${esc(d.name||d.mac)} ${pills}</div><div class="meta">${d.slot>0?':'+esc(slotPort(d.slot)):'—'}<br>${cap}</div>
+      <div class="s"><span class="mono">${mac}</span> · ${seats}${where?' · '+where:''}${who?' · '+who:''}</div>
+      ${dis?`<div class="why">${esc(b.reason)}</div>`:''}</div>`;
+  }).join('') : `<div class="muted" style="padding:12px 4px">${esc(T('noFree'))}</div>`;
+  $('#amGo').disabled = !assignSel || !list.some(b=>b.d.mac===assignSel && !b.reason);
+  $('#amList').querySelectorAll('.pick').forEach(el=>{
+    const choose=()=>{ if(el.getAttribute('aria-disabled')==='true') return; assignSel=el.dataset.mac; renderAssign(); $('#amList').querySelector(`.pick[data-mac="${assignSel}"]`)?.focus(); };
+    el.addEventListener('click', choose);
+    el.addEventListener('keydown', e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); choose(); }
+      else if(e.key==='ArrowDown'||e.key==='ArrowUp'){ e.preventDefault(); const opts=[...$('#amList').querySelectorAll('.pick:not([aria-disabled="true"])')]; const i=opts.indexOf(el); const n=opts[(i+(e.key==='ArrowDown'?1:-1)+opts.length)%opts.length]; if(n) n.focus(); }
+    });
+  });
+}
+function closeAssign(){ $('#amodal').style.display='none'; $('#app').inert=false; assignUser=null; }
+$('#amShowAll').addEventListener('change', ()=>{ assignSel=null; renderAssign(); });
+$('#amCancel').addEventListener('click', closeAssign);
+$('#amUnassign').addEventListener('click', async ()=>{
+  try{ await api('/api/users/'+encodeURIComponent(assignUser)+'/unassign',{method:'POST',body:'{}'}); showToast(T('unassigned')+' '+assignUser); closeAssign(); viewUsers(); }
+  catch(e){ $('#amErr').textContent=e.message; }
+});
+$('#amGo').addEventListener('click', async ()=>{
+  if(!assignSel) return;
+  $('#amGo').disabled=true; $('#amGo').textContent=T('assigning'); $('#amErr').textContent='';
+  try{
+    await api('/api/users/'+encodeURIComponent(assignUser)+'/assign',{method:'POST',body:JSON.stringify({device_mac:assignSel})});
+    const b=assignBoards.find(x=>x.d.mac===assignSel); showToast(T('assigned')+': '+assignUser+' → '+((b&&b.d.name)||assignSel));
+    closeAssign(); viewUsers();
+  }catch(e){
+    $('#amErr').textContent = e.body && e.body.error==='capacity' && e.body.reason ? T('capacityReason')+e.body.reason : e.message;
+    $('#amGo').disabled=false; $('#amGo').textContent=T('assignGo');
+  }
+});
 function showUsersErr(msg){
   let el=$('#uErr');
   if(!el){ el=document.createElement('div'); el.id='uErr'; el.className='err'; el.setAttribute('role','alert'); $('#view').insertBefore(el,$('#view').children[1]||null); }
@@ -354,7 +513,8 @@ $('#umSave').onclick = async ()=>{
       body.username=$('#umUser').value.trim();
       if(!body.username){ $('#umErr').textContent='Username required'; return; }
       const r = await api('/api/users',{method:'POST',body:JSON.stringify(body)});
-      if(r.generated_password) alert('User created.\nPassword (shown once): '+r.generated_password);
+      showToast(T('userCreated')+': '+body.username);
+      if(r.generated_password) setTimeout(()=>openCreds(body.username), 50); // the sheet shows the password with a Copy button
     }
     closeModal(); viewUsers();
   }catch(e){ $('#umErr').textContent=e.message; }
@@ -522,7 +682,7 @@ function closeFw(){ $('#fwmodal').style.display='none'; }
 function otaDevice(mac){ openFw([mac], 'Update firmware · '+mac); }
 function otaAll(){
   const macs=(window._nodes||[]).filter(n=>n.online&&!n.blocked).map(n=>n.mac);
-  if(!macs.length){ alert('No online devices.'); return; }
+  if(!macs.length){ showToast(T('noOnline'), true); return; }
   openFw(macs, 'Update firmware · '+macs.length+' online device'+(macs.length>1?'s':''));
 }
 async function devAction(mac,a){ if(a==='forget'&&!confirm('Forget '+mac+'?'))return;
@@ -623,7 +783,7 @@ async function revealWifi(mac, btn){
       box.innerHTML = prev;
       const nb = box.querySelector('button[data-act="reveal"]'); if(nb) nb.addEventListener('click',()=>revealWifi(mac,nb));
     }, 10000);
-  }catch(e){ alert(T('revealFailed')+e.message); }
+  }catch(e){ showToast(T('revealFailed')+e.message, true); }
 }
 document.addEventListener('keydown',e=>{
   if(e.key==='Tab' && $('#dmodal').style.display==='flex'){
@@ -635,6 +795,8 @@ document.addEventListener('keydown',e=>{
   }
   if(e.key!=='Escape') return;
   if($('#dmodal').style.display==='flex') closeDevice();
+  else if($('#cmodal').style.display==='flex') closeCreds();
+  else if($('#amodal').style.display==='flex') closeAssign();
   else if($('#umodal').style.display==='flex') closeModal();
 });
 
@@ -658,7 +820,7 @@ function saveSettings(){
   localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim();
   localStorage.setItem('flash',$('#setFlash').value.trim()); $('#flashLink').href=$('#setFlash').value.trim();
   localStorage.setItem('ota_url',$('#setOta').value.trim());
-  alert('Saved');
+  showToast(T('saved'));
 }
 
 /* ---- boot ---- */

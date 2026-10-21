@@ -47,6 +47,10 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`id="dmMaps"`,                    // device editor: paste a Google Maps share link
 		`/api/geo/resolve`,               // ... which the server turns into lat/lon
 		`google.com/maps?q=`,             // the location cell opens Google Maps
+		`id="cmodal"`,                    // connection sheet: fields with their own copy buttons
+		`id="amodal"`,                    // assign picker: choose a free board, never type a MAC
+		`id="toast"`,                     // transient confirmations instead of alert()
+		`role="listbox"`,                 // the picker is keyboard-navigable
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
@@ -58,8 +62,11 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 	if !strings.Contains(body, `data-user="${un}"`) {
 		t.Error("users table must carry the username in data-user")
 	}
+	// alert() boxes cannot be copied from and prompt() makes the operator type a
+	// MAC; both are gone (confirm() for destructive actions stays)
 	for _, bad := range []string{`onclick="copyCreds`, `onclick='openUser`, `onclick="openUser`, `onclick="userAction`,
-		`onclick="delUser`, `onclick="assignDevice`, `JSON.stringify(u)`, `onclick="devAction`, `onclick="otaDevice`} {
+		`onclick="delUser`, `onclick="assignDevice`, `JSON.stringify(u)`, `onclick="devAction`, `onclick="otaDevice`,
+		`alert(`, `prompt(`} {
 		if strings.Contains(body, bad) {
 			t.Errorf("dashboard still has inline handler %q", bad)
 		}
