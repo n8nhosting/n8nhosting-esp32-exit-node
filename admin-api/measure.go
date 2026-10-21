@@ -21,11 +21,19 @@ import (
 )
 
 const (
-	measureMaxBytes     = 8 << 20          // the size of the speedtest object
-	measureMinBytes     = 64 << 10         // less is no measurement
-	measureTimeout      = 45 * time.Second // a slow board is measured on what it got through by then
-	measureSoakMaxBytes = 512 << 20        // per worker, even if the timed origin is unusually fast
+	measureMaxBytes        = 8 << 20          // the size of the speedtest object
+	measureMinBytes        = 64 << 10         // less is no measurement
+	measureTimeout         = 45 * time.Second // a slow board is measured on what it got through by then
+	measureSoakMaxBytes    = 512 << 20        // per worker, even if the timed origin is unusually fast
+	measureRolloverRetries = 3
+	measureWorkerRetries   = 8
+	measureRolloverWindow  = time.Second
 )
+
+// Identified from the local proxy's CONNECT response, never an origin HTTP
+// status or an error-message match. A full C3 mux can briefly retain the old
+// tunnel while a timed worker rotates to its next object.
+var errMeasureConnectUnavailable = errors.New("proxy CONNECT: Service Unavailable")
 
 type measureOptions struct {
 	Parallel    int  `json:"parallel"`
@@ -74,14 +82,16 @@ func readMeasureOptions(body io.Reader) (measureOptions, error) {
 }
 
 type measureStreamResult struct {
-	Stream     int     `json:"stream"`
-	Bytes      int64   `json:"bytes"`
-	Seconds    float64 `json:"seconds"`
-	Mbps       float64 `json:"mbps"`
-	Downloads  int     `json:"downloads"`
-	Completed  bool    `json:"completed"`
-	Error      string  `json:"error,omitempty"`
-	StopReason string  `json:"stop_reason"`
+	Stream      int     `json:"stream"`
+	Bytes       int64   `json:"bytes"`
+	Seconds     float64 `json:"seconds"`
+	Mbps        float64 `json:"mbps"`
+	Downloads   int     `json:"downloads"`
+	Retries     int     `json:"retries"`
+	Connect503s int     `json:"connect_503s"`
+	Completed   bool    `json:"completed"`
+	Error       string  `json:"error,omitempty"`
+	StopReason  string  `json:"stop_reason"`
 }
 
 type measureDiagnosticResult struct {
@@ -96,6 +106,12 @@ type measureDiagnosticResult struct {
 // until its shared context or byte budget ends; it never accepts a target from
 // the caller. All workers finish before the throwaway account is deleted.
 func measureDiagnostic(ctx context.Context, proxyURL, target string, parallel int, repeat bool) measureDiagnosticResult {
+	return measureDiagnosticUsing(ctx, proxyURL, target, parallel, repeat, measureViaProxy)
+}
+
+// The injected downloader lets policy tests reproduce a completed object and
+// precise CONNECT rejection without changing production TLS verification.
+func measureDiagnosticUsing(ctx context.Context, proxyURL, target string, parallel int, repeat bool, download func(context.Context, string, string, int64) (float64, int64, error)) measureDiagnosticResult {
 	start := time.Now()
 	result := measureDiagnosticResult{Streams: make([]measureStreamResult, parallel), Complete: true}
 	var wg sync.WaitGroup
@@ -117,10 +133,40 @@ func measureDiagnostic(ctx context.Context, proxyURL, target string, parallel in
 				if ctx.Err() != nil {
 					break
 				}
-				_, n, err := measureViaProxy(ctx, proxyURL, target, min(int64(measureMaxBytes), budget-r.Bytes))
-				r.Bytes += n
+				var n int64
+				var err, lastConnect503 error
+				objectRetries := 0
+				var retryUntil time.Time
+				for {
+					_, n, err = download(ctx, proxyURL, target, min(int64(measureMaxBytes), budget-r.Bytes))
+					r.Bytes += n
+					if errors.Is(err, errMeasureConnectUnavailable) {
+						r.Connect503s++
+						lastConnect503 = err
+					}
+					// An unfinished retry with no body must not convert an earlier
+					// CONNECT failure into a successful end-of-duration sample.
+					if err != nil && n == 0 && objectRetries > 0 && errors.Is(ctx.Err(), context.DeadlineExceeded) && !errors.Is(err, errMeasureConnectUnavailable) {
+						err = errors.Join(lastConnect503, err)
+					}
+					if !repeat || r.Downloads == 0 || n != 0 || !errors.Is(err, errMeasureConnectUnavailable) || ctx.Err() != nil || objectRetries >= measureRolloverRetries || r.Retries >= measureWorkerRetries {
+						break
+					}
+					if retryUntil.IsZero() {
+						retryUntil = time.Now().Add(measureRolloverWindow)
+					}
+					backoff := (100 * time.Millisecond) << objectRetries
+					if !time.Now().Add(backoff).Before(retryUntil) {
+						break
+					}
+					if !waitMeasureRollover(ctx, backoff) || !time.Now().Before(retryUntil) {
+						break
+					}
+					objectRetries++
+					r.Retries++ // only count the retry actually about to run
+				}
 				if err != nil {
-					if errors.Is(ctx.Err(), context.DeadlineExceeded) && r.Bytes >= measureMinBytes {
+					if errors.Is(ctx.Err(), context.DeadlineExceeded) && r.Bytes >= measureMinBytes && !errors.Is(err, errMeasureConnectUnavailable) {
 						break
 					}
 					r.Error = strings.ReplaceAll(err.Error(), proxyURL, "proxy")
@@ -168,6 +214,17 @@ func measureDiagnostic(ctx context.Context, proxyURL, target string, parallel in
 	return result
 }
 
+func waitMeasureRollover(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return ctx.Err() == nil
+	}
+}
+
 // measureProxyURL is gost's slot service for slot, as admin-api reaches it
 // inside the compose network. A var so tests can point it at a fake proxy.
 var measureProxyURL = func(slot int) string {
@@ -186,6 +243,12 @@ func measureViaProxy(ctx context.Context, proxyURL, targetURL string, maxBytes i
 		return 0, 0, errors.New("bad proxy url")
 	}
 	tr := &http.Transport{Proxy: http.ProxyURL(pu), DisableCompression: true, DisableKeepAlives: true}
+	tr.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, _ *http.Request, resp *http.Response) error {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return errMeasureConnectUnavailable
+		}
+		return nil
+	}
 	defer tr.CloseIdleConnections()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
