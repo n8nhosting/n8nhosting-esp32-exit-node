@@ -50,7 +50,28 @@
   .pill.ok{background:rgba(53,214,164,.15);color:var(--ok)} .pill.bad{background:rgba(255,92,108,.15);color:var(--bad)}
   .pill.warn{background:rgba(255,176,32,.15);color:var(--warn)} .pill.off{background:var(--panel2);color:var(--muted)}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem}
+  .row-actions{white-space:nowrap}
   .row-actions button{padding:5px 10px;font-size:.78rem;margin-left:6px}
+  button.more{padding:5px 8px;min-width:32px;line-height:1;vertical-align:middle}
+  button.more svg{display:block}
+  /* health cell: uptime, then a RAM and a CPU meter; amber when a board is close to the edge */
+  td.health{min-width:190px}
+  .meter{display:grid;grid-template-columns:30px 60px 1fr;gap:6px;align-items:center;font-size:.78rem;margin-top:3px;white-space:nowrap}
+  .meter .k{color:var(--muted)} .meter .bar{height:6px;border-radius:3px;background:var(--panel2);overflow:hidden}
+  .meter .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+  .meter.warn .bar i{background:var(--warn)} .meter.warn .v{color:var(--warn)}
+  td.health.muted .meter .bar i{background:var(--muted)}
+  .micro{font-size:.76rem}
+  /* row menu: one shared popover (fixed, so the table's overflow:hidden cannot clip it);
+   * destructive items sit last, after a separator, in red text */
+  #rowmenu{position:fixed;z-index:30;min-width:184px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  #rowmenu[hidden]{display:none}
+  #rowmenu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--fg);padding:9px 12px;border-radius:7px;font-weight:500;font-size:.88rem;min-height:36px}
+  #rowmenu button:hover,#rowmenu button:focus-visible{background:var(--panel2);outline:none;filter:none}
+  #rowmenu button:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+  #rowmenu .sep{height:1px;background:var(--line);margin:6px 4px}
+  #rowmenu button.danger{color:var(--bad)}
+  @media (pointer:coarse){ .row-actions button,#rowmenu button{min-height:44px} }
   .toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:10}
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:22px;width:380px}
@@ -191,6 +212,7 @@
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="rowmenu" role="menu" hidden></div>
 <div class="modal-bg" id="fwmodal">
   <div class="modal" style="width:440px">
     <h3 id="fwTitle">Update firmware</h3>
@@ -222,7 +244,12 @@ const i18n = {
   slot:'Slot', port:'Port', noPort:'none', slotInvalid:'Slot must be blank or a whole number 1\u201330',
   measure:'Measure', measuring:'Measuring\u2026', streamsActive:'streams active', stream1:'stream active', ipGroup:'IP', boards:'boards',
   justNow:'just now', minAgo:'min ago', hAgo:'h ago', dAgo:'d ago', capacityReason:'Capacity: ',
-  slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.'
+  slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.',
+  health:'Health', ram:'RAM', cpu:'CPU', flash:'Flash', free:'free', freeOf:'free of', lowWater:'lowest since boot',
+  cpuHint:'CPU load over the last 30 s, all cores', ramLow:'RAM is running low', cpuHigh:'CPU is saturated',
+  noStats:'RAM / CPU need firmware 2.4.23', lastSeen:'last seen', offline:'offline', stale:'no report for',
+  moreActions:'More actions', updateFw:'Update FW', block:'Block', allow:'Allow', forget:'Forget',
+  enable:'Enable', disable:'Disable', extend30:'+30 days', del:'Delete'
 };
 const T = k => i18n[k] ?? k;
 const $ = s => document.querySelector(s);
@@ -337,10 +364,8 @@ async function viewUsers(){
         <td>${dev}</td>
         <td class="right row-actions">
           <button type="button" data-act="copy" data-user="${un}">${esc(T('connection'))}</button>
-          <button type="button" class="sec" data-act="edit" data-user="${un}">Edit</button>
-          <button type="button" class="sec" data-act="${u.enabled?'disable':'enable'}" data-user="${un}">${u.enabled?'Disable':'Enable'}</button>
-          <button type="button" class="sec" data-act="extend" data-user="${un}">+30d</button>
-          <button type="button" class="danger" data-act="delete" data-user="${un}">Delete</button>
+          <button type="button" class="sec" data-act="edit" data-user="${un}">${esc(T('edit'))}</button>
+          ${moreBtn('user', un, u.username)}
         </td></tr>`;
     }).join('');
     $('#utbl').innerHTML = `<table><thead><tr><th>Username</th><th>Status</th><th>Rate</th><th>Usage (this month)</th><th>Expires</th><th>Device</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -349,8 +374,15 @@ async function viewUsers(){
       if(act==='copy') openCreds(name);
       else if(act==='edit'){ const u=usersByName.get(name); if(u) openUser(u); }
       else if(act==='assign') openAssign(name);
-      else if(act==='delete') delUser(name);
-      else userAction(name,act); // enable | disable | extend
+      else if(act==='more'){
+        const u=usersByName.get(name)||{};
+        openRowMenu(b, [
+          {label:u.enabled?T('disable'):T('enable'), act:u.enabled?'disable':'enable'},
+          {label:T('extend30'), act:'extend'},
+          {sep:true},
+          {label:T('del'), act:'delete', danger:true},
+        ], a => a==='delete' ? delUser(name) : userAction(name,a));
+      }
     }));
   }catch(e){ $('#utbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
@@ -365,6 +397,71 @@ function showToast(msg, isErr){
 async function copyText(text, label, el){
   try{ await navigator.clipboard.writeText(text); showToast(T('copied')+(label?' — '+label:'')); return true; }
   catch(_){ if(el){ const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); } showToast(T('copyFailed'), true); return false; }
+}
+
+/* ---- Row menu: every table row has one visible action and a "more" button that opens this
+ * shared popover (role=menu). Destructive items come last, after a separator. ---- */
+const ICON_MORE = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="3" cy="8" r="1.7" fill="currentColor"/><circle cx="8" cy="8" r="1.7" fill="currentColor"/><circle cx="13" cy="8" r="1.7" fill="currentColor"/></svg>';
+// kind = "mac" | "user"; id is already HTML-escaped by the caller (it is the row's data attribute)
+const moreBtn = (kind, id, name) => `<button type="button" class="sec more" data-act="more" data-${kind}="${id}" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(T('moreActions'))}: ${esc(name)}" title="${esc(T('moreActions'))}">${ICON_MORE}</button>`;
+let menuOpener=null;
+function openRowMenu(trigger, items, onPick){
+  const m=$('#rowmenu');
+  m.innerHTML = items.map(it => it.sep ? '<div class="sep" role="separator"></div>'
+    : `<button type="button" role="menuitem" class="${it.danger?'danger':''}" data-act="${esc(it.act)}">${esc(it.label)}</button>`).join('');
+  m.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ closeRowMenu(true); onPick(b.dataset.act); }));
+  menuOpener=trigger; trigger.setAttribute('aria-expanded','true');
+  m.hidden=false;
+  const r=trigger.getBoundingClientRect(), mw=m.offsetWidth, mh=m.offsetHeight;
+  const left=Math.max(8, Math.min(r.right-mw, innerWidth-mw-8));
+  let top=r.bottom+4; if(top+mh>innerHeight-8) top=Math.max(8, r.top-mh-4);   // near the bottom edge: open upwards
+  m.style.left=left+'px'; m.style.top=top+'px';
+  m.querySelector('button').focus();
+}
+function closeRowMenu(refocus){
+  const m=$('#rowmenu'); if(m.hidden) return;
+  m.hidden=true;
+  if(menuOpener){ menuOpener.setAttribute('aria-expanded','false'); if(refocus) menuOpener.focus(); }
+  menuOpener=null;
+}
+$('#rowmenu').addEventListener('keydown',e=>{
+  const bs=[...$('#rowmenu').querySelectorAll('button')], i=bs.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){ e.preventDefault(); bs[(i+1)%bs.length].focus(); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); bs[(i-1+bs.length)%bs.length].focus(); }
+  else if(e.key==='Home'){ e.preventDefault(); bs[0].focus(); }
+  else if(e.key==='End'){ e.preventDefault(); bs[bs.length-1].focus(); }
+  else if(e.key==='Tab'){ closeRowMenu(false); }
+});
+document.addEventListener('mousedown',e=>{
+  const m=$('#rowmenu');
+  if(!m.hidden && !m.contains(e.target) && !(menuOpener && menuOpener.contains(e.target))) closeRowMenu(false);
+});
+addEventListener('resize',()=>closeRowMenu(false));
+addEventListener('scroll',()=>closeRowMenu(false),true);
+
+/* ---- Health cell: uptime (the broker keeps it running between reports) plus the board's
+ * latest STATS sample: internal RAM, CPU load, flash. Old firmware has no sample. ---- */
+function fmtKB(b){ b=+b||0; return b>=1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB'; }
+function meter(label, pct, text, warn, title){
+  const p=Math.max(0,Math.min(100,+pct||0));
+  return `<div class="meter${warn?' warn':''}" title="${esc(title||'')}"><span class="k">${esc(label)}</span><span class="bar" role="img" aria-label="${esc(label+' '+text)}"><i style="width:${p}%"></i></span><span class="v">${esc(text)}</span></div>`;
+}
+function healthCell(n){
+  const s=n.stats;
+  const top = n.online ? esc(fmtUptime(n.uptime_sec))
+    : `<span class="muted">${esc(T('offline'))}${fmtAgo(n.last_seen) ? ' \u00b7 '+esc(T('lastSeen'))+' '+esc(fmtAgo(n.last_seen)) : ''}</span>`;
+  if(!s) return `<div>${top}</div><div class="muted micro">${esc(T('noStats'))}</div>`;
+  const tot=+s.heap_total||0, free=+s.heap_free||0, used=tot?100-free*100/tot:0;
+  const low = tot>0 && (free<24*1024 || free<tot*0.15);
+  const ram = meter(T('ram'), used, fmtKB(free)+' '+T('free'), low,
+    (low?T('ramLow')+' \u2014 ':'')+`${T('ram')}: ${fmtKB(free)} ${T('freeOf')} ${fmtKB(tot)} \u00b7 ${T('lowWater')} ${fmtKB(s.heap_min)}`);
+  const cpu = s.cpu_pct>=0 ? meter(T('cpu'), s.cpu_pct, s.cpu_pct+'%', s.cpu_pct>=85, (s.cpu_pct>=85?T('cpuHigh')+' \u2014 ':'')+T('cpuHint')) : '';
+  const psram = s.psram_total>0 ? `<div class="muted micro">PSRAM ${esc(fmtKB(s.psram_free))} ${esc(T('freeOf'))} ${esc(fmtKB(s.psram_total))}</div>` : '';
+  const fl = s.flash_bytes>0 ? `<div class="muted micro">${esc(T('flash'))} ${esc(fmtKB(s.app_bytes))} / ${esc(fmtKB(s.slot_bytes))} \u00b7 ${esc(fmtKB(s.flash_bytes))}</div>` : '';
+  // a linked board reports every 30 s; a sample older than 2 min means the report path is stuck
+  const ageMs = Date.now()-Date.parse(s.at);
+  const stale = n.online && ageMs>120000 ? `<div class="muted micro">${esc(T('stale'))} ${esc(fmtAgo(s.at))}</div>` : '';
+  return `<div>${top}</div>${ram}${cpu}${psram}${fl}${stale}`;
 }
 
 /* ---- Connection sheet (replaces the alert box): every field has its own Copy, plus one paste-ready message ---- */
@@ -573,23 +670,29 @@ async function viewDevices(){
         <td>${loc}</td>
         <td>${cap}</td>
         <td class="muted">${esc(g.isp||'\u2014')}</td>
-        <td>${fmtUptime(n.uptime_sec)}</td>
+        <td class="health${n.online?'':' muted'}">${healthCell(n)}</td>
         <td>\u2191${fmtBytes(n.bytes_up)} \u2193${fmtBytes(n.bytes_down)}</td>
         <td class="mono muted">${esc(n.firmware||'')} ${otaPill(n)}</td>
         <td class="right row-actions">
-          <button type="button" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>
-          <button type="button" class="sec" data-act="ota" data-mac="${mac}">Update FW</button>
-          <button type="button" class="sec" data-act="${n.blocked?'allow':'block'}" data-mac="${mac}">${n.blocked?'Allow':'Block'}</button>
-          <button type="button" class="danger" data-act="forget" data-mac="${mac}">Forget</button>
+          <button type="button" class="sec" data-act="edit" data-mac="${mac}">${esc(T('edit'))}</button>
+          ${moreBtn('mac', mac, n.name||n.mac)}
         </td></tr>`;
     }).join('');
-    $('#dtbl').innerHTML = `<table><thead><tr><th>${esc(T('name'))}</th><th>${esc(T('kind'))}</th><th>Status</th><th>${esc(T('users'))}</th><th>${esc(T('wifi'))}</th><th>Exit IP</th><th>${esc(T('location'))}</th><th>${esc(T('capacity'))}</th><th>ISP</th><th>Uptime</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    $('#dtbl').innerHTML = `<table><thead><tr><th>${esc(T('name'))}</th><th>${esc(T('kind'))}</th><th>Status</th><th>${esc(T('users'))}</th><th>${esc(T('wifi'))}</th><th>Exit IP</th><th>${esc(T('location'))}</th><th>${esc(T('capacity'))}</th><th>ISP</th><th>Health</th><th>Traffic</th><th>FW</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
     $('#dtbl').querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click',()=>{
       const mac=b.dataset.mac, act=b.dataset.act;
       if(act==='edit') openDevice(mac,b);
       else if(act==='measure') measureDevice(mac,b);
       else if(act==='reveal') revealWifi(mac,b);
-      else if(act==='ota') otaDevice(mac);
+      else if(act==='more'){
+        const n=(window._devs||{})[mac]||{};
+        openRowMenu(b, [
+          {label:T('updateFw'), act:'ota'},
+          {label:n.blocked?T('allow'):T('block'), act:n.blocked?'allow':'block'},
+          {sep:true},
+          {label:T('forget'), act:'forget', danger:true},
+        ], a => a==='ota' ? otaDevice(mac) : devAction(mac,a));
+      }
       else devAction(mac,act);
     }));
   }catch(e){ $('#dtbl').innerHTML=`<div class="err">${esc(e.message)}</div>`; }
@@ -796,7 +899,8 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(e.key!=='Escape') return;
-  if($('#dmodal').style.display==='flex') closeDevice();
+  if(!$('#rowmenu').hidden) closeRowMenu(true);
+  else if($('#dmodal').style.display==='flex') closeDevice();
   else if($('#cmodal').style.display==='flex') closeCreds();
   else if($('#amodal').style.display==='flex') closeAssign();
   else if($('#umodal').style.display==='flex') closeModal();

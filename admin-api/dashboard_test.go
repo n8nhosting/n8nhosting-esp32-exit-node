@@ -51,6 +51,12 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`id="amodal"`,                    // assign picker: choose a free board, never type a MAC
 		`id="toast"`,                     // transient confirmations instead of alert()
 		`role="listbox"`,                 // the picker is keyboard-navigable
+		`<th>Health</th>`,                // uptime + RAM/CPU/flash in one cell (no 14th column)
+		`n.stats`,                        // the broker's STATS sample (firmware 2.4.23+)
+		`fmtAgo(n.last_seen)`,            // an offline board says when it was last seen
+		`id="rowmenu"`,                   // one shared popover for every row's "more" button
+		`role="menu"`,                    // ... which is a real menu for keyboard and screen readers
+		`aria-haspopup="menu"`,           // the trigger says so
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
@@ -66,7 +72,9 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 	// MAC; both are gone (confirm() for destructive actions stays)
 	for _, bad := range []string{`onclick="copyCreds`, `onclick='openUser`, `onclick="openUser`, `onclick="userAction`,
 		`onclick="delUser`, `onclick="assignDevice`, `JSON.stringify(u)`, `onclick="devAction`, `onclick="otaDevice`,
-		`alert(`, `prompt(`} {
+		`alert(`, `prompt(`,
+		// destructive actions live at the bottom of the row menu, never as a red button beside Edit
+		`class="danger" data-act="forget"`, `class="danger" data-act="delete"`} {
 		if strings.Contains(body, bad) {
 			t.Errorf("dashboard still has inline handler %q", bad)
 		}
