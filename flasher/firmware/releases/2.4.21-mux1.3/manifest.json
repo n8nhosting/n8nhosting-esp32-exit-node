@@ -1,5 +1,5 @@
 {
-  "name": "ESP32-S3 Exit Node (NAT Router + rproxy)",
+  "name": "ESP32 Exit Node (NAT Router + rproxy)",
   "version": "2.4.21-mux1.3",
   "new_install_prompt_erase": true,
   "builds": [
