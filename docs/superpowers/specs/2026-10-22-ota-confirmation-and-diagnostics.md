@@ -65,6 +65,13 @@ Exhaustion or a deadline while retrying an unresolved CONNECT failure is an
 incomplete result, never a successful duration sample. Keep the original
 shared deadline, byte budget and stream/admission limits.
 
+An expired context alone does not establish normal duration completion. Accept
+partial bytes at the intended deadline only when the read error itself wraps
+the expected context deadline/cancellation. Preserve an unrelated body or
+network failure even when it coincides with the deadline, including after a
+recovered CONNECT rollover. A client cancellation remains a failed/cancelled
+diagnostic.
+
 ## Verification gates
 
 Keep local unit/race/browser checks, actual production deployment, actual board

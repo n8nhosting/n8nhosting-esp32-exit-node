@@ -600,3 +600,62 @@ Dashboard commit `175ccf9` displays nonzero slot retries per worker. All five
 connection-browser groups pass again with simulated retry responses, including
 partial failures, cancellation, stale-response protection and mobile layout.
 These local checks do not establish production or hardware acceptance.
+
+Timed diagnostic rollover commit `9f1cda7` passes full admin tests (8.711 s),
+vet and the full race suite (32.452 s). The typed local CONNECT classification,
+retry limits, real elapsed time, cancellation and unresolved deadline cases
+have focused coverage. Production deployment `peevksff8g32azqvaocismkj`
+imported `9f1cda7b48bd62b77fb8102a9f11dae91058f8ac` at 04:32:15 +07;
+all four services started by 04:33:39 and the deployment finished successfully.
+The broker file retained all three requested 2.4.24 targets, `ok` states and
+slots 1/3/4 across this restart. The dashboard shows the reconnected boards
+with the same customer seats and measured capacities. See
+`production-live-accounting-deployment.txt` and
+`broker-state-{before,after}-final-restart.txt`.
+
+Actual open-stream verification after this deployment: AEC0 stays at 4/4
+streams while relayed download bytes advance from 2.9 MiB to 11.8 MiB between
+two observations before the initial objects finish. The next established
+sampler interval reports Overview download **5.11 Mbps**, upload **0.03 Mbps**
+while both C3 diagnostics continue. Customer traffic and Connected now remain
+separate from the reserved, seatless measurement accounts. Evidence:
+`production-live-counter-open-{first,second}.txt`,
+`production-live-counter-open.jpg` and
+`production-live-throughput-after-fix.{txt,jpg}`. The first successful sampler
+poll after a restart establishes a zero-rate baseline as specified.
+
+### Five-minute retest after bounded rollover handling
+
+Both C3 diagnostics on deployed `9f1cda7` returned HTTP 200 /
+`all_complete:true` at 04:39:13 +07. All eight workers reached the intended
+duration and each completed two full 8 MiB objects plus partial data from its
+third. These results explicitly include brief local slot rejections and retry
+waiting; they do not establish zero-error customer connection admission.
+
+| Board | Actual duration | Aggregate | Bytes | Completed | Slot retries per worker |
+|---|---:|---:|---:|---:|---|
+| AEC0 / 3134 | 300.0014 s | 2.503 Mbps | 93,853,627 | 4/4 | 2 / 2 / 3 / 1 (8 total) |
+| 7EB0 / 3133 | 300.0015 s | 2.530 Mbps | 94,885,835 | 4/4 | 4 / 3 / 2 / 1 (10 total) |
+
+`persisted:false` on both requests; saved capacities remain 2.4 and 1.6 Mbps,
+with existing customer seats 1/1 on each. Broker logs show the corresponding
+rollover refusals but no mux link down during the run. Uptime continued and
+active streams returned to zero after completion. Overview remained around
+5.14 Mbps during sustained transfer. Sanitized actual results are in
+`production-c3-4x300-retest-results.{txt,json}` and
+`production-c3-4x300-retest-broker-log.txt`; the earlier partial run remains
+retained separately.
+
+A read-only second review then identified a deadline-classification edge:
+an unrelated body error coinciding with the context deadline could be hidden
+by the old broad deadline test. A separate follow-up narrows accepted deadline
+errors and adds deterministic tests; its deployment and short real-hardware
+deadline verification must be recorded separately from this five-minute run.
+
+Deadline follow-up `574514b` passes full admin tests (9.920 s), vet, all
+measurement race tests (11.563 s) and the full race suite (35.457 s).
+Deterministic reader/policy regressions preserve unrelated EOF/network failures
+coinciding with a deadline, while accepting genuine deadline partial reads.
+The final object may have fewer than 64 KiB if prior objects already made the
+worker meaningful; its typed deadline cause is retained for that decision.
+A standalone short measurement still fails the minimum-data requirement.
