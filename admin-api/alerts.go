@@ -29,6 +29,7 @@ type nodeActivity struct {
 	OfflineSince  string `json:"offline_since,omitempty"`
 	IPChangedAt   string `json:"ip_changed_at,omitempty"`
 	PinnedOffline int64  `json:"pinned_offline"`
+	Overflow      int64  `json:"overflow"`
 }
 
 type activityState struct {
@@ -138,7 +139,7 @@ func (s *server) observeActivity(nodes []brokerNode, brokerOK bool, now time.Tim
 		pinnedGrew := false
 		for _, n := range nodes {
 			old, known := a.nodes[n.MAC]
-			cur := nodeActivity{Online: n.Online, IP: n.RemoteIP, Firmware: n.Firmware, OTA: n.OTAStatus, OfflineSince: old.OfflineSince, IPChangedAt: old.IPChangedAt, PinnedOffline: n.DialsPinnedOffline}
+			cur := nodeActivity{Online: n.Online, IP: n.RemoteIP, Firmware: n.Firmware, OTA: n.OTAStatus, OfflineSince: old.OfflineSince, IPChangedAt: old.IPChangedAt, PinnedOffline: n.DialsPinnedOffline, Overflow: n.DialsOverflow}
 			if n.Online {
 				cur.OfflineSince = ""
 			} else if cur.OfflineSince == "" {
@@ -170,6 +171,15 @@ func (s *server) observeActivity(nodes []brokerNode, brokerOK bool, now time.Tim
 					sev = "error"
 				}
 				emitNode("node.ota_"+n.OTAStatus, sev, "Device OTA "+n.OTAStatus)
+			}
+			if known {
+				carried := n.DialsOverflow - old.Overflow
+				if carried < 0 {
+					carried = n.DialsOverflow // the broker restarted; its counter started again
+				}
+				if carried > 0 {
+					emitNode("node.slot_overflow", "info", fmt.Sprintf("%d connection(s) for this board's slot were carried by another board behind the same IP", carried))
+				}
 			}
 			seen[n.MAC] = cur
 			if a.brokerSeen && known && n.DialsPinnedOffline > old.PinnedOffline {

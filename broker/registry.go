@@ -78,6 +78,7 @@ type node struct {
 	DialsOK            int64 `json:"dials_ok"`
 	DialsErr           int64 `json:"dials_err"`
 	DialsPinnedOffline int64 `json:"dials_pinned_offline"`
+	DialsOverflow      int64 `json:"dials_overflow"` // this slot's dials carried by a same-IP sibling board
 	BytesUp            int64 `json:"bytes_up"`
 	BytesDown          int64 `json:"bytes_down"`
 	lastSeenT          time.Time
@@ -138,6 +139,7 @@ func (n *node) snapshot() *node {
 		Idle:      atomic.LoadInt64(&n.Idle), Mux: atomic.LoadInt64(&n.Mux), Active: atomic.LoadInt64(&n.Active),
 		DialsOK: atomic.LoadInt64(&n.DialsOK), DialsErr: atomic.LoadInt64(&n.DialsErr),
 		DialsPinnedOffline: atomic.LoadInt64(&n.DialsPinnedOffline),
+		DialsOverflow:      atomic.LoadInt64(&n.DialsOverflow),
 		BytesUp:            atomic.LoadInt64(&n.BytesUp), BytesDown: atomic.LoadInt64(&n.BytesDown)}
 }
 
@@ -378,6 +380,24 @@ func (r *registry) setSlotPool(mac string, slot int, pool *bool) error {
 	}
 	r.saveLocked()
 	return nil
+}
+
+// overflowSiblings returns the shared, unblocked boards behind pin's public
+// IP, pin excluded: the boards that can carry pin's customer without changing
+// its exit IP.
+func (r *registry) overflowSiblings(pin *node) map[*node]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[*node]bool{}
+	if pin.RemoteIP == "" {
+		return out
+	}
+	for _, n := range r.nodes {
+		if n != pin && n.RemoteIP == pin.RemoteIP && n.inPool() && !n.isBlocked() {
+			out[n] = true
+		}
+	}
+	return out
 }
 
 // bySlot returns the node holding slot N, or nil.

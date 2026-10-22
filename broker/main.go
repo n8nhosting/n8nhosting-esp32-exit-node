@@ -59,6 +59,9 @@ type config struct {
 	tlsKey     string
 	nodesFile  string // persisted node policy (block list)
 	slotSecret string // SOCKS user/pass password for gost's per-slot chains ("" = slot logins refused)
+	// SLOT_OVERFLOW=0 keeps every slot dial on its own board, even when a
+	// shared board behind the same public IP could carry it.
+	noSlotOverflow bool
 	// OTA_ALLOW_HTTP=1 lets /nodes/{mac}/ota queue a plain http:// image URL.
 	// Firmware images are not signed, so the download must ride on TLS in
 	// production; the flag exists for bench tests that serve an image from a PC.
@@ -113,20 +116,22 @@ type broker struct {
 	streamsIdleClosed int64 // mux streams closed by the idle / half-close reaper
 
 	dialsPinnedOffline int64 // slot dials refused because the slot's board had no usable link
+	dialsOverflow      int64 // slot dials carried by a same-IP sibling because the slot's board could not take them
 }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.LUTC)
 	cfg := config{
-		poolAddr:     envOr("POOL_ADDR", ":7000"),
-		socksAddr:    envOr("SOCKS_ADDR", ":1080"),
-		statusAddr:   envOr("STATUS_ADDR", ":7001"),
-		token:        os.Getenv("POOL_TOKEN"),
-		tlsCert:      pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
-		tlsKey:       pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
-		nodesFile:    envOr("NODES_FILE", "/data/nodes.json"),
-		slotSecret:   os.Getenv("SLOT_SECRET"),
-		allowHTTPOTA: os.Getenv("OTA_ALLOW_HTTP") == "1",
+		poolAddr:       envOr("POOL_ADDR", ":7000"),
+		socksAddr:      envOr("SOCKS_ADDR", ":1080"),
+		statusAddr:     envOr("STATUS_ADDR", ":7001"),
+		token:          os.Getenv("POOL_TOKEN"),
+		tlsCert:        pemFromEnv("TLS_CERT_PEM", "TLS_CERT_B64"),
+		tlsKey:         pemFromEnv("TLS_KEY_PEM", "TLS_KEY_B64"),
+		nodesFile:      envOr("NODES_FILE", "/data/nodes.json"),
+		slotSecret:     os.Getenv("SLOT_SECRET"),
+		allowHTTPOTA:   os.Getenv("OTA_ALLOW_HTTP") == "1",
+		noSlotOverflow: os.Getenv("SLOT_OVERFLOW") == "0",
 	}
 	waitS, _ := strconv.Atoi(envOr("DIAL_WAIT_SECONDS", "10"))
 	cfg.dialWait = time.Duration(waitS) * time.Second
@@ -390,17 +395,41 @@ func (b *broker) muxCount() int {
 // reports ok=false: with no usable link it answers repHostFail itself, so the
 // customer is not handed to the pool or another board.
 func (b *broker) dialViaMux(host string, port int, tried map[*muxSession]bool, pin *node) (st *muxStream, rep byte, ok bool) {
+	st, rep, linked := b.dialOwn(host, port, tried, pin)
+	if linked {
+		return st, rep, true
+	}
+	if pin != nil {
+		b.countPinnedOffline(pin, host, port)
+		return nil, repHostFail, true
+	}
+	return nil, 0, false
+}
+
+// dialOwn runs the dial loop over pin's own links (pool links when pin is
+// nil), evicting an idle stream when they are full. linked=false means none
+// of them could take the stream.
+func (b *broker) dialOwn(host string, port int, tried map[*muxSession]bool, pin *node) (*muxStream, byte, bool) {
+	return b.openVia(host, port, tried, func() *muxSession { return b.pickMux(tried, pin) },
+		func() bool { return b.evictIdleStream(tried, pin) })
+}
+
+func (b *broker) countPinnedOffline(pin *node, host string, port int) {
+	atomic.AddInt64(&b.dialsPinnedOffline, 1)
+	atomic.AddInt64(&pin.DialsPinnedOffline, 1)
+	log.Printf("socks: slot device %s has no usable link for %s:%d", pin.MAC, host, port)
+}
+
+// openVia tries each link pick offers once; a busy, closing or timed-out link
+// passes to the next, and evict (when set) may free room before giving up.
+// linked=false means no offered link could take the stream; otherwise rep is
+// the SOCKS reply and st is non-nil on success.
+func (b *broker) openVia(host string, port int, tried map[*muxSession]bool, pick func() *muxSession, evict func() bool) (st *muxStream, rep byte, linked bool) {
 	for {
-		m := b.pickMux(tried, pin)
+		m := pick()
 		if m == nil {
-			if b.evictIdleStream(tried, pin) {
+			if evict != nil && evict() {
 				continue // a slot was just freed
-			}
-			if pin != nil {
-				atomic.AddInt64(&b.dialsPinnedOffline, 1)
-				atomic.AddInt64(&pin.DialsPinnedOffline, 1)
-				log.Printf("socks: slot device %s has no usable link for %s:%d", pin.MAC, host, port)
-				return nil, repHostFail, true
 			}
 			return nil, 0, false
 		}
@@ -700,9 +729,11 @@ func (b *broker) handleSocks(c net.Conn) {
 	ic.node.addActive(-1)
 }
 
-// dialSlot serves a "slot-N" customer on the board holding slot N only. A slot
-// nobody holds, or whose board has no usable mux link, is refused with "host
-// unreachable" — never rerouted to the pool or another board.
+// dialSlot serves a "slot-N" customer on the board holding slot N. When that
+// board is full or has no usable link, a shared board behind the same public
+// IP may carry the dial (dialOverflow), so the customer's exit IP does not
+// change. Otherwise, and for a slot nobody holds, the dial is refused with
+// "host unreachable" — never rerouted to the pool or another exit IP.
 func (b *broker) dialSlot(c net.Conn, slot int, host string, port int) {
 	pin := b.reg.bySlot(slot)
 	if pin == nil {
@@ -711,8 +742,63 @@ func (b *broker) dialSlot(c net.Conn, slot int, host string, port int) {
 		socksReply(c, repHostFail)
 		return
 	}
-	st, rep, _ := b.dialViaMux(host, port, map[*muxSession]bool{}, pin)
+	tried := map[*muxSession]bool{}
+	st, rep, linked := b.dialOwn(host, port, tried, pin)
+	if !linked {
+		st, rep, linked = b.dialOverflow(host, port, tried, pin)
+	}
+	if !linked {
+		b.countPinnedOffline(pin, host, port)
+		rep = repHostFail
+	}
 	b.finishMux(c, st, rep)
+}
+
+// dialOverflow carries a slot dial that pin's own links cannot take on a
+// shared board behind pin's public IP. A dedicated pin never overflows, a
+// dedicated board never takes overflow (overflowSiblings), and a sibling keeps
+// a quarter of its streams (at least one) for its own slot customer.
+func (b *broker) dialOverflow(host string, port int, tried map[*muxSession]bool, pin *node) (*muxStream, byte, bool) {
+	if b.cfg.noSlotOverflow || !pin.inPool() {
+		return nil, 0, false
+	}
+	sibs := b.reg.overflowSiblings(pin)
+	if len(sibs) == 0 {
+		return nil, 0, false
+	}
+	st, rep, linked := b.openVia(host, port, tried, func() *muxSession { return b.pickOverflow(tried, sibs) }, nil)
+	if st != nil {
+		atomic.AddInt64(&b.dialsOverflow, 1)
+		atomic.AddInt64(&pin.DialsOverflow, 1)
+		log.Printf("socks: slot device %s full or offline; %s:%d carried by %s behind the same IP", pin.MAC, host, port, st.s.node.MAC)
+	}
+	return st, rep, linked
+}
+
+// pickOverflow returns the least-loaded link of a board in sibs that still has
+// room beyond its reserve, skipping any in tried.
+func (b *broker) pickOverflow(tried map[*muxSession]bool, sibs map[*node]bool) *muxSession {
+	b.muxMu.Lock()
+	defer b.muxMu.Unlock()
+	var best *muxSession
+	bestLoad := 0
+	for _, m := range b.muxes {
+		if tried[m] || !sibs[m.node] || m.node.isBlocked() || m.isClosed() {
+			continue
+		}
+		reserve := m.maxStreams / 4
+		if reserve < 1 {
+			reserve = 1
+		}
+		load := m.active()
+		if load >= m.maxStreams-reserve {
+			continue
+		}
+		if best == nil || load < bestLoad {
+			best, bestLoad = m, load
+		}
+	}
+	return best
 }
 
 // finishMux answers the customer and relays a successful stream; a failed dial
@@ -815,6 +901,7 @@ func (b *broker) statusMux() *http.ServeMux {
 			"dials_err":            atomic.LoadInt64(&b.dialsErr),
 			"dials_no_node":        atomic.LoadInt64(&b.dialsNoNode),
 			"dials_pinned_offline": atomic.LoadInt64(&b.dialsPinnedOffline),
+			"dials_overflow":       atomic.LoadInt64(&b.dialsOverflow),
 			"streams_evicted":      atomic.LoadInt64(&b.streamsEvicted),
 			"streams_idle_closed":  atomic.LoadInt64(&b.streamsIdleClosed),
 			"bytes_up":             atomic.LoadInt64(&b.bytesUp),

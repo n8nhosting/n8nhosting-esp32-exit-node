@@ -58,6 +58,7 @@ type brokerNode struct {
 	MaxStreams         int        `json:"max_streams"`
 	LinkSince          string     `json:"link_since"`
 	DialsPinnedOffline int64      `json:"dials_pinned_offline"`
+	DialsOverflow      int64      `json:"dials_overflow"` // this slot's dials a same-IP sibling carried
 	MAC                string     `json:"mac"`
 	Online             bool       `json:"online"`
 	Blocked            bool       `json:"blocked"`

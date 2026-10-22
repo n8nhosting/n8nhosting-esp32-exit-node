@@ -69,8 +69,12 @@ broker (it logs "broker does not support the mux link").
 Each board gets its own **slot port** in `3131`–`3160` (slot N ↔ port `3130+N`).
 The slot is assigned in the console's device editor. Customers connect to
 `proxy.<domain>:<port>` with their credentials, and `/credentials` returns the
-port for their slot. Each slot exits through exactly one board, so a slot port
-pins the customer to that device's exit IP. Port `3128` remains the legacy
+port for their slot. A slot port pins the customer to that device's exit IP.
+When a shared board is full or has no usable link, a new connection may be
+carried by another shared board behind the **same public IP** (with a quarter
+of its streams kept for its own customer), so the exit IP does not change.
+Dedicated boards never take part, a different exit IP is never used, and
+`SLOT_OVERFLOW=0` on the broker turns this off. Port `3128` remains the legacy
 shared pool.
 
 How many customers a board takes is set by its measured capacity. Seats are

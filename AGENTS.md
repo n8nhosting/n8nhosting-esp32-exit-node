@@ -186,6 +186,16 @@ only the broker-wide counter; known pinned boards get their own count
 when no usable link remains (including blocked/full/exhausted links).
 These fields and counters are never persisted to the node file.
 
+**2026-10-22 slot overflow:** a shared slot board that is full or has no
+usable link may have a new dial carried by another shared, unblocked board
+with the same `remote_ip` (exit IP unchanged), keeping max(1, streams/4) of
+that sibling's streams for its own customer. Dedicated boards neither
+overflow nor take overflow; a target failure never overflows; another exit IP
+is never used (the owner has not decided cross-IP failover). The pinned board
+counts `dials_overflow` (live-only); `dials_pinned_offline` counts only dials
+still refused. admin-api records `node.slot_overflow` events on growth.
+`SLOT_OVERFLOW=0` disables it.
+
 Local tests/builds are development evidence. Coolify deployment, production
 checks, and hardware soak are separate gates; do not infer any of them from
 the phase 2 implementation or fixture screenshots.

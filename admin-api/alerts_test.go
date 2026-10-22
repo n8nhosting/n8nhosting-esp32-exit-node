@@ -86,6 +86,30 @@ func TestAlertsMonthProjectionAndExpiry(t *testing.T) {
 	}
 }
 
+// When a same-IP sibling carried some of a slot board's dials, the board's
+// activity says so once per observation in which the broker's counter grew;
+// a broker restart that resets the counter still reports what it carried.
+func TestActivityRecordsSlotOverflow(t *testing.T) {
+	s := activityTestServer(t)
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	n := brokerNode{MAC: "aa", Online: true, RemoteIP: "1.2.3.4", Firmware: "fw", DialsOverflow: 2}
+	s.observeActivity([]brokerNode{n}, true, now)
+	if eventCount(t, s, "node.slot_overflow") != 0 {
+		t.Fatal("first sight is a baseline, not an event")
+	}
+	n.DialsOverflow = 5
+	s.observeActivity([]brokerNode{n}, true, now.Add(time.Minute))
+	s.observeActivity([]brokerNode{n}, true, now.Add(2*time.Minute))
+	if got := eventCount(t, s, "node.slot_overflow"); got != 1 {
+		t.Fatalf("overflow events = %d, want 1 (growth once, then unchanged)", got)
+	}
+	n.DialsOverflow = 1 // broker restarted and carried one dial since
+	s.observeActivity([]brokerNode{n}, true, now.Add(3*time.Minute))
+	if got := eventCount(t, s, "node.slot_overflow"); got != 2 {
+		t.Fatalf("overflow events after a counter reset = %d, want 2", got)
+	}
+}
+
 func TestActivityIPAndOTATransitionsPersist(t *testing.T) {
 	s := activityTestServer(t)
 	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
