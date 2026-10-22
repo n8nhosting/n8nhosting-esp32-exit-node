@@ -27,20 +27,27 @@ building firmware or touching the broker/admin-api against live hardware.
 ## ESP-IDF build (Windows)
 
 The firmware needs **ESP-IDF v5.5.x**, not whatever version `esp-idf
-manager` (EIM) last installed — check `C:\Users\ADMIN\esp-idf\` for a
-`v5.5.2` checkout and `C:\Users\ADMIN\.espressif\python_env\` for its venv
-before assuming EIM's default toolchain works; a 6.x toolchain cannot build
-this firmware (`esp_wireguard_idf_5.5.x` pins 5.5.6, and it's untested
-beyond 5.5.x generally).
+manager` (EIM) last installed; a 6.x toolchain cannot build this firmware
+(`esp_wireguard_idf_5.5.x` pins 5.5.6, and it's untested beyond 5.5.x
+generally). Builds use **v5.5.6** from 2026-10-22 (`D:\esp-idf\v5.5.6\esp-idf-v5.5.6`,
+venv `C:\Users\ADMIN\.espressif\python_env\idf5.5.6_py3.11_env`), matching
+`dependencies.lock`; releases up to 2.4.25 were built with v5.5.2
+(`C:\Users\ADMIN\esp-idf\v5.5.2\esp-idf`, venv `idf5.5_py3.11_env`), kept for
+comparison.
 
 `export.ps1` breaks if the system `python` isn't the exact version the venv
 was built against. Activate instead with:
 ```powershell
-$env:IDF_PATH = "C:\Users\ADMIN\esp-idf\v5.5.2\esp-idf"
+$env:IDF_PATH = "D:\esp-idf\v5.5.6\esp-idf-v5.5.6"
 $env:IDF_TOOLS_PATH = "C:\Users\ADMIN\.espressif"
-$act = & "$env:IDF_TOOLS_PATH\python_env\idf5.5_py3.11_env\Scripts\python.exe" "$env:IDF_PATH\tools\activate.py" --export | Select-Object -Last 1
+$env:IDF_PYTHON_ENV_PATH = "$env:IDF_TOOLS_PATH\python_env\idf5.5.6_py3.11_env"
+$act = & "$env:IDF_PYTHON_ENV_PATH\Scripts\python.exe" "$env:IDF_PATH\tools\activate.py" --export | Select-Object -Last 1
 . $act
 ```
+The v5.5.6 tree came from the release zip: its 16 symlinks (examples and an
+unused NimBLE port header) were restored as text files and `core.filemode`
+is off in it and its submodules, so `git describe --dirty` stays `v5.5.6`
+and images do not report `-dirty`.
 Must run from PowerShell, not Git Bash/MSYS (`idf_tools.py` refuses it).
 
 Build from a short, space-free mirror — this workspace's path has spaces
