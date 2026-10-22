@@ -342,3 +342,17 @@ Deploy หลัง run 5 ครบ duration (23 ต.ค. 13:26:02 +07) ตา�
 หลัง deploy: ตรวจ `list_deployments` ว่า commit ตรงกับ `origin/main`, ตรวจ public portal,
 และถ้าต้องการ soak ต่อให้เริ่ม collector run ใหม่บน server ตามข้อ 5.B
 การตรวจ slip flow กับ hostname จริงยังรอเจ้าของใส่ค่าบัญชีธนาคาร/email/Turnstile
+
+### ผล deploy (เจ้าของยืนยันให้ deploy ทันทีเวลา 16:40 +07 โดยยอมให้ run 5 จบก่อนครบ)
+
+- Coolify deployment `14f7fnic34j3j7gm2ahfkkly`, commit `d2cc62b`, เริ่ม 09:41:40Z
+  (16:41:40 +07) **finished** 09:43:03Z (16:43:03 +07); `restart_count 0`
+- ตรวจหลัง deploy 09:43:31Z: `/portal/th/`, `/portal/api/config`, `/portal/sitemap.xml`,
+  `/robots.txt`, `/healthz` และ `flash.jbacteam.com` ตอบ 200; `portal.js` ที่ serve จริงมี `orderStatus(o)`
+- **ยังไม่ได้ตรวจ** ว่าบอร์ดทั้งสาม reconnect กับ broker ใหม่ (ไม่มี admin token / broker log ใน MCP)
+- **Soak run 5 ถูกขัดจังหวะ** ช่วง 16:41–16:43 +07 หลังเก็บได้ราว 3 ชั่วโมง 15 นาที
+  recorder `exitnode-soak-20261022-v2425-i18n` ยังผูกกับ network namespace ของ broker เดิม
+  จึงจะบันทึก poll ล้มเหลวไปจนครบ duration ถ้าไม่มีใครหยุด ผู้มีสิทธิ์ SSH ต้อง
+  (1) หยุด recorder เดิมแบบ SIGTERM ให้ได้ `completed:false` และเก็บไว้เป็นหลักฐาน interrupted
+  (2) นับเฉพาะ sample ก่อน 16:41:40 +07 (3) ถ้าต้องการ soak ต่อ เริ่ม run 6 ใน output directory ใหม่
+  ผูกกับ broker container ใหม่ของ deployment นี้ ตาม `tools/HARDWARE_SOAK.md`

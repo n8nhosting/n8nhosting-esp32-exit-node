@@ -9,6 +9,14 @@ Private server output: `/root/exitnode-soak-20261022-0550/evidence/run-5/`.
 The first two samples show all three boards online and zero polling errors.
 This is **running evidence collection**, not a completed acceptance result.
 
+**Update 22 October 2026:** the owner approved deploying `d2cc62b` before run 5
+finished. Coolify deployment `14f7fnic34j3j7gm2ahfkkly` replaced the broker between
+**16:41:40 and 16:43:03 +07**, so run 5 is **interrupted** after about 3h15m. Count
+only samples before 16:41:40 +07. The old recorder stays bound to the replaced
+broker's namespace and records failed polls until someone stops it. Stop it with
+SIGTERM (giving `completed:false`), keep it as interrupted evidence, and start
+run 6 in a new output directory bound to the new broker.
+
 Runs 1-4 are retained as interrupted evidence with `completed:false`:
 run 1 warm-up (9 samples), run 2 (416 samples, 6h55m40s, zero poll failures),
 and runs 3/4 (5 samples each, zero poll failures), interrupted by runtime
