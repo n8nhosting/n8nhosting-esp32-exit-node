@@ -1,5 +1,11 @@
 # Platform completion — 22 October 2026
 
+> Superseded runtime/soak status: the six-language portal and marketing release
+> is deployed at `7a6f884` (22 October 2026, 13:25:38 +07). The collector now uses
+> `run-5/`, started 13:26:02 +07; the older run-2 status below is historical,
+> interrupted evidence. See [current delivery and activation handoff](07-portal-language-seo-sem-analytics.md#production-delivery-and-follow-up).
+
+
 This extends Dashboard Phase 2 with the seven follow-ups approved by the operator:
 bounded firmware OTA, per-user live/history UI, RSSI, commerce, Stripe/manual
 payment, customer identity/portal, and durable lifecycle/operational email.

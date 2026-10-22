@@ -1,0 +1,68 @@
+{
+  "scope": "real local Go/SQLite and SSR; mocked vendor SDKs; intercepted identity only where named; no real provider network, account, campaign, payment or indexation proof",
+  "checks": [
+    {
+      "name": "typed ID validation, authenticated settings access and optimistic conflict handling",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "admin edits persist all six languages, rejects script URLs, exports 18-page safe CSV and fits mobile with keyboard fields",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "18 localized initial HTML pages, reciprocal hreflang, canonical, sitemap and six real OG PNGs work without JavaScript",
+      "evidence": "real Go SSR, no JavaScript, anonymous HTTP asset checks"
+    },
+    {
+      "name": "six JavaScript languages and mobile layouts render; language selector preserves public page without loading providers",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "bare and index legacy entries reload remembered EN/JA SSR; private hash tokens survive once and sensitive legacy queries stay untracked",
+      "evidence": "real localized documents and account API; fake token only; accepted consent never permits private/sensitive SDKs"
+    },
+    {
+      "name": "no SDK or provider event before choice; reject-all persists across reload",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "analytics-only grants GA4 with sanitized manual public event; sign-in replaces SDK-bearing document before private UI",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "marketing-only loads exact fake Ads/Meta/TikTok IDs, emits no purchase/GA4 event and withdrawal reloads into an SDK-free document",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "accepted preference never authorizes SDKs on private, token/query/hash, signed-in or failed-identity documents",
+      "evidence": "real routes/settings; signed-in and identity-error API responses explicitly intercepted"
+    },
+    {
+      "name": "any saved marketing revision invalidates old consent and requires a new choice",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    },
+    {
+      "name": "GTM is exclusive with direct tags and requires both purpose choices",
+      "evidence": "real isolated Go API/SQLite; mocked vendor SDKs"
+    }
+  ],
+  "screenshots": [
+    "portal-marketing-admin-desktop.png",
+    "portal-marketing-admin-mobile.png",
+    "portal-marketing-ssr-th.png",
+    "portal-marketing-ssr-en.png",
+    "portal-marketing-ssr-zh-CN.png",
+    "portal-marketing-ssr-ja.png",
+    "portal-marketing-ssr-ru.png",
+    "portal-marketing-ssr-vi.png",
+    "portal-marketing-public-th-mobile.png",
+    "portal-marketing-public-en-mobile.png",
+    "portal-marketing-public-zh-CN-mobile.png",
+    "portal-marketing-public-ja-mobile.png",
+    "portal-marketing-public-ru-mobile.png",
+    "portal-marketing-public-vi-mobile.png"
+  ],
+  "errors": [],
+  "external": [],
+  "intercepted_vendor_script_count": 8
+}

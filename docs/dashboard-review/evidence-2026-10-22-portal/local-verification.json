@@ -1,0 +1,55 @@
+{
+  "portal-admin-test": {
+    "cases": 277,
+    "top_level": 148,
+    "failed": 0,
+    "elapsed": 13.984
+  },
+  "portal-admin-race": {
+    "cases": 277,
+    "top_level": 148,
+    "failed": 0,
+    "elapsed": 51.004
+  },
+  "runtime_source": "7a6f8843e8ff9741de7745fe241b8ce6b66836fa",
+  "vet": "pass",
+  "i18n_helper_groups": 6,
+  "locale_keys_each": 212,
+  "total_translations": 1272,
+  "marketing_browser_groups": 11,
+  "commerce_i18n_browser_groups": 19,
+  "external_provider_requests": 0,
+  "dashboard_impeccable": {
+    "non_advisory": 0,
+    "advisory": 83
+  },
+  "portal_impeccable": {
+    "non_advisory": 0,
+    "advisory": 11
+  },
+  "scope": "Local verification only; inert vendor SDK stubs and synthetic customer data; production checks recorded separately",
+  "portal-admin-final-test": {
+    "cases": 278,
+    "top_level": 149,
+    "failed": 0,
+    "elapsed": 13.074
+  },
+  "portal-admin-final-race": {
+    "cases": 278,
+    "top_level": 149,
+    "failed": 0,
+    "elapsed": 47.61
+  },
+  "final_delta": "Latest 11-group marketing suite includes eight legacy root/index routing and privacy scenarios. Earlier 19-group commerce suite predates private Go metadata localization and legacy startup normalization; its account UI/API/CSS remain unchanged. Final Go tests rerun on 7a6f884; full race suite on same Go source at 8782a12.",
+  "broker": "go test ./... (cached), go vet ./... pass",
+  "marketing_browser_source": "7a6f8843e8ff9741de7745fe241b8ce6b66836fa",
+  "commerce_browser_source": "74190697886d6baf19c22903be1700faeb77e462",
+  "portal-admin-latest-test": {
+    "cases": 278,
+    "top_level": 149,
+    "failed": 0,
+    "elapsed": 13.199
+  },
+  "race_source": "8782a12726e3cff2f85e58b8eb7b13031f539b7b",
+  "vet_source": "7a6f8843e8ff9741de7745fe241b8ce6b66836fa"
+}

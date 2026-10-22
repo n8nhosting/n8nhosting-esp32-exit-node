@@ -1,0 +1,84 @@
+{
+  "runtime_source": "7a6f8843e8ff9741de7745fe241b8ce6b66836fa",
+  "deployment": "jokgjuch6v5y7lvkjz9iuyjo",
+  "deployment_status": "Success",
+  "all_services_started_at": "2026-10-22T13:25:38+07:00",
+  "container_suffix": "20261022T062427",
+  "database": {
+    "integrity": "ok",
+    "schema": 8,
+    "counts": {
+      "users": 4,
+      "devices": 4,
+      "plans": 3,
+      "customers": 0,
+      "subscriptions": 0,
+      "orders": 0
+    },
+    "changed_legacy_user_contracts": 0,
+    "board_measurement_exception": "Audited prior-runtime device.measured AEC0 2.4 to 1.4 Mbps at 13:07:18+07, preserved"
+  },
+  "public_html_pages": 18,
+  "public_sitemap_urls": 18,
+  "private_localized_metadata_and_noindex_routes": 36,
+  "remembered_english_legacy_entry_routes": [
+    "/portal/",
+    "/portal/index.html"
+  ],
+  "viewports": [
+    {
+      "locale": "th",
+      "width": 1440,
+      "height": 900,
+      "document_width": 1425
+    },
+    {
+      "locale": "en",
+      "width": 375,
+      "height": 812,
+      "document_width": 360
+    }
+  ],
+  "screenshot_scope": "Production viewport captures; full-page capture timed out",
+  "marketing": {
+    "enabled": false,
+    "analytics": {},
+    "seo": {}
+  },
+  "readiness": {
+    "login": false,
+    "stripe": false,
+    "manual_transfer": false
+  },
+  "collector": {
+    "container": "exitnode-soak-20261022-v2425-i18n",
+    "out": "/root/exitnode-soak-20261022-0550/evidence/run-5/",
+    "started_at": "2026-10-22T06:26:02.944Z",
+    "expected_duration_finish": "2026-10-23T13:26:02+07:00",
+    "status": "running",
+    "observed_samples": 2,
+    "poll_failures": 0,
+    "online_boards": 3,
+    "completed_24h": false
+  },
+  "limits": [
+    "No real provider delivery or purchase conversion verified",
+    "No campaign created or spend",
+    "No search indexation or native-language commercial review",
+    "No hardware acceptance verdict"
+  ],
+  "anonymous_http": {
+    "/portal/en/": 200,
+    "/robots.txt": 200
+  },
+  "captured_raster_sizes": {
+    "production-portal-th-desktop.jpg": [
+      1376,
+      900
+    ],
+    "production-portal-en-mobile.jpg": [
+      360,
+      780
+    ]
+  }
+}

@@ -294,3 +294,125 @@ commercial reviewer was consulted. Public copy is a truthful draft, provider
 network tests require owner IDs, and no indexing/ranking/ad-spend result is
 inferred from local code or a deployment. The renderer successfully produced
 all six 1200×630 PNGs; visual checks include every script family.
+
+## Implemented controls and local acceptance
+
+Admin **Settings → Portal marketing** edits SEO overrides per language and page,
+previews the default or overridden title/description, and exports an 18-row CSV
+with localized keyword themes and landing paths. Empty overrides retain the
+translated defaults. The editor keeps unsaved values when changing language/page;
+stale concurrent saves return 409 rather than overwrite another operator.
+
+Typed IDs are supported for GA4, Google Ads, Meta Pixel, TikTok Pixel or an
+exclusive GTM container. The Google Ads conversion label is stored for a future
+verified-conversion integration; this release emits no purchase conversion.
+All integrations start disabled and blank. Analytics and advertising choices are
+independent; GTM requires both and operator-managed consent inside its container.
+Configuration revisions require fresh consent. Withdrawal clears accessible
+optional cookies and reloads a document without vendor listeners. A failed
+identity check is unknown and does not authorize tracking.
+Only clean public paths and locale enter app-managed measurement. UTM values,
+ad click identifiers and arbitrary query/fragment values are not forwarded;
+cross-page campaign attribution is not implemented in this release. SEM output
+is landing-page content and editorial/export drafts, not an activated campaign
+or a verified conversion pipeline.
+
+The 212-key dictionaries contain 1,272 translations. Fixed UI, statuses,
+validation, account/slip/receipt flows, dates/numbers/THB and public SEO copy are
+localized. Operator-entered plan names/descriptions, bank details and customer
+data stay byte-for-byte authoritative; they are not silently machine-translated.
+
+Final local results:
+
+- Final admin: 278 cases / 149 top-level tests pass (13.199s); all 278 under race
+  pass (47.610s); vet passes. This includes a final correction for localized
+  private-page metadata across 36 routes. The full race run used the same Go
+  source before the final legacy-entry JavaScript correction. Broker tests (cached) and vet pass;
+  broker source unchanged.
+- I18n helper: 6 groups pass for key parity, placeholders, routing and privacy.
+- Marketing browser suite: 11 groups pass, 14 screenshots. Real Go/SQLite/SSR
+  with inert locally fulfilled SDKs; zero uncaught JS errors/real vendor requests.
+  Includes bare/index legacy URLs, remembered language, verification-token
+  transfer and sensitive-query tracking suppression.
+- Final commerce/account suite: 19 groups pass, 22 screenshots, including all six
+  private-language journeys and the original 13 groups. Explicitly substituted
+  customer APIs use synthetic records. All six public language links measure
+  44px tall after the final CSS correction; desktop/mobile have no page overflow.
+- Static Impeccable: no non-advisory findings. Dashboard has 83 inherited token
+  advisories; portal has 11 typography/print-color advisories. Not a full WCAG audit.
+
+See [scoped evidence and screenshots](evidence-2026-10-22-portal/README.md).
+Source, deployment and hardware collection state are recorded separately below.
+
+## Production delivery and follow-up
+
+Runtime source: `7a6f8843e8ff9741de7745fe241b8ce6b66836fa` on `main`.
+Coolify deployment `jokgjuch6v5y7lvkjz9iuyjo` reports **Success**. Its import log
+identifies that exact source; all four services started by **22 October 2026,
+13:25:38 +07**. Current broker, admin-api, gost and flasher container names end
+in `20261022T062427`. Later evidence/documentation commits do not replace this
+runtime unless a new deployment is deliberately started.
+
+The public, non-secret `PORTAL_BASE_URL` is now explicitly configured as
+`https://admin.jbacteam.com/portal/`; canonical URLs never trust request headers.
+The pre-v8 online SQLite backup passed integrity/schema/count checks and is
+retained privately on the server at
+`/root/exitnode-pre-v8-20261022-portal/platform.db` (directory 0700, file 0600).
+The live database passes integrity checks at schema 8, with 4 legacy users,
+4 device records, 3 draft plans and no customers, subscriptions or orders.
+All four legacy user contracts match the backup.
+
+Production checks on this runtime passed all 18 initial public HTML pages
+(canonical, seven hreflang links, OG and meaningful heading/body), all 36 private
+localized titles/noindex/no-canonical/no-OG responses, and an 18-URL public
+sitemap. Cookie-free HTTP requests return 200 for the public portal and
+`/robots.txt`. Browser checks at 1440x900 and 375x812 show no horizontal page overflow.
+Both bare `/portal/` and `/portal/index.html` return to the remembered English
+clean URL with matching English UI and metadata. The selected production
+screenshots show the real unconfigured service, not the synthetic account or
+fake tracking identifiers used in local tests. Full-page capture timed out in
+the live browser; production images are viewport captures.
+
+Marketing remains `enabled:false`, with empty analytics and SEO overrides.
+The app sends no real provider traffic and created no ad campaign or spend.
+The edge may inject its own Cloudflare beacon markup; application CSP does not
+allow `static.cloudflareinsights.com`, and no edge security/analytics setting
+was weakened. This application verification is not a claim about all
+infrastructure telemetry.
+
+Login, Stripe and bank-transfer readiness remain false pending the owner's
+email, Turnstile and payment configuration. No secrets, live customer records,
+real payment, email or purchase event were used for acceptance. Native-language
+commercial review, Search Console crawl/indexation and consented real-provider
+network/dashboard verification remain operator activation checks. These checks
+are not prerequisites for browsing the six-language public content.
+
+One concurrent, audited `device.measured` event from the previous runtime at
+**13:07:18 +07** changed board AEC0 capacity from 2.4 to 1.4 Mbps while the first
+portal deployment was building. The portal work issued no production measure
+request. The current measured result is preserved; routing, names and board
+kinds are unchanged. This is an explicit exception to any claim that every
+board setting matches the earlier backup.
+
+### Hardware evidence continuity
+
+No firmware was built, flashed or promoted in this portal task. All three boards
+remain online on testing firmware 2.4.25 with OTA status `ok`; stable 2.4.21 and
+the prior archives remain available. Broker replacement reconnects mux links
+without a firmware update. Each collector is scoped to its broker's container
+network namespace, so every runtime deployment needs a new collector directory.
+
+| Run | Interval (+07) | Samples / failed polls | Result |
+|---|---|---|---|
+| 2 | 22 Oct 06:11:17 to 13:06:57 | 416 / 0 | Interrupted; 6h55m40s, all three online in all samples, zero uptime/counter resets |
+| 3 | 22 Oct 13:11:32 to 13:15:51 | 5 / 0 | Interrupted before metadata correction deployment |
+| 4 | 22 Oct 13:19:04 to 13:24:03 | 5 / 0 | Interrupted before legacy-route correction deployment |
+| 5 | **22 Oct 13:26:02 onward** | First 2 / 0 | **Running**, all three online in the first two samples |
+
+Interrupted runs explicitly record `completed:false` and remain private server
+evidence. Current container: `exitnode-soak-20261022-v2425-i18n`, output
+`/root/exitnode-soak-20261022-0550/evidence/run-5/`, started
+`2026-10-22T06:26:02.944Z`; expected duration finish is **23 October 2026,
+13:26:02 +07** if uninterrupted. A 24-hour hardware pass is **not** claimed.
+Read actual results after completion; a future configuration deployment that
+replaces the broker must start run 6 or another new output directory.

@@ -1,0 +1,138 @@
+{
+  "passed": [
+    {
+      "name": "research catalog creates three inactive drafts with exact satang prices and bonus days; public API hides drafts",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "real plan create persists decimal THB, unlimited zero fields and publication; keyboard/form focus survives refresh pause",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "real plan update/archive, live search/focus persistence and mobile plan cards/editor fit viewport",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "wrapped real approval DTO renders amount/verifier, private Bearer attachment downloads and mandatory review note persists rejection",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "real order retry keeps funded sold-out orders safe, cancel excludes funded orders and email log DTO renders sanitized metadata",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "managed subscription hides legacy extend/delete and locks ledger fields; legacy/new editors reset disabled fields",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "user history uses real nonzero bytes and gaps, keyboard/table/mobile work and Back rejects delayed stale history",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "live bytes/s converts to 8Mbps; RSSI unknown/fresh/exact120s/stale/offline and reservation/self-board UI policies hold",
+      "evidence": "Local browser evaluation of deterministic UI boundary fixtures; no hardware RSSI measurement"
+    },
+    {
+      "name": "real embedded portal/CSP and real unconfigured API disable signup/payment and hide inactive catalog",
+      "evidence": "real local Go API + isolated SQLite"
+    },
+    {
+      "name": "customer subscription/usage, explicit reveal/rotation/hide and keyboard activation fit desktop/mobile",
+      "evidence": "INTERCEPTED customer API UI scenarios; synthetic credentials only"
+    },
+    {
+      "name": "customer renewal sends subscription ownership identifier, manual slip sends raw Blob+CSRF, receipt labels payment record",
+      "evidence": "INTERCEPTED customer APIs; no actual renewal, bank transfer or payment"
+    },
+    {
+      "name": "session401 clears visible credential DOM and account state",
+      "evidence": "INTERCEPTED 401 customer response"
+    },
+    {
+      "name": "localized th private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "localized en private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "localized zh-CN private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "localized ja private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "localized ru private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "localized vi private account/credentials, current status/date/THB, slip validation/upload/review/receipt and guarded login form",
+      "evidence": "INTERCEPTED customer APIs; native Intl readback; synthetic account/slip only"
+    },
+    {
+      "name": "pricing research HTML renders Thai, source links, prices and evidence qualifications without page overflow",
+      "evidence": "Static repository research document readback only; no competitor claim re-verification"
+    }
+  ],
+  "browser": "156.0.8078.4",
+  "viewports": [
+    "1440x900",
+    "375x812"
+  ],
+  "screenshots": [
+    "commerce-plans-desktop-real-api.png",
+    "commerce-plans-mobile-real-api.png",
+    "commerce-plan-editor-mobile-real-api.png",
+    "commerce-approval-desktop-real-api.png",
+    "commerce-approval-mobile-real-api.png",
+    "commerce-orders-mobile-real-api.png",
+    "commerce-user-history-desktop-real-api.png",
+    "commerce-user-history-mobile-real-api.png",
+    "commerce-portal-unconfigured-desktop-real-api.png",
+    "commerce-portal-unconfigured-mobile-real-api.png",
+    "commerce-portal-subscription-desktop-intercepted-api.png",
+    "commerce-portal-subscription-mobile-intercepted-api.png",
+    "commerce-portal-slip-mobile-intercepted-api.png",
+    "commerce-portal-receipt-mobile-intercepted-api.png",
+    "commerce-portal-th-private-account-mobile-intercepted-api.png",
+    "commerce-portal-en-private-account-mobile-intercepted-api.png",
+    "commerce-portal-zh-CN-private-account-mobile-intercepted-api.png",
+    "commerce-portal-ja-private-account-mobile-intercepted-api.png",
+    "commerce-portal-ru-private-account-mobile-intercepted-api.png",
+    "commerce-portal-vi-private-account-mobile-intercepted-api.png",
+    "commerce-pricing-desktop-document.png",
+    "commerce-pricing-mobile-document.png"
+  ],
+  "publicLanguageTargets": [
+    {
+      "locale": "th",
+      "height": 44
+    },
+    {
+      "locale": "en",
+      "height": 44
+    },
+    {
+      "locale": "zh-CN",
+      "height": 44
+    },
+    {
+      "locale": "ja",
+      "height": 44
+    },
+    {
+      "locale": "ru",
+      "height": 44
+    },
+    {
+      "locale": "vi",
+      "height": 44
+    }
+  ],
+  "pageErrors": [],
+  "externalRequests": [],
+  "scope": "Local real admin/API/SQLite; customer-only cases explicitly intercepted. No production/email/payment/provider activity."
+}

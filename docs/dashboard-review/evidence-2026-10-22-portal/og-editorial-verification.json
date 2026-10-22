@@ -1,0 +1,218 @@
+{
+  "scope": "local editorial/OG assets only; not campaign or indexation proof",
+  "date": "2026-10-22",
+  "renderer": "installed Playwright Chromium; all network routes blocked",
+  "source": "tools/render_portal_og.cjs",
+  "locales": [
+    "th",
+    "en",
+    "zh-CN",
+    "ja",
+    "ru",
+    "vi"
+  ],
+  "images": [
+    {
+      "file": "admin-api/portal/og/portal-en.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 41273,
+      "sha256": "85e04d134e62f016af525ffd5a07b3adf54a3614567d01829333ae730b6733af",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    },
+    {
+      "file": "admin-api/portal/og/portal-ja.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 47915,
+      "sha256": "fff560a5ed8733657d951b9de612780f8008ce477318e24eb1afb927bd645a45",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    },
+    {
+      "file": "admin-api/portal/og/portal-ru.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 37050,
+      "sha256": "0bd33517bbf2d9f2cc8f648eb93f8de419e02be9cfcc8a6eb8808f661e080be1",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    },
+    {
+      "file": "admin-api/portal/og/portal-th.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 47091,
+      "sha256": "d8b7c04a3af56ceeb14605ebb193d3b2954b4ecadaef705b992df23fea74de59",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    },
+    {
+      "file": "admin-api/portal/og/portal-vi.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 42187,
+      "sha256": "01354c1737ff056f35c264318ebac1fb147ac137f17646db75e1e162ecda09b0",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    },
+    {
+      "file": "admin-api/portal/og/portal-zh-CN.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 43364,
+      "sha256": "ce9bc3cbe8dbb3bcede597fdef0bae31a6e6f1adf9a2e5d44b8c5c9270598a00",
+      "visual_inspection": "complete; readable glyphs and no clipping"
+    }
+  ],
+  "draft_ad_asset_checks": [
+    {
+      "text": "พร็อกซีเครือข่ายไทย",
+      "weighted_characters": 19,
+      "limit": 30
+    },
+    {
+      "text": "เลือกแพ็กเกจ Proxy",
+      "weighted_characters": 18,
+      "limit": 30
+    },
+    {
+      "text": "ดูการใช้งานในบัญชี",
+      "weighted_characters": 18,
+      "limit": 30
+    },
+    {
+      "text": "เลือกแพ็กเกจตามการใช้งาน ดูเงื่อนไขและความพร้อมก่อนสั่งซื้อ",
+      "weighted_characters": 59,
+      "limit": 90
+    },
+    {
+      "text": "ดูการใช้งานและต่ออายุผ่านบัญชีของคุณ IP อาจเปลี่ยนตามผู้ให้บริการ",
+      "weighted_characters": 65,
+      "limit": 90
+    },
+    {
+      "text": "Thai Network Proxies",
+      "weighted_characters": 20,
+      "limit": 30
+    },
+    {
+      "text": "Compare Proxy Plans",
+      "weighted_characters": 19,
+      "limit": 30
+    },
+    {
+      "text": "Manage Access In One Place",
+      "weighted_characters": 26,
+      "limit": 30
+    },
+    {
+      "text": "Explore Thai network proxy plans. Check capacity and terms before buying.",
+      "weighted_characters": 73,
+      "limit": 90
+    },
+    {
+      "text": "Review usage and renew in your account. ISP-assigned IP addresses may change.",
+      "weighted_characters": 77,
+      "limit": 90
+    },
+    {
+      "text": "泰国网络代理",
+      "weighted_characters": 12,
+      "limit": 30
+    },
+    {
+      "text": "查看代理套餐",
+      "weighted_characters": 12,
+      "limit": 30
+    },
+    {
+      "text": "账户管理更清晰",
+      "weighted_characters": 14,
+      "limit": 30
+    },
+    {
+      "text": "选择适合需求的泰国代理套餐。购买前查看容量与使用条款。",
+      "weighted_characters": 54,
+      "limit": 90
+    },
+    {
+      "text": "在账户中查看用量并续费。运营商分配的 IP 地址可能变化。",
+      "weighted_characters": 54,
+      "limit": 90
+    },
+    {
+      "text": "タイのプロキシ",
+      "weighted_characters": 14,
+      "limit": 30
+    },
+    {
+      "text": "プランを比較",
+      "weighted_characters": 12,
+      "limit": 30
+    },
+    {
+      "text": "利用量を確認",
+      "weighted_characters": 12,
+      "limit": 30
+    },
+    {
+      "text": "タイのネットワークプロキシ。購入前に容量と条件をご確認ください。",
+      "weighted_characters": 64,
+      "limit": 90
+    },
+    {
+      "text": "アカウントで利用量を確認し更新できます。IPは変更される場合があります。",
+      "weighted_characters": 70,
+      "limit": 90
+    },
+    {
+      "text": "Прокси из Таиланда",
+      "weighted_characters": 18,
+      "limit": 30
+    },
+    {
+      "text": "Сравните тарифы",
+      "weighted_characters": 15,
+      "limit": 30
+    },
+    {
+      "text": "Трафик в личном кабинете",
+      "weighted_characters": 24,
+      "limit": 30
+    },
+    {
+      "text": "Тарифы прокси тайской сети. Проверьте доступность и условия перед покупкой.",
+      "weighted_characters": 75,
+      "limit": 90
+    },
+    {
+      "text": "Смотрите расход трафика и продлевайте доступ. IP провайдера может измениться.",
+      "weighted_characters": 77,
+      "limit": 90
+    },
+    {
+      "text": "Proxy Mạng Thái Lan",
+      "weighted_characters": 19,
+      "limit": 30
+    },
+    {
+      "text": "So Sánh Các Gói Proxy",
+      "weighted_characters": 21,
+      "limit": 30
+    },
+    {
+      "text": "Xem Mức Sử Dụng",
+      "weighted_characters": 15,
+      "limit": 30
+    },
+    {
+      "text": "Chọn gói proxy mạng Thái Lan. Kiểm tra chỗ trống và điều khoản trước khi mua.",
+      "weighted_characters": 77,
+      "limit": 90
+    },
+    {
+      "text": "Xem mức sử dụng và gia hạn trong tài khoản. IP do nhà mạng cấp có thể thay đổi.",
+      "weighted_characters": 79,
+      "limit": 90
+    }
+  ],
+  "limits_note": "CJK wide/fullwidth characters count as two; validate again in current Google Ads editor before use",
+  "provider_research_limitation": "Meta official developer pages returned429; suppression flags not claimed verified; no provider account delivery tested"
+}
