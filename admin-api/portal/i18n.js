@@ -11,7 +11,8 @@ window.PortalI18n=(()=>{
   const page=()=>{
     const pathParts=location.pathname.split('/').filter(Boolean);
     const hashPage=location.hash.match(/^#\/?([a-z]+)/)?.[1];
-    return hashPage||((supported.includes(pathParts[1])?pathParts[2]:pathParts[1])||'home');
+    const pathPage=(supported.includes(pathParts[1])?pathParts[2]:pathParts[1])||'home';
+    return hashPage||(pathPage==='index.html'?'home':pathPage);
   };
   const path=(name='home',language=locale)=>'/portal/'+(supported.includes(language)?language:'th')+'/'+(name==='home'?'':encodeURIComponent(name));
   const t=(key,params={})=>String(dictionary[key]??key).replace(/\{([a-zA-Z0-9_]+)\}/g,(_,name)=>String(params[name]??'{'+name+'}'));

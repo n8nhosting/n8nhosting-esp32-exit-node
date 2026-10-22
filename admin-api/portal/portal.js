@@ -6,7 +6,9 @@ const initialPage=I18n.page(),initialQuery=new URLSearchParams(location.search),
 let signInToken=initialPage==='verify'?(hashQuery.get('token')||initialQuery.get('token')):null;
 const sensitiveQuery=[...initialQuery.keys()].some(key=>!/^utm_(source|medium|campaign|term|content)$/.test(key));
 let privacyBlocked=sensitiveQuery&&initialPage!=='verify';
-const pathParts=location.pathname.split('/').filter(Boolean),pathPage=(I18n.supported.includes(pathParts[1])?pathParts[2]:pathParts[1])||'home';
+const pathParts=location.pathname.split('/').filter(Boolean),rawPathPage=(I18n.supported.includes(pathParts[1])?pathParts[2]:pathParts[1])||'home',pathPage=rawPathPage==='index.html'?'home':rawPathPage;
+const legacyPublicRoot=pathParts.length===1||(pathParts.length===2&&pathParts[1]==='index.html');
+if(legacyPublicRoot&&publicPages.has(initialPage)){location.replace(I18n.path(initialPage)+(sensitiveQuery?location.search:''));return;}
 if(publicPages.has(initialPage)&&(location.hash.startsWith('#/')||(!sensitiveQuery&&location.search))){location.replace(I18n.path(initialPage));return;}
 if(!publicPages.has(initialPage)&&publicPages.has(pathPage)&&location.hash.startsWith('#/')){location.replace(I18n.path(initialPage)+location.hash);return;}
 if(location.search||location.hash.startsWith('#/'))history.replaceState(null,'',I18n.path(initialPage));
