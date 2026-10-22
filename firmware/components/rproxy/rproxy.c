@@ -44,6 +44,7 @@
 #include "esp_timer.h"
 #include "esp_app_desc.h"
 #include "esp_tls.h"
+#include "mbedtls/ssl.h"
 #include "esp_https_ota.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -173,6 +174,8 @@ static bool link_connect(link_t *l, const char *host, uint16_t port, bool use_tl
             return false;
         }
         if (esp_tls_get_conn_sockfd(l->t, &l->fd) != ESP_OK) l->fd = -1;
+        mbedtls_ssl_context *ssl = esp_tls_get_ssl_context(l->t);
+        if (ssl) ESP_LOGI(TAG, "link: TLS %s", mbedtls_ssl_get_ciphersuite(ssl));
         l->tls = true;
         return true;
     }
