@@ -69,6 +69,9 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`Table view`,                     // the chart has a non-visual data equivalent
 		`with data`,                      // the table says how many samples were observed
 		`No data · `,                     // consecutive unobserved samples collapse into one row
+		`id="userSummary"`,               // users page states counts per status from real data
+		`Up to board speed`,              // no placeholder-looking "≤ capacity" / "∞ GB" labels
+		`avg Mbps`,                       // history charts plot average rate, not bytes per sample
 		`row.dataset.key=key`,            // background updates retain row identity
 		`document.hidden`,                // stop polling a hidden browser tab
 		`body.lat=null;body.lon=null`,    // explicit paired coordinate deletion
