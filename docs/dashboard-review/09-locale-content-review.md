@@ -29,6 +29,7 @@ nothing was deployed. Suggested wordings are reviewer proposals, not decided tex
 
 1. **ข้อบกพร่องในโค้ด (C1):** หลังลูกค้าอัปโหลดสลิป รายการยังแสดง "รอชำระ" และมีปุ่มอัปโหลดอีกครั้ง
    ลูกค้าอาจโอนซ้ำ ต้องแก้ในรอบ source ไม่ใช่แก้คำแปล
+   **แก้ใน source แล้ว 22 ต.ค. 16:15 +07 รอ deploy หลัง soak run 5 ครบ**
 2. **คำว่า "บอร์ด" ในภาษารัสเซีย (C14):** `плата` อ่านเป็น "ค่าธรรมเนียม/การชำระ" ได้ เช่น "ได้รับเงินแล้ว
    รอการชำระ" ควรเปลี่ยนเป็น `устройство` ก่อนทำการตลาดภาษารัสเซีย
 3. **ข้อความภายในที่ลูกค้าเห็น (C2):** หน้า Help แสดง "นโยบายธุรกิจยังต้องตรวจก่อนเปิดรับเงินจริง" ตลอดเวลา
@@ -41,6 +42,14 @@ nothing was deployed. Suggested wordings are reviewer proposals, not decided tex
 
 These affect several languages or come from the source copy or code.
 Fix them once, at the source, before the per-language polish.
+
+> **Update 22 Oct 2026, 16:15 +07:** C1 is fixed in source and **not yet deployed**.
+> The customer order list now carries `slip_status` (`awaiting_review` or `reviewed`).
+> The order stays `pending`, so its seat reservation is unchanged. The portal shows
+> **Receipt under review** in place of the upload button. Covered by
+> `TestPortalOrderListShowsSubmittedSlipWhileSeatStaysReserved` (real handler), and
+> the browser intercept now returns the real response shape. The deploy is planned
+> after soak run 5 finishes.
 
 | ID | Finding | Locales | Evidence | Recommended change | Type | Sev |
 |---|---|---|---|---|---|---|

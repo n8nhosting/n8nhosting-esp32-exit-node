@@ -43,6 +43,9 @@ type CommerceOrder struct {
 	CreatedAt            string `json:"created_at"`
 	PaidAt               string `json:"paid_at"`
 	StripeSessionID      string `json:"stripe_session_id,omitempty"`
+	// SlipStatus is "awaiting_review" or "reviewed" for an order with an
+	// uploaded slip; set only by listCommerceOrders.
+	SlipStatus string `json:"slip_status,omitempty"`
 }
 type Subscription struct {
 	ID           string `json:"id"`

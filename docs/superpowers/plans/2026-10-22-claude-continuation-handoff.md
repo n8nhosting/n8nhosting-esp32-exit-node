@@ -301,3 +301,44 @@ runtime hash/Coolify deployment, SQLite counts, สถานะบอร์ด�
    → แก้ locale ในรอบ source ที่มี test/deploy ตามปกติ; deploy จะเปลี่ยน broker
    container จึงควรรอให้ run 5 ครบ duration ก่อน แล้วเริ่ม collector run ใหม่ตามข้อ 5.B
 4. ตั้ง analytics IDs เมื่อเจ้าของพร้อม → ทำงาน D
+
+## 10. บันทึกรอบ Claude — 22 ต.ค. 2026 16:15 +07 (Coolify MCP + แก้ C1, ยังไม่ deploy)
+
+เจ้าของให้ Coolify MCP token ชั่วคราว (เจ้าของจะ revoke เอง; token ไม่ถูกบันทึกใน repo)
+ใช้ผ่าน `https://coolify.jbacteam.com/mcp` ไม่ใช่ `http://…:8000` เพื่อไม่ให้ token วิ่งแบบ plaintext
+เครื่องมือของ Coolify MCP ไม่มีคำสั่งรันบน server จึงยังอ่านไฟล์ collector ใต้ `/root/…` ไม่ได้
+
+### ตรวจแบบ read-only ผ่าน Coolify MCP (2026-10-22T08:59:57Z = 15:59:57 +07)
+
+- `list_deployments`: ล่าสุดยังเป็น `jokgjuch6v5y7lvkjz9iuyjo`, commit `7a6f884`,
+  finished 06:25:38Z (13:25:38 +07); ไม่มี deploy หลังจากนั้น
+- `get_application`: `status running:unknown`, `restart_count 0`, `last_restart_at` ว่าง
+  → ณ เวลานี้ run 5 ไม่ถูกขัดจังหวะด้วย deploy หรือ restart ของ stack
+  (ยังไม่ใช่หลักฐานว่า recorder ยังเก็บ sample อยู่ ต้องอ่าน `samples.jsonl` บน server)
+- `list_env_keys` (ชื่อเท่านั้น): มี `STRIPE_*`, `RESEND_API_KEY`, `EMAIL_FROM`, `TURNSTILE_*`,
+  `PAYMENT_BANK_*`/`PAYMENT_ACCOUNT_*` ซึ่ง Coolify สร้างจาก `${VAR:-}` ใน compose
+  เจ้าของยืนยันว่า **ยังไม่ได้ใส่ค่า**; `/portal/api/config` ยังรายงาน not configured ทุกตัว
+- `get_logs` คืน log ของ gost: ช่วง 15:34 +07 มี `authentication failed` ต่อเนื่องที่ slot-6
+  (`:3136`) จาก client ภายนอก ดูเป็นการ scan/ลองรหัส ไม่ได้ทำอะไรเพิ่ม
+
+### แก้ C1 ใน source (ยังไม่ deploy)
+
+- `admin-api/commerce_http.go` `listCommerceOrders`: เพิ่ม `slip_status`
+  (`awaiting_review` = มีสลิปยังไม่ตรวจ, `reviewed` = ตรวจแล้ว, ว่าง = ไม่มีสลิป)
+  ผ่าน subquery บน `slips`; ไม่เปลี่ยน `orders.status` เพราะ `reservedCommerceSeats`
+  นับ seat จาก `status='pending'`
+- `admin-api/portal/portal.js`: `orderStatus()` แสดง `ui.receipt.under.review` และซ่อนปุ่มอัปโหลด
+  เมื่อ order `pending` มีสลิปรอตรวจ
+- Test: `TestPortalOrderListShowsSubmittedSlipWhileSeatStaysReserved` (handler จริง, RED ก่อนแก้)
+  และ intercept ใน `tools/dashboard_commerce_smoke.cjs` คืน shape เดียวกับ backend จริง
+  (status คง `pending` + `slip_status`) พร้อม assert ว่าปุ่มอัปโหลดหายไป (RED ก่อนแก้ portal.js)
+- Regression ในเครื่องบน source นี้: admin `go test` 150 top-level / 279 cases ผ่าน, vet ผ่าน,
+  `-race` ผ่าน 42.0s; broker test/vet ผ่าน; i18n 6 groups; marketing 11 groups;
+  commerce/i18n 19 groups (ทุกภาษาผ่าน slip upload → review state)
+
+### แผน deploy
+
+Deploy หลัง run 5 ครบ duration (23 ต.ค. 13:26:02 +07) ตามที่เจ้าของเลือก
+หลัง deploy: ตรวจ `list_deployments` ว่า commit ตรงกับ `origin/main`, ตรวจ public portal,
+และถ้าต้องการ soak ต่อให้เริ่ม collector run ใหม่บน server ตามข้อ 5.B
+การตรวจ slip flow กับ hostname จริงยังรอเจ้าของใส่ค่าบัญชีธนาคาร/email/Turnstile

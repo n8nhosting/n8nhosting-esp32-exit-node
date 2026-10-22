@@ -153,8 +153,16 @@ type commerceOrderInput struct {
 	PreferredMAC   string `json:"preferred_device_mac"`
 }
 
+// slipScanner appends the slip state column to an order row's destinations.
+type slipScanner struct {
+	row  commerceScanner
+	slip *string
+}
+
+func (r slipScanner) Scan(dest ...any) error { return r.row.Scan(append(dest, r.slip)...) }
+
 func (s *server) listCommerceOrders(ctx context.Context, customer string) ([]CommerceOrder, error) {
-	query := `SELECT ` + orderCols + ` FROM orders`
+	query := `SELECT ` + orderCols + `,COALESCE((SELECT CASE WHEN reviewed_at='' THEN 'awaiting_review' ELSE 'reviewed' END FROM slips WHERE slips.order_id=orders.id),'') FROM orders`
 	args := []any{}
 	if customer != "" {
 		query += ` WHERE customer_id=?`
@@ -168,10 +176,12 @@ func (s *server) listCommerceOrders(ctx context.Context, customer string) ([]Com
 	defer rows.Close()
 	out := []CommerceOrder{}
 	for rows.Next() {
-		o, e := scanCommerceOrder(rows)
+		var slip string
+		o, e := scanCommerceOrder(slipScanner{rows, &slip})
 		if e != nil {
 			return nil, e
 		}
+		o.SlipStatus = slip
 		out = append(out, *o)
 	}
 	return out, rows.Err()

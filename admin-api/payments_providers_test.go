@@ -249,6 +249,55 @@ func TestSlipUploadPrivateBoundedAndTenantOwned(t *testing.T) {
 	}
 }
 
+// A submitted slip must be visible in the customer's order list, or the
+// portal keeps offering the upload and the customer may transfer again. The
+// order itself stays pending so its seat reservation is unchanged.
+func TestPortalOrderListShowsSubmittedSlipWhileSeatStaysReserved(t *testing.T) {
+	s, mux := portalTestServer(t)
+	configureManualTest(t)
+	cookie, csrf := portalFixtureIdentity(t, s, "buyer")
+	portalFixtureOrder(t, s, "ord_slip", "buyer", "slip")
+	portalFixtureOrder(t, s, "ord_open", "buyer", "slip")
+	listed := func() map[string]CommerceOrder {
+		t.Helper()
+		rr := portalRequest(mux, "GET", "/portal/api/orders", "", cookie, "")
+		var body struct {
+			Orders []CommerceOrder `json:"orders"`
+		}
+		if rr.Code != 200 || json.Unmarshal(rr.Body.Bytes(), &body) != nil {
+			t.Fatalf("orders: %d %s", rr.Code, rr.Body.String())
+		}
+		out := map[string]CommerceOrder{}
+		for _, o := range body.Orders {
+			out[o.ID] = o
+		}
+		return out
+	}
+	if o := listed()["ord_slip"]; o.SlipStatus != "" {
+		t.Fatalf("slip state before upload: %q", o.SlipStatus)
+	}
+	rr := portalRequest(mux, "POST", "/portal/api/orders/ord_slip/slip", "%PDF-1.4\nfixture payment slip\n%%EOF", cookie, csrf)
+	if rr.Code != 201 {
+		t.Fatalf("slip: %d %s", rr.Code, rr.Body.String())
+	}
+	got := listed()
+	if o := got["ord_slip"]; o.SlipStatus != "awaiting_review" || o.Status != "pending" || o.PaidAt != "" {
+		t.Fatalf("submitted slip not listed or seat released: %+v", o)
+	}
+	if o := got["ord_open"]; o.SlipStatus != "" {
+		t.Fatalf("slip state leaked to another order: %q", o.SlipStatus)
+	}
+	broker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`[]`)) }))
+	defer broker.Close()
+	t.Setenv("BROKER_STATUS_URL", broker.URL)
+	if _, err := s.reviewCommerceOrder(context.Background(), "ord_slip", false, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	if o := listed()["ord_slip"]; o.SlipStatus != "reviewed" || o.Status != "rejected" {
+		t.Fatalf("reviewed slip: %+v", o)
+	}
+}
+
 func TestStripeExpiredCheckoutCannotRenewReservationButLatePaymentIsHonored(t *testing.T) {
 	s, mux := portalTestServer(t)
 	portalFixtureIdentity(t, s, "buyer")
