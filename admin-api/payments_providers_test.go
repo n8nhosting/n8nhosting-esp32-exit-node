@@ -86,7 +86,7 @@ func TestStripeCheckoutServerAmountOwnershipAndStableRetry(t *testing.T) {
 		} else if encoded != firstBody {
 			t.Fatal("retry changed immutable Stripe payload")
 		}
-		if r.Header.Get("Stripe-Version") != "2026-09-30.endive" || r.Form.Get("payment_method_types[0]") != "" || r.Form.Get("allowed_payment_method_types[0]") != "card" || r.Form.Get("line_items[0][price_data][unit_amount]") != "4900" || r.Form.Get("line_items[0][price_data][currency]") != "thb" || r.Form.Get("allowed_payment_method_types[1]") != "promptpay" || r.Form.Get("metadata[customer_id]") != "buyer" {
+		if r.Header.Get("Stripe-Version") != "2026-09-30.endive" || r.Form.Get("payment_method_types[0]") != "" || r.Form.Get("allowed_payment_method_types[0]") != "card" || r.Form.Get("line_items[0][price_data][unit_amount]") != "4900" || r.Form.Get("line_items[0][price_data][currency]") != "thb" || r.Form.Get("allowed_payment_method_types[1]") != "promptpay" || r.Form.Get("metadata[customer_id]") != "buyer" || r.Form.Get("locale") != "auto" {
 			t.Fatalf("checkout contract %v", r.Form)
 		}
 		return portalTestResponse(200, `{"id":"cs_fixture","url":"https://checkout.stripe.com/c/pay/cs_fixture"}`), nil

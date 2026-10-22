@@ -78,7 +78,7 @@ func (s *server) handleStripeCheckout(w http.ResponseWriter, r *http.Request) {
 		"metadata[customer_id]":                         {identity.ID},
 		"success_url":                                   {root + "#/orders/" + url.PathEscape(id)},
 		"cancel_url":                                    {root + "#/orders/" + url.PathEscape(id)},
-		"locale":                                        {"th"},
+		"locale":                                        {"auto"}, // browser language; fixed so retries send the same payload
 		"expires_at":                                    {strconv.FormatInt(checkoutExpiry, 10)},
 	}
 	req, err := http.NewRequestWithContext(r.Context(), "POST", "https://api.stripe.com/v1/checkout/sessions", strings.NewReader(form.Encode()))
