@@ -231,3 +231,20 @@ func TestMarketingCorruptConfigFailsClosed(t *testing.T) {
 		t.Fatal("private API indexable")
 	}
 }
+
+func TestPortalPrivateMetadataUsesLocale(t *testing.T) {
+	_, mux := portalTestServer(t)
+	for _, locale := range portalLocales {
+		dict := portalDictionary(locale)
+		for page, key := range map[string]string{"account": "ui.my.plans", "subscriptions": "ui.my.plans", "orders": "ui.orders", "login": "ui.sign.in", "verify": "ui.sign.in", "checkout": "ui.sign.in"} {
+			rr := marketingRequest(mux, "GET", "/portal/"+locale+"/"+page, "", false)
+			expected := "<title>" + html.EscapeString(dict[key]+" | Proxy Server") + "</title>"
+			if rr.Code != 200 || dict[key] == "" || !strings.Contains(rr.Body.String(), expected) || !strings.Contains(rr.Body.String(), html.EscapeString(dict["seo.home.description"])) {
+				t.Fatalf("%s/%s missing localized private metadata: %d", locale, page, rr.Code)
+			}
+			if !strings.Contains(rr.Header().Get("X-Robots-Tag"), "noindex") || strings.Contains(rr.Body.String(), `rel="canonical"`) || strings.Contains(rr.Body.String(), `property="og:`) {
+				t.Fatalf("%s/%s lost private indexing boundary", locale, page)
+			}
+		}
+	}
+}

@@ -67,6 +67,16 @@ func portalDictionary(locale string) map[string]string {
 }
 func portalSEO(locale, page string, m MarketingSettings) (MarketingSEO, map[string]string) {
 	d := portalDictionary(locale)
+	if !containsString(portalPublicPages, page) {
+		key := "ui.sign.in"
+		switch page {
+		case "account", "subscriptions":
+			key = "ui.my.plans"
+		case "orders":
+			key = "ui.orders"
+		}
+		return MarketingSEO{Title: d[key] + " | Proxy Server", Description: d["seo.home.description"]}, d
+	}
 	prefix := "seo." + page + "."
 	seo := MarketingSEO{Title: d[prefix+"title"], Description: d[prefix+"description"], Keywords: d[prefix+"keywords"]}
 	if seo.Title == "" {
