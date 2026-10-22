@@ -58,6 +58,7 @@ function pageTitle(title,description){const content=$('#publicContent');if(publi
 function currentPage(){return I18n.page();}
 function renderHome(){
   const content=$('#publicContent');
+  if(content?.classList.contains('landing')){$('#page').innerHTML='';return;}
   $('#page').innerHTML=(content?.querySelector('h1')?'':pageTitle(t('seo.home.h1'),t('seo.home.intro'))+'<p class="help-note">'+esc(t('seo.home.body'))+'</p>')+'<div class="actions public-actions"><a class="button" data-page="plans" href="'+I18n.path('plans')+'">'+t('ui.browse.plans')+'</a><a class="button secondary" data-page="help" href="'+I18n.path('help')+'">'+t('ui.connection.guide')+'</a></div>';
 }
 async function loadPlans(){const result=await api('/plans');state.plans=result.plans||[];return state.plans;}

@@ -155,7 +155,41 @@ func portalSEOHead(locale, page string, seo MarketingSEO, indexable bool) string
 	fmt.Fprintf(&h, `<meta property="og:type" content="website"><meta property="og:site_name" content="Proxy Server"><meta property="og:locale" content="%s"><meta property="og:title" content="%s"><meta property="og:description" content="%s"><meta property="og:url" content="%s"><meta property="og:image" content="%s"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="%s"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="%s"><meta name="twitter:description" content="%s"><meta name="twitter:image" content="%s">`, ogLocale, e(seo.Title), e(seo.Description), e(canonical), e(base.String()), e(seo.Title), e(seo.Title), e(seo.Description), e(base.String()))
 	return h.String()
 }
-func portalPublicContent(locale, page string, d map[string]string) string {
+
+// portalPageLinks lists the public pages and the same page in every locale.
+func portalPageLinks(locale, page string, d map[string]string) string {
+	e := html.EscapeString
+	var b strings.Builder
+	fmt.Fprintf(&b, `<nav class="page-links" aria-label="%s">`, e(d["nav.label"]))
+	for _, p := range portalPublicPages {
+		label := d["seo."+p+".h1"]
+		if label == "" {
+			label = p
+		}
+		path := "/portal/" + locale + "/"
+		if p != "home" {
+			path += p
+		}
+		fmt.Fprintf(&b, `<a href="%s">%s</a>`, path, e(label))
+	}
+	b.WriteString(`</nav><div class="language-links">`)
+	for _, lang := range portalLocales {
+		path := "/portal/" + lang + "/"
+		if page != "home" {
+			path += page
+		}
+		fmt.Fprintf(&b, `<a href="%s" hreflang="%s" lang="%s">%s</a>`, path, lang, lang, e(map[string]string{"th": "ไทย", "en": "English", "zh-CN": "简体中文", "ja": "日本語", "ru": "Русский", "vi": "Tiếng Việt"}[lang]))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+// portalPublicContent renders a public page; home is the sales page and
+// lists the active plans.
+func portalPublicContent(locale, page string, d map[string]string, plans []Plan) string {
+	if page == "home" {
+		return portalLandingContent(locale, d, plans)
+	}
 	e := html.EscapeString
 	h1 := d["seo."+page+".h1"]
 	if h1 == "" {
@@ -169,19 +203,7 @@ func portalPublicContent(locale, page string, d map[string]string) string {
 		intro = d["seo."+page+".description"]
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<section id="publicContent" class="public-content" aria-labelledby="publicHeading"><h1 id="publicHeading">%s</h1><p>%s</p><nav aria-label="%s">`, e(h1), e(intro), e(d["nav.label"]))
-	for _, p := range portalPublicPages {
-		label := d["seo."+p+".h1"]
-		if label == "" {
-			label = p
-		}
-		path := "/portal/" + locale + "/"
-		if p != "home" {
-			path += p
-		}
-		fmt.Fprintf(&b, `<a href="%s">%s</a>`, path, e(label))
-	}
-	b.WriteString(`</nav>`)
+	fmt.Fprintf(&b, `<section id="publicContent" class="public-content" aria-labelledby="publicHeading"><h1 id="publicHeading">%s</h1><p class="lead">%s</p>`, e(h1), e(intro))
 	if body := d["seo."+page+".body"]; body != "" {
 		fmt.Fprintf(&b, `<p class="public-body">%s</p>`, e(body))
 	}
@@ -196,15 +218,8 @@ func portalPublicContent(locale, page string, d map[string]string) string {
 	if q := d["seo."+page+".faq.question"]; q != "" {
 		fmt.Fprintf(&b, `<section class="public-faq"><h2>%s</h2><p>%s</p></section>`, e(q), e(d["seo."+page+".faq.answer"]))
 	}
-	b.WriteString(`<div class="language-links">`)
-	for _, lang := range portalLocales {
-		path := "/portal/" + lang + "/"
-		if page != "home" {
-			path += page
-		}
-		fmt.Fprintf(&b, `<a href="%s" hreflang="%s" lang="%s">%s</a>`, path, lang, lang, e(map[string]string{"th": "ไทย", "en": "English", "zh-CN": "简体中文", "ja": "日本語", "ru": "Русский", "vi": "Tiếng Việt"}[lang]))
-	}
-	b.WriteString(`</div></section>`)
+	b.WriteString(portalPageLinks(locale, page, d))
+	b.WriteString(`</section>`)
 	return b.String()
 }
 func registerPortalStatic(mux *http.ServeMux, s *server) {
@@ -279,7 +294,12 @@ func registerPortalStatic(mux *http.ServeMux, s *server) {
 		doc = strings.Replace(doc, "</head>", portalSEOHead(locale, page, seo, indexable)+"</head>", 1)
 		content := `<section id="publicContent" class="public-content" hidden></section>`
 		if public {
-			content = portalPublicContent(locale, page, dict)
+			var plans []Plan
+			if page == "home" {
+				// a failed lookup shows the "no plans on sale" line, never an error page
+				plans, _ = s.listCommercePlans(r.Context(), true)
+			}
+			content = portalPublicContent(locale, page, dict, plans)
 		}
 		if strings.Contains(doc, "<!--PORTAL_PUBLIC_CONTENT-->") {
 			doc = strings.Replace(doc, "<!--PORTAL_PUBLIC_CONTENT-->", content, 1)
