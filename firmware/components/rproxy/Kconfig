@@ -89,6 +89,15 @@ config RPROXY_OTA_DEADLINE_SEC
         partial image and reconnects without rebooting. A blocking IDF call
         that exceeds this deadline plus 10 seconds triggers a safe restart.
 
+config RPROXY_TEST_HEAPTRACE
+    bool "Test builds only: trace the heap and dump freed records on corruption"
+    default n
+    help
+        Needs HEAP_TRACING_STANDALONE (and on RISC-V ESP_SYSTEM_USE_FRAME_POINTER
+        for call stacks) plus comprehensive heap poisoning. A task checks heap
+        integrity five times a second and, on the first corruption, prints every
+        freed allocation with its allocating and freeing callers, then aborts.
+
 config RPROXY_TEST_HANG
     bool "Test builds only: hang the relay loop 60 s after the link comes up"
     default n

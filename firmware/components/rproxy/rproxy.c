@@ -764,6 +764,62 @@ static volatile int64_t s_relay_beat;     /* time of the mux task's latest pass;
 
 static void relay_beat(void) { s_relay_beat = esp_timer_get_time(); }
 
+#if CONFIG_RPROXY_TEST_HEAPTRACE && CONFIG_HEAP_TRACING_STANDALONE
+#include "esp_heap_trace.h"
+/* Test builds only: find who writes into freed memory. Every allocation and
+ * free is traced; on the first failed integrity check the freed records are
+ * printed (address, size, allocating and freeing callers) before aborting. */
+#define HT_RECORDS 256
+static heap_trace_record_t s_ht[HT_RECORDS];
+
+static void heap_trace_dump_freed(void)
+{
+    heap_trace_stop();
+    size_t n = heap_trace_get_count();
+    esp_rom_printf("HEAPTRACE corrupt, %u records\n", (unsigned)n);
+    for (size_t i = 0; i < n; i++) {
+        heap_trace_record_t r;
+        if (heap_trace_get(i, &r) != ESP_OK || !r.address || !r.freed_by[0]) continue;
+        esp_rom_printf("HT %p %u A", r.address, (unsigned)r.size);
+        for (int d = 0; d < CONFIG_HEAP_TRACING_STACK_DEPTH; d++) esp_rom_printf(" %p", r.alloced_by[d]);
+        esp_rom_printf(" F");
+        for (int d = 0; d < CONFIG_HEAP_TRACING_STACK_DEPTH; d++) esp_rom_printf(" %p", r.freed_by[d]);
+        esp_rom_printf("\n");
+    }
+}
+
+/* The allocator usually meets the damaged block first and asserts inside
+ * malloc; the link wraps __assert_func (CMakeLists) so the dump still runs. */
+void __real___assert_func(const char *file, int line, const char *func, const char *expr) __attribute__((noreturn));
+void __attribute__((noreturn)) __wrap___assert_func(const char *file, int line, const char *func, const char *expr)
+{
+    heap_trace_dump_freed();
+    __real___assert_func(file, line, func, expr);
+}
+
+static void heap_watch_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(200));
+        if (heap_caps_check_integrity_all(true)) continue;
+        heap_trace_dump_freed();
+        abort();
+    }
+}
+
+static void heap_watch_start(void)
+{
+    static bool started;
+    if (started) return;
+    started = true;
+    if (heap_trace_init_standalone(s_ht, HT_RECORDS) == ESP_OK && heap_trace_start(HEAP_TRACE_ALL) == ESP_OK)
+        xTaskCreate(heap_watch_task, "heap_watch", 4096, NULL, configMAX_PRIORITIES - 2, NULL);
+    else
+        ESP_LOGE(TAG, "heap trace unavailable");
+}
+#endif
+
 static void relay_watchdog(void *arg)
 {
     (void)arg;
@@ -1195,6 +1251,9 @@ static void start_pool(void)
      * every board at ~1.5 Mbps. */
     esp_wifi_set_ps(WIFI_PS_NONE);
     relay_beat();                              /* a restart must not inherit a stale beat */
+#if CONFIG_RPROXY_TEST_HEAPTRACE && CONFIG_HEAP_TRACING_STANDALONE
+    heap_watch_start();
+#endif
     static esp_timer_handle_t watchdog;
     if (!watchdog) {
         const esp_timer_create_args_t args = { .callback = relay_watchdog, .name = "relay_wdt" };
