@@ -368,6 +368,7 @@ const i18n = {
   slotMismatch:'slot not on broker', slotMismatchHint:'The broker routes this board differently from its saved slot/kind. Edit → Save sends it again.',
   health:'Health', ram:'RAM', cpu:'CPU', flash:'Flash', free:'free', freeOf:'free of', lowWater:'lowest since boot',
   cpuHint:'CPU load over the last 30 s, all cores', ramLow:'RAM is running low', cpuHigh:'CPU is saturated',
+  room:'Room', chipTemp:'Chip', roomHot:'Room is hot', chipHot:'Chip is hot', envHint:'Room sensor (BMP280) and chip temperature, every 30 s',
   noStats:'RAM / CPU need firmware 2.4.23', lastSeen:'last seen', offline:'offline', stale:'last report', lastSample:'last sample',
   moreActions:'More actions', updateFw:'Update FW', block:'Block', allow:'Allow', forget:'Forget',
   enable:'Enable', disable:'Disable', extend30:'+30 days', del:'Delete'
@@ -708,6 +709,15 @@ function meter(label, pct, text, warn, title){
   const p=Math.max(0,Math.min(100,+pct||0));
   return `<div class="meter${warn?' warn':''}" title="${esc(title||'')}"><span class="k">${esc(label)}</span><span class="bar" role="img" aria-label="${esc(label+' '+text)}"><i style="width:${p}%"></i></span><span class="v">${esc(text)}</span></div>`;
 }
+// S3 boards with a room sensor (2.4.26+): room temperature/pressure and the chip's own temperature
+function envLine(s){
+  const num=v=>typeof v==='number'&&Number.isFinite(v), parts=[], hot=[];
+  if(num(s.room_temp_c)){parts.push(T('room')+' '+s.room_temp_c.toFixed(1)+' °C');if(s.room_temp_c>=35)hot.push(T('roomHot'));}
+  if(num(s.pressure_hpa))parts.push(Math.round(s.pressure_hpa)+' hPa');
+  if(num(s.chip_temp_c)){parts.push(T('chipTemp')+' '+Math.round(s.chip_temp_c)+' °C');if(s.chip_temp_c>=80)hot.push(T('chipHot'));}
+  if(!parts.length)return '';
+  return `<div class="micro"><span class="${hot.length?'warn':'muted'}" title="${esc(hot.length?hot.join(' · ')+' — '+T('envHint'):T('envHint'))}">${esc(parts.join(' · '))}</span></div>`;
+}
 function healthCell(n){
   const s=n.stats;
   const top = n.online ? esc(fmtUptime(n.uptime_sec))
@@ -725,7 +735,7 @@ function healthCell(n){
   const ageMs = Date.now()-Date.parse(s.at);
   const stale = !n.online ? `<div class="muted micro">${esc(T('lastSample'))} ${esc(fmtAgo(s.at)||'—')}</div>`
     : (ageMs>120000 ? `<div class="muted micro">${esc(T('stale'))} ${esc(fmtAgo(s.at))}</div>` : '');
-  return `<div>${top}</div>${ram}${cpu}${psram}${fl}<div class="micro">${wifiSignal(n)}</div>${stale}`;
+  return `<div>${top}</div>${ram}${cpu}${psram}${fl}<div class="micro">${wifiSignal(n)}</div>${envLine(s)}${stale}`;
 }
 
 /* ---- Connection sheet (replaces the alert box): every field has its own Copy, plus one paste-ready message ---- */

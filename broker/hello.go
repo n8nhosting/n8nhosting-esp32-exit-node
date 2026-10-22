@@ -78,6 +78,7 @@ func parseHelloOpts(f []string) helloOpts {
 //	cpu=<0..100|-1> app=<image bytes> slot=<partition bytes> flash=<chip bytes>
 //	streams=<open mux streams>
 //	rssi=<-127..0 dBm>                                    optional, firmware 2.4.25+
+//	tempc=<centi degC> press=<Pa> chiptempc=<centi degC>  optional, S3 room sensor (2.4.26+)
 func parseStats(s string) (st nodeStats, ok bool) {
 	st.CPUPct = -1
 	for _, tok := range strings.Fields(s) {
@@ -89,6 +90,13 @@ func parseStats(s string) (st nodeStats, ok bool) {
 			if value, err := strconv.ParseInt(v, 10, 16); err == nil && value >= -127 && value <= 0 {
 				rssi := int(value)
 				st.RSSI, ok = &rssi, true
+			}
+			continue
+		}
+		if dst, lo, hi := sensorField(&st, k); dst != nil {
+			if value, err := strconv.ParseInt(v, 10, 32); err == nil && value >= lo && value <= hi {
+				f := float64(value) / 100
+				*dst, ok = &f, true
 			}
 			continue
 		}
@@ -127,4 +135,19 @@ func parseStats(s string) (st nodeStats, ok bool) {
 		ok = true
 	}
 	return st, ok
+}
+
+// sensorField maps a sensor key to its field (stored /100: degC, hPa) and the
+// raw range the hardware can report: a BMP280 -40..85 degC and 300..1100 hPa,
+// the chip sensor -40..125 degC.
+func sensorField(st *nodeStats, k string) (dst **float64, lo, hi int64) {
+	switch k {
+	case "tempc":
+		return &st.RoomTempC, -4000, 8500
+	case "press":
+		return &st.PressureHPa, 30000, 110000
+	case "chiptempc":
+		return &st.ChipTempC, -4000, 12500
+	}
+	return nil, 0, 0
 }

@@ -89,6 +89,29 @@ config RPROXY_OTA_DEADLINE_SEC
         partial image and reconnects without rebooting. A blocking IDF call
         that exceeds this deadline plus 10 seconds triggers a safe restart.
 
+config RPROXY_ENV_SENSOR
+    bool "Report room temperature/pressure (BMP280/BME280) and chip temperature in STATS"
+    default n
+    help
+        A low-priority task reads a BMP280 or BME280 on I2C (address 0x76 or
+        0x77) and the chip's own temperature sensor every 30 s, and each STATS
+        sample carries the fresh values (tempc= press= chiptempc=). Without a
+        sensor wired the board reports only the chip temperature and looks for
+        the sensor again every 5 minutes. Enabled for the S3 N16R8 build.
+
+config RPROXY_ENV_SDA
+    int "Room sensor I2C SDA GPIO"
+    depends on RPROXY_ENV_SENSOR
+    default 8
+    help
+        On an S3 N16R8 keep clear of GPIO 26-37 (flash and octal PSRAM) and the
+        strapping pins 0, 3, 45 and 46.
+
+config RPROXY_ENV_SCL
+    int "Room sensor I2C SCL GPIO"
+    depends on RPROXY_ENV_SENSOR
+    default 9
+
 config RPROXY_TEST_HEAPTRACE
     bool "Test builds only: trace the heap and dump freed records on corruption"
     default n

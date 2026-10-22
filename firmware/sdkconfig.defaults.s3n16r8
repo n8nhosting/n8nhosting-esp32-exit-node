@@ -51,6 +51,10 @@ CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_RX_BA_WIN=32
 
+# --- room sensor (2.4.26): BMP280/BME280 module on 3V3/GND, SDA GPIO 8, SCL GPIO 9 ---
+# Every STATS sample carries room temperature, pressure and the chip temperature.
+CONFIG_RPROXY_ENV_SENSOR=y
+
 # Outgoing TLS records up to 16 KB (default 4 KB): a full DATA frame
 # (RPROXY_RELAY_BUF + 8-byte header) goes out as one record, a quarter of the
 # per-record AES/HMAC and syscall work. Costs ~12 KB more internal RAM for

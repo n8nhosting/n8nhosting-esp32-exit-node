@@ -107,4 +107,6 @@ gcc -std=c11 -Wall -Wextra -Werror tools/test_firmware_ota.c -o output/test_firm
 ./output/test_firmware_ota.exe
 gcc -std=c11 -Wall -Wextra -Werror tools/test_firmware_link.c -o output/test_firmware_link.exe
 ./output/test_firmware_link.exe
+gcc -std=c11 -Wall -Wextra -Werror tools/test_firmware_env.c -o output/test_firmware_env.exe
+./output/test_firmware_env.exe
 ```

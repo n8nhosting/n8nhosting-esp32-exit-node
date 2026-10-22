@@ -53,6 +53,7 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`role="listbox"`,                 // the picker is keyboard-navigable
 		`<th>Health</th>`,                // uptime + RAM/CPU/flash in one cell (no 14th column)
 		`n.stats`,                        // the broker's STATS sample (firmware 2.4.23+)
+		`s.room_temp_c`,                  // S3 room sensor reading in the Health cell (2.4.26+)
 		`fmtAgo(n.last_seen)`,            // an offline board says when it was last seen
 		`id="rowmenu"`,                   // one shared popover for every row's "more" button
 		`role="menu"`,                    // ... which is a real menu for keyboard and screen readers

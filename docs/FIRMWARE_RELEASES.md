@@ -28,6 +28,19 @@ the build directory's target (a C3 bin in the S3 folder). The dashboard sends
 the per-chip string as the OTA target version, so a push is only "ok" when the
 board comes back reporting exactly that.
 
+**2.4.26 (not yet archived)** restarts a board whose relay loop has made no
+pass for 2 minutes and fails a broker-link write that has moved no byte for
+30 s, so a stuck board reconnects or reboots instead of staying "online" with
+dead customers. The S3 N16R8 build also reports a room sensor in `STATS`: a
+low-priority task reads a BMP280/BME280 on I2C (SDA GPIO 8, SCL GPIO 9,
+address 0x76 or 0x77) and the chip's temperature sensor every 30 s and adds
+`tempc=` (centi-degC), `press=` (Pa) and `chiptempc=` (centi-degC). The
+broker keeps only values a BMP280 or the chip can produce and reports them as
+`room_temp_c`, `pressure_hpa` and `chip_temp_c`; the Health cell shows
+"Room 25.1 °C · 1007 hPa · Chip 45 °C". A board without the module sends only
+the chip temperature and looks for the module again every 5 minutes; the C3
+build leaves the sensor task out.
+
 **2.4.24 (testing)** yields for 100 ms when the console returns NULL/EOF.
 ESP-IDF 5.5.2's USB-Serial/JTAG VFS returns a read error immediately when no
 USB host is attached; the previous main console loop retried without blocking.

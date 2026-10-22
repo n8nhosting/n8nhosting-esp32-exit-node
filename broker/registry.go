@@ -32,6 +32,10 @@ type nodeStats struct {
 	SlotBytes  uint32 `json:"slot_bytes"`
 	FlashBytes uint32 `json:"flash_bytes"`
 	Streams    int    `json:"streams"`
+	// S3 room sensor (BMP280/BME280) and the chip's own sensor; nil when not fitted or invalid
+	RoomTempC   *float64 `json:"room_temp_c,omitempty"`
+	PressureHPa *float64 `json:"pressure_hpa,omitempty"`
+	ChipTempC   *float64 `json:"chip_temp_c,omitempty"`
 }
 
 // node is one ESP32 exit device, identified by its WiFi STA MAC address.

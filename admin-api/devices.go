@@ -50,6 +50,10 @@ type nodeStats struct {
 	SlotBytes  uint32 `json:"slot_bytes"`
 	FlashBytes uint32 `json:"flash_bytes"`
 	Streams    int    `json:"streams"`
+	// S3 room sensor (2.4.26+): absent when no sensor is fitted
+	RoomTempC   *float64 `json:"room_temp_c,omitempty"`
+	PressureHPa *float64 `json:"pressure_hpa,omitempty"`
+	ChipTempC   *float64 `json:"chip_temp_c,omitempty"`
 }
 
 // brokerNode mirrors the broker's /nodes JSON.

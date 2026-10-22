@@ -27,7 +27,9 @@ sdkconfig overlay; the broker learns a board's limits from its HELLO. From
 2.4.23 a board also reports its health every 30 s (a `STATS` frame on the
 link: internal RAM free / lowest, CPU load, image and flash sizes), which the
 dashboard shows in the Devices table's **Health** cell; uptime is carried by
-the broker between reports, so it is right for older firmware too.
+the broker between reports, so it is right for older firmware too. From
+2.4.26 an S3 also adds the chip's temperature and, with a BMP280/BME280 module
+on SDA GPIO 8 / SCL GPIO 9 (3V3, GND), room temperature and air pressure.
 
 ```
  customer abroad                         VPS (Coolify)                         home

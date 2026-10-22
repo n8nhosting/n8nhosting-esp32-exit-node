@@ -21,6 +21,7 @@
 #include "rproxy.h"
 #include "ota_transfer.h"
 #include "link_guard.h"
+#include "env_sensor.h"
 #include "sdkconfig.h"
 #include <limits.h>
 
@@ -734,7 +735,7 @@ static void health_init(void)
 
 static bool health_send(link_t *l)
 {
-    char line[224];
+    char line[256];
     int n = snprintf(line, sizeof(line),
                      "up=%lu heap=%u heapmin=%u heaptot=%u cpu=%d app=%lu slot=%lu flash=%lu streams=%d",
                      (unsigned long)(esp_timer_get_time() / 1000000ULL),
@@ -750,6 +751,13 @@ static bool health_send(link_t *l)
     wifi_ap_record_t ap;
     if (n > 0 && n < (int)sizeof(line) && esp_wifi_sta_get_ap_info(&ap) == ESP_OK && ap.rssi >= -127 && ap.rssi <= 0)
         n += snprintf(line + n, sizeof(line) - n, " rssi=%d", (int)ap.rssi);
+#if CONFIG_RPROXY_ENV_SENSOR
+    if (n > 0 && n < (int)sizeof(line)) {
+        rproxy_env_t env;
+        env_sensor_snapshot(&env);
+        n += rproxy_env_append(line, sizeof(line), &env, esp_timer_get_time());
+    }
+#endif
     if (n <= 0 || n >= (int)sizeof(line)) return true;   /* cannot happen; never drop the link for it */
     return frame_send(l, F_STATS, 0, line, (uint16_t)n);
 }
@@ -1286,6 +1294,9 @@ esp_err_t rproxy_init(void)
 
     cfg_load(&s_cfg);
     ota_verify_start();
+#if CONFIG_RPROXY_ENV_SENSOR
+    env_sensor_start();
+#endif
     ESP_LOGI(TAG, "init: enabled=%d host=%s:%u pool=%u tls=%d mac=%s fw=%s",
              s_cfg.enabled, s_cfg.host, s_cfg.port, s_cfg.pool, s_cfg.use_tls, s_mac, s_fw);
     if (s_cfg.enabled && s_cfg.host[0] && s_cfg.token[0]) start_pool();

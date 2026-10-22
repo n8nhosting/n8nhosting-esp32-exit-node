@@ -1,7 +1,7 @@
 idf_component_register(
-    SRCS "rproxy.c"
+    SRCS "rproxy.c" "env_sensor.c"
     INCLUDE_DIRS "include"
-    REQUIRES nvs_flash esp_netif lwip console esp_timer log esp_hw_support esp-tls esp_wifi esp_app_format esp_https_ota esp_http_client app_update esp_partition bootloader_support spi_flash mbedtls cmd_router http_server esp_http_server
+    REQUIRES nvs_flash esp_netif lwip console esp_timer log esp_hw_support esp-tls esp_wifi esp_app_format esp_https_ota esp_http_client app_update esp_partition bootloader_support spi_flash mbedtls cmd_router http_server esp_http_server esp_driver_i2c esp_driver_tsens
     EMBED_TXTFILES "broker_ca.pem"
 )
 if(CONFIG_RPROXY_TEST_HEAPTRACE)

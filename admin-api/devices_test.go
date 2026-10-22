@@ -305,3 +305,27 @@ func TestDevicesCarryStats(t *testing.T) {
 		t.Fatal("uptime must pass through")
 	}
 }
+
+// An S3 room sensor's readings reach the dashboard; a board without one has none.
+func TestDevicesCarryRoomSensor(t *testing.T) {
+	_, mux, fb := newTestServerWithBroker(t)
+	room, hpa, chip := 25.08, 1006.53, 45.1
+	fb.nodes = []brokerNode{
+		{MAC: "aa:bb:cc:dd:ee:09", Online: true, Stats: &nodeStats{At: "2026-10-22T12:00:00Z", HeapFree: 1, CPUPct: 1,
+			RoomTempC: &room, PressureHPa: &hpa, ChipTempC: &chip}},
+		{MAC: "aa:bb:cc:dd:ee:08", Online: true, Stats: &nodeStats{At: "2026-10-22T12:00:00Z", HeapFree: 1, CPUPct: 1}},
+	}
+	_, list := doJSONList(t, mux, "GET", "/api/devices", "admintok")
+	byMac := map[string]map[string]any{}
+	for _, d := range list {
+		byMac[d["mac"].(string)] = d
+	}
+	st, _ := byMac["aa:bb:cc:dd:ee:09"]["stats"].(map[string]any)
+	if st == nil || st["room_temp_c"] != 25.08 || st["pressure_hpa"] != 1006.53 || st["chip_temp_c"] != 45.1 {
+		t.Fatalf("room sensor: %v", byMac["aa:bb:cc:dd:ee:09"]["stats"])
+	}
+	bare, _ := byMac["aa:bb:cc:dd:ee:08"]["stats"].(map[string]any)
+	if _, has := bare["room_temp_c"]; has {
+		t.Fatalf("no sensor must mean no reading: %v", bare)
+	}
+}
