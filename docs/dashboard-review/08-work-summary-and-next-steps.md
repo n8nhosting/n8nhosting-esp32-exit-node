@@ -71,6 +71,9 @@ intercepted synthetic customer APIs จึงยังไม่พิสูจ�
 4. **ตรวจคำแปลและ SEO ก่อนทำการตลาดจริง**: native-language commercial review,
    Search Console/crawl/indexation และยืนยัน keyword demand; keyword ปัจจุบันเป็น
    editorial hypotheses ไม่มีข้อมูล search volume/CPC หรือคำรับประกันอันดับ
+   รายการตรวจเบื้องต้น (AI pre-review ยังไม่ใช่ native sign-off) อยู่ใน
+   [09-locale-content-review.md](09-locale-content-review.md) รวมข้อบกพร่องสถานะสลิป
+   ที่ต้องแก้ในโค้ด (C1)
 5. **อ่านผล soak และตรวจรับฮาร์ดแวร์**: snapshot ล่าสุด run 5 ยังรันอยู่
    เริ่ม 22 ต.ค. 13:26:02 น. คาดครบ duration 23 ต.ค. 13:26:02 น. ถ้าไม่ถูกขัดจังหวะ
    ต้องอ่านผลจริงและประเมินก่อนเรียกว่าผ่านหรือ promote firmware

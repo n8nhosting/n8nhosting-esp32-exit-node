@@ -49,9 +49,9 @@ its STA uplink, so traffic leaves with the home connection's Thai IP.
 
 | Dir | What it is | Tested |
 |-----|-----------|--------|
-| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **one multiplexed TLS link (CA pinned)** with up to 24 concurrent streams and per-stream flow control, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
-| `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push** with status (queued → sent → ok / rolled back), `/status` `/nodes`. | `go test -race` (34 tests: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA and OTA status, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side, idle eviction/reaping; slots: pinned routing, offline refusal, `SLOT_SECRET` fail-closed, dedicated boards kept out of the pool; gost slot-config generator, which needs `sh`) |
-| `admin-api/` | Go: **admin dashboard** (users; **devices** by MAC with name, `shared`/`dedicated` kind, lat/lon, operator-entered WiFi password shown masked, notes; OTA push with a firmware version picker; **capacity measurement** and the admission rule) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, SQLite store (no cgo). | `go test -race` (37 tests: users, auth/limiter/observer plugins, payment webhook, SQLite store and import, devices, slots and pool flag, admission rule, capacity measurement, dashboard markup) + headless-browser smoke test |
+| `firmware/` | `esp32_nat_router` fork + **`rproxy`** component: reverse dialer over **one multiplexed TLS link (CA pinned)** with up to 40 (S3 N16R8) or 4 (C3 Super Mini) concurrent streams and per-stream flow control, **zero-touch provisioning** (broker/token baked at build), MAC identity, **OTA on command**, AP auto-off, minimal UI (no Firewall/VPN/PCAP), "Proxy service: online/connecting/error" on the status page. Prebuilt S3 N16R8 bins in `firmware/prebuilt_s3n16r8/`. | builds clean on ESP-IDF 5.5.6; wire protocol covered by broker tests |
+| `broker/` | Go broker: **TLS** ESP32 link (`:7000`, multiplexed `mux1`; still accepts the v1.2 one-DIAL-per-connection pool) ⇄ GOST SOCKS5 upstream (`:1080`); node registry by **MAC** (online, exit IP, traffic, block/allow), **OTA push** with status (queued → sent → ok / rolled back), `/status` `/nodes`. | `go test -race` (70 top-level tests in source on 2026-10-22, including: relay, 1 MB integrity, concurrency, safety filter, TLS pinning, blocking, OTA and OTA status, persistence; mux: 40 streams on one link, slow-stream isolation, legacy+mux side by side, idle eviction/reaping; slots: pinned routing, offline refusal, `SLOT_SECRET` fail-closed, dedicated boards kept out of the pool; gost slot-config generator, which needs `sh`) |
+| `admin-api/` | Go: **admin dashboard** (users; **devices** by MAC with name, `shared`/`dedicated` kind, lat/lon, operator-entered WiFi password shown masked, notes; OTA push with a firmware version picker; **capacity measurement** and the admission rule) + user/billing REST + GOST **auth/limiter/observer** plugins + payment webhook. PBKDF2 password hashing, SQLite store (no cgo). | `go test -race` (149 top-level tests / 278 cases including subtests, last recorded at `7a6f884`: users, auth/limiter/observer plugins, payment webhook, SQLite store and import, devices, slots and pool flag, per-board admission, capacity measurement, metrics/events/alerts, commerce, customer portal, marketing, dashboard markup) + headless-browser suites (`tools/portal_marketing_smoke.cjs`, `tools/dashboard_commerce_smoke.cjs`); section 6 of the [Claude handoff](docs/superpowers/plans/2026-10-22-claude-continuation-handoff.md) has the rerun commands |
 | `flasher/` | ESP Web Tools static page to flash the board from Chrome/Edge + configure it. | manifest validated |
 | `deploy/` | Full-stack `docker-compose.yml` for Coolify (gost + broker + admin-api + flasher). | YAML validated |
 
@@ -73,13 +73,22 @@ port for their slot. Each slot exits through exactly one board, so a slot port
 pins the customer to that device's exit IP. Port `3128` remains the legacy
 shared pool.
 
-How many customers a board takes is set by its measured capacity:
+How many customers a board takes is set by its measured capacity. Seats are
+counted **per board (MAC)**, also when several boards share one public IP; the
+IP group is shown for information only
+([per-board seats](docs/superpowers/specs/2026-10-22-per-board-seats-design.md)):
 
-- **Shared** device: `max_shared_users = min(3, floor(capacity_mbps / 5))`.
-- **Dedicated** device: 1 customer, who owns the whole exit IP (every board
-  behind the same `remote_ip`). The board itself never carries `3128` pool
-  traffic (admin-api tells the broker on every slot or kind change).
-- **Unmeasured** shared device: no new bindings until it has been measured.
+- **Shared** device with a positive measurement:
+  `max_users = min(3, max(1, floor(capacity_mbps / 5)))`, so a measured
+  ~2.6 Mbps C3 gets 1 seat. This is an admission allowance, not a promise of
+  5 Mbps per customer.
+- **Dedicated** device: 1 customer, who reserves that one board (not the other
+  boards behind the same `remote_ip`). The board itself never carries `3128`
+  pool traffic (admin-api tells the broker on every slot or kind change).
+- **Unmeasured** shared device (capacity not positive): 0 seats, no new
+  bindings until it has been measured.
+- A pending, unpaid portal order holds a seat on its board until its
+  reservation expires (renewing an active subscription takes no second seat).
 - The limiter is capped at the device's capacity.
 
 **Measure** (in the device editor) downloads `speedtest.bin` through the

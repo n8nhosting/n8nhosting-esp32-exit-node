@@ -233,3 +233,71 @@ Coolify เป็น manual deploy: push ไม่ deploy และ deploy จ�
 > รักษางานที่ทำแล้วและกฎ Seat ต่อบอร์ด ทำ activation acceptance เมื่อเจ้าของแจ้งพร้อม
 > หากยังไม่มี provider config ให้ทำ local/content review ที่ไม่ต้องใช้ secrets ต่อ
 > อย่าเริ่ม implement Phase 2 ใหม่ อย่า deploy docs-only หรือรบกวน soak โดยไม่จำเป็น
+
+## 9. บันทึกรอบ Claude — 22 ต.ค. 2026 13:35 +07 (docs-only)
+
+เจ้าของสั่งให้รอบนี้แก้เฉพาะเอกสาร ไม่ deploy และไม่ขัดจังหวะ soak
+ไม่มีการ deploy, restart collector, measure, OTA, เปิด serial หรือแก้ source/locale
+ส่วนที่ 1–8 ด้านบนคงไว้เป็นประวัติ ค่าใหม่ด้านล่างเป็น snapshot ณ เวลาที่ระบุ
+
+### ตรวจแบบ read-only เวลา 2026-10-22T06:35:28Z (13:35:28 +07)
+
+- Git: `main` = `origin/main` = `4524938` ก่อนแก้เอกสารรอบนี้; working tree มีเพียง `?? output/`
+- `GET /portal/api/config` (public): `login_ready`, `signup_ready`, `stripe_ready`,
+  `manual_ready` เป็น false ทั้งหมด, `stripe_mode:"disabled"`, reasons =
+  `email_not_configured`, `turnstile_not_configured`, `stripe_not_configured`,
+  `bank_not_configured`, `portal_url` = `https://admin.jbacteam.com/portal/`
+  → เจ้าของยังไม่ได้ตั้ง provider; งาน C ยังรอ
+- `GET /portal/api/marketing`: `enabled:false`, provider IDs ว่างทั้งหมด,
+  `consent_required:true`, `config_version` `21523ed01b65b6f0` → งาน D ยังรอ
+- `GET /portal/api/plans`: `{"plans":[]}` — draft plans ยัง inactive ตามที่ตกลง
+- `/portal/th/` 200, `/robots.txt` 200 (มี `Sitemap: https://admin.jbacteam.com/portal/sitemap.xml`
+  และ `Disallow: /portal/api/`), `/portal/sitemap.xml` 200 มี 18 `<loc>`,
+  `https://flash.jbacteam.com/` 200
+- `flash.jbacteam.com/firmware/releases.json` ตรงกับ repo: 10 releases,
+  `latest` = `2.4.21-mux1.2`, 2.4.22–2.4.25 = testing; Last-Modified 21 ต.ค. 22:50:04 GMT
+- `node --test tools/portal_i18n_test.cjs` ผ่านในเครื่อง (6 groups, 212 keys × 6 ภาษา)
+
+ข้อสังเกต: `robots.txt` มีบล็อก `Content-Signal` ที่ Cloudflare เติมไว้ก่อนกลุ่มของ app
+จึงมี `User-agent: *` สองกลุ่ม; crawler รวมกลุ่ม user-agent เดียวกัน (RFC 9309 §2.2.1)
+กฎ `Disallow`/`Sitemap` ของ app จึงยังมีผล ไม่ได้แก้ edge ตามกฎข้อ 5.D
+
+### สิ่งที่รอบนี้ตรวจไม่ได้ และยังเป็น snapshot เดิม
+
+Session นี้ไม่มี admin token และไม่มี shell บน server (permission ของ session ไม่อนุญาต
+ให้สำรวจ SSH credentials จึงไม่ได้พยายามต่อ) ข้อต่อไปนี้ **ไม่ได้ตรวจใหม่**:
+runtime hash/Coolify deployment, SQLite counts, สถานะบอร์ดทั้งสามใน `/api/devices`
+และไฟล์ collector run 5 (`run.json`, `samples.jsonl`, `result.json`)
+ตามที่เห็นจาก public endpoint ไม่มีอะไรบ่งว่ามี deploy ใหม่หลัง 13:25:38 +07
+แต่ยังยืนยันไม่ได้ว่า run 5 ไม่ถูกขัดจังหวะ ผู้ที่มีสิทธิ์ server ต้องอ่าน run 5 เอง
+หลัง 23 ต.ค. 13:26:02 +07 ก่อนสรุปผล hardware
+
+### เอกสารที่แก้ในรอบนี้
+
+- `README.md`: กฎ Seat ต่อบอร์ดตามโค้ด `maxUsers`/`admit`
+  (Shared วัดเป็นบวก = `min(3, max(1, floor(cap/5)))`, ยังไม่วัด = 0,
+  Dedicated สงวนบอร์ดเดียว, pending order ถือ seat จน reservation หมดอายุ),
+  จำนวน streams ต่อบอร์ด (S3 40 / C3 4) และจำนวน tests (broker 70 top-level ใน source,
+  admin 149 top-level / 278 cases ตามผลที่บันทึกไว้ที่ `7a6f884`)
+- `docs/dashboard-review/01-ux-ia.md`: หมายเหตุ supersede เรื่อง Seat ต่อบอร์ดแบบเดียวกับ 02/03
+- `docs/dashboard-review/09-locale-content-review.md`: AI pre-review ของคำแปล 6 ภาษา
+  และ SEO/SEM drafts สำหรับให้เจ้าของ/ผู้ตรวจภาษาเจ้าของภาษาใช้ **ไม่ใช่** native sign-off
+  และยังไม่ได้แก้ `locales/*.json` ตามข้อเสนอ
+- `docs/dashboard-review/08-work-summary-and-next-steps.md` และ `README.md` ในโฟลเดอร์เดียวกัน:
+  ลิงก์ไปรายงาน 09
+
+รายงาน 09 พบ **ข้อบกพร่องในโค้ด C1**: หลังอัปโหลดสลิป `orders.status` ยังเป็น `pending`
+และรายการคำสั่งซื้อของลูกค้าไม่มีสถานะสลิป Portal จึงแสดง "รอชำระ" พร้อมปุ่มอัปโหลดซ้ำ
+(การอัปโหลดครั้งที่สองได้ 409 แต่ลูกค้าอาจโอนเงินซ้ำ) browser smoke ไม่จับเพราะ intercept
+ตั้ง `awaiting_review` เอง (`tools/dashboard_commerce_smoke.cjs:87`) ต้องแก้ก่อนเปิดรับโอนจริง
+พร้อม regression ที่ใช้ handler จริง รอบนี้ไม่ได้แก้เพราะเป็นรอบเอกสารเท่านั้น
+
+### งานถัดไป (ลำดับไม่เปลี่ยน)
+
+1. เจ้าของตั้ง Stripe/bank/Resend/Turnstile ใน Coolify แล้วแจ้ง → ทำงาน C
+   (แก้ C1 ก่อนตรวจ manual slip flow กับ hostname จริง)
+2. ผู้มีสิทธิ์ server อ่านผล run 5 หลังครบ duration → ประเมิน hardware ตามข้อ 5.B
+3. เจ้าของเลือกข้อเสนอจากรายงาน 09 ที่จะใช้ และให้ native reviewer ตรวจ
+   → แก้ locale ในรอบ source ที่มี test/deploy ตามปกติ; deploy จะเปลี่ยน broker
+   container จึงควรรอให้ run 5 ครบ duration ก่อน แล้วเริ่ม collector run ใหม่ตามข้อ 5.B
+4. ตั้ง analytics IDs เมื่อเจ้าของพร้อม → ทำงาน D

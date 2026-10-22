@@ -2,6 +2,14 @@
 
 วันที่: 2026-10-21 · ผู้รีวิว: UX research / IA (read-only, ไม่แก้ไฟล์ใน repo)
 
+> 2026-10-22: เจ้าของเปลี่ยนจาก Seat ตาม exit IP เป็น **Seat แยกต่อบอร์ด/MAC**
+> แม้บอร์ดใช้ public IP เดียวกัน; IP group เหลือเป็นข้อมูลประกอบเท่านั้น
+> และ Dedicated สงวนบอร์ดเดียว ไม่ใช่ทั้ง IP กฎ Shared ปัจจุบันคือ 0 seats เมื่อยังไม่มีค่าวัดที่เป็นบวก
+> แล้ว `min(3, max(1, floor(capacity_mbps/5)))` ดู
+> [per-board seat contract](../superpowers/specs/2026-10-22-per-board-seats-design.md)
+> สูตร `min(3, floor(Mbps/5))` และข้อความเรื่อง IP group ด้านล่างเป็นบริบทย้อนหลัง
+> รายละเอียดบอร์ดที่ deploy แล้วแสดงครบพร้อมกันใน drawer ดู [ผลตรวจรับ Phase 2](04-phase2-acceptance.md)
+
 > วิธีการ (ตามแนว `impeccable critique`): **single-context review — อ่านจาก source เท่านั้น**
 > (`admin-api/dashboard/index.html`, `admin-api/*.go`, `broker/registry.go`, `broker/main.go`,
 > `docs/superpowers/specs/2026-10-20-proxy-seller-platform-design.md`, `README.md`,

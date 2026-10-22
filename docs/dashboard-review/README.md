@@ -4,6 +4,8 @@
 > [สรุปสิ่งที่ทำแล้วและงานค้าง](08-work-summary-and-next-steps.md) และ
 > [Claude continuation handoff](../superpowers/plans/2026-10-22-claude-continuation-handoff.md)
 > อ่านสถานะ runtime/activation ล่าสุดก่อนนำ backlog ด้านล่างไปทำซ้ำ
+> รายการตรวจคำแปล 6 ภาษาและ SEM drafts (AI pre-review):
+> [09-locale-content-review.md](09-locale-content-review.md)
 
 > งานต่อเนื่องระบบขาย/Portal/RSSI/OTA วันที่ 22 ต.ค. 2026:
 > [รายงานตรวจรับ Platform](06-platform-commerce-acceptance.md) และ
