@@ -366,7 +366,7 @@ func TestCommerceMigrationV6AndBrokerOutsideTransaction(t *testing.T) {
 	defer db.Close()
 	var version int
 	db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version)
-	if version != 7 {
+	if version != len(migrations) {
 		t.Fatalf("version %d", version)
 	}
 	u, err := scanUser(db.QueryRow(selectUser, "legacy"))

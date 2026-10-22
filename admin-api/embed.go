@@ -14,6 +14,7 @@ func dashboardHandler() http.Handler {
 	index, _ := fs.ReadFile(sub, "index.html")
 	fileServer := http.FileServer(http.FS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 		// SPA root: write index.html directly (FileServer would redirect
 		// /index.html -> / and loop). Other assets are served normally.
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex,nofollow" />
 <title>Proxy Server Dashboard</title>
 <style>
   :root{
@@ -203,6 +204,9 @@
   #salesReadiness{margin-bottom:18px}.sales-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:18px 0}.sales-editor{margin:0 0 24px}.sales-editor h3{margin:0}.sales-editor label{display:block}.sales-check{display:flex!important;gap:10px;align-items:center;margin-top:16px}.sales-check input{width:18px;min-width:18px;height:18px;margin:0}.sales-editor button,.commerce-table button{min-height:44px}.sales-editor textarea{margin-bottom:12px}.review-data{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);padding:16px;border-radius:9px}.commerce-table td{overflow-wrap:anywhere}.commerce-table td:last-child{white-space:normal}.commerce-table .subline{max-width:50ch}.user-history-button{padding:5px 0!important;min-height:32px;background:transparent!important;color:var(--accent);font-size:12px}.user-live{font-variant-numeric:tabular-nums}
   @media(max-width:900px){.sales-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:720px){.sales-fields{grid-template-columns:minmax(0,1fr)}.sales-nav{gap:2px}.sales-nav a{padding:10px;font-size:13px}.commerce-table thead{display:none}.commerce-table tr{display:block;background:var(--panel);padding:16px;border-radius:12px;margin-bottom:12px}.commerce-table td{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;padding:10px 0;background:none;border:0}.commerce-table td::before{content:attr(data-label);color:var(--muted);font-size:12px}.commerce-table td>*{grid-column:2}.commerce-table .pill{width:fit-content}.commerce-table td .subline{margin-top:2px}.users-table td:nth-child(3){display:block;grid-column:1/-1}.user-history-button{min-height:44px!important}.sales-editor .toolbar{align-items:stretch}.sales-editor .toolbar button{flex:1}}
+  .settings-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}.settings-layout h3{margin-top:0}.marketing-settings h3:not(:first-child){margin-top:32px;margin-bottom:8px}.marketing-settings label{display:block;margin:16px 0 8px}.marketing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.marketing-grid label{min-width:0}.marketing-settings input,.marketing-settings textarea,.marketing-settings select{width:100%;margin-top:8px}.marketing-settings textarea{resize:vertical;min-height:76px}.marketing-settings .sales-check{margin:20px 0}.marketing-settings .sales-check input{width:18px;margin:0}.marketing-status{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:24px}.marketing-search-preview{margin:20px 0;padding:20px;background:var(--bg);border-radius:9px;overflow-wrap:anywhere}.marketing-search-preview strong{color:var(--accent);font-size:18px}.marketing-search-preview p{margin:8px 0;max-width:70ch}.marketing-settings .toolbar{flex-wrap:wrap}.console-settings p{line-height:1.7}.marketing-settings button{min-height:44px}.marketing-settings .subline{white-space:normal;line-height:1.6}
+  @media(max-width:1100px){.settings-layout{grid-template-columns:minmax(0,1fr)}.console-settings{max-width:none}}
+  @media(max-width:720px){.marketing-grid{grid-template-columns:minmax(0,1fr);gap:0}.settings-layout{gap:16px}.marketing-settings .toolbar>*{width:100%}.marketing-settings .toolbar .muted{width:auto}.marketing-status{align-items:flex-start}.marketing-search-preview{padding:16px}}
 </style>
 </head>
 <body>
@@ -1199,12 +1203,65 @@ document.addEventListener('keydown',e=>{
   else if($('#umodal').style.display==='flex') closeModal();
 });
 
-/* ---- Settings ---- */
+/* ---- Settings / marketing ---- */
+let marketingDraft=null,marketingLocale='th',marketingPage='home',marketingLoading=false,marketingDefaults={};
+const marketingLocales=[['th','ไทย'],['en','English'],['zh-CN','简体中文'],['ja','日本語'],['ru','Русский'],['vi','Tiếng Việt']];
+const marketingPages=[['home','Landing page'],['plans','Plans'],['help','Connection guide']];
+function marketingCapture(){
+  if(!marketingDraft||!$('#marketingTitle'))return;
+  marketingDraft.seo=marketingDraft.seo||{};marketingDraft.seo[marketingLocale]=marketingDraft.seo[marketingLocale]||{};
+  marketingDraft.seo[marketingLocale][marketingPage]={title:$('#marketingTitle').value,description:$('#marketingDescription').value,keywords:$('#marketingKeywords').value};
+}
+function marketingSEOFields(){
+  const value=marketingDraft?.seo?.[marketingLocale]?.[marketingPage]||{};
+  $('#marketingTitle').value=value.title||'';$('#marketingDescription').value=value.description||'';$('#marketingKeywords').value=value.keywords||'';
+  $('#marketingTitle').lang=marketingLocale;$('#marketingDescription').lang=marketingLocale;$('#marketingKeywords').lang=marketingLocale;
+  const path='/portal/'+marketingLocale+'/'+(marketingPage==='home'?'':marketingPage);
+  $('#marketingPreview').href=path;$('#marketingPreview').textContent='Preview '+path+' ↗';
+  marketingPreview();
+}
+function marketingPreview(){
+  const defaults=marketingDefaults[marketingLocale]||{};
+  $('#marketingTitle').placeholder=defaults['seo.'+marketingPage+'.title']||'Use the translated default';$('#marketingDescription').placeholder=defaults['seo.'+marketingPage+'.description']||'Use the translated default';$('#marketingKeywords').placeholder=defaults['seo.'+marketingPage+'.keywords']||'Comma-separated keyword themes';
+  $('#marketingPreviewTitle').textContent=$('#marketingTitle').value||$('#marketingTitle').placeholder;
+  $('#marketingPreviewDescription').textContent=$('#marketingDescription').value||$('#marketingDescription').placeholder;
+  $('#marketingTitleCount').textContent=$('#marketingTitle').value.length+' / 120';$('#marketingDescriptionCount').textContent=$('#marketingDescription').value.length+' / 320';
+}
+async function loadMarketing(){
+  if(marketingLoading===routeEpoch)return;const epoch=routeEpoch;marketingLoading=epoch;
+  $('#marketingWorkspace').innerHTML='<div class="empty" role="status">Loading marketing settings…</div>';
+  try{
+    const [result,locales]=await Promise.all([api('/api/marketing'),Promise.all(marketingLocales.map(async([locale])=>{const response=await fetch('/portal/locales/'+locale+'.json',{credentials:'omit',cache:'no-store'});if(!response.ok)throw new Error('Translated marketing defaults unavailable');return [locale,await response.json()];}))]);if(epoch!==routeEpoch||activeView!=='settings')return;
+    marketingDefaults=Object.fromEntries(locales);
+    marketingDraft=JSON.parse(JSON.stringify(result));const a=result.analytics||{};
+    $('#marketingWorkspace').innerHTML=`<form id="marketingForm"><div class="marketing-status"><span class="pill ${result.enabled?'ok':''}" id="marketingState">${result.enabled?'Tracking enabled after consent':'Tracking disabled'}</span><span class="muted">SEO works independently of tracking.</span></div>
+      <h3>Search &amp; social previews</h3><p class="subline">Six localized public pages with canonical, hreflang and Open Graph metadata. Account and payment pages stay out of search.</p>
+      <div class="marketing-grid"><label>Language<select id="marketingLocale">${marketingLocales.map(([id,name])=>`<option value="${id}"${id===marketingLocale?' selected':''}>${name}</option>`).join('')}</select></label><label>Public page<select id="marketingPage">${marketingPages.map(([id,name])=>`<option value="${id}"${id===marketingPage?' selected':''}>${name}</option>`).join('')}</select></label></div>
+      <label for="marketingTitle">SEO title <span class="subline" id="marketingTitleCount"></span></label><input id="marketingTitle" maxlength="120" placeholder="Use the translated default">
+      <label for="marketingDescription">Description <span class="subline" id="marketingDescriptionCount"></span></label><textarea id="marketingDescription" rows="3" maxlength="320" placeholder="Use the translated default"></textarea>
+      <label for="marketingKeywords">Keyword themes</label><textarea id="marketingKeywords" rows="2" maxlength="600" placeholder="Comma-separated localized keyword themes"></textarea><p class="subline">An editorial reference for page copy and SEM. Google does not use the meta keywords tag for ranking. Changes do not create ads or ad spend.</p>
+      <div class="marketing-search-preview"><strong id="marketingPreviewTitle"></strong><p id="marketingPreviewDescription"></p><a id="marketingPreview" target="_blank" rel="noopener noreferrer"></a></div>
+      <div class="toolbar"><button type="button" class="sec" id="marketingExport">Download keyword CSV · all languages</button><a class="button-link sec" href="/portal/sitemap.xml" target="_blank" rel="noopener noreferrer">Sitemap ↗</a></div>
+      <h3>Analytics &amp; advertising</h3><p class="subline">Paste public IDs only. No script snippets or provider secrets. Tags run only on signed-out public pages after consent; credentials, account pages and payment forms are excluded.</p>
+      <label class="sales-check"><input type="checkbox" id="marketingEnabled"${result.enabled?' checked':''}> Enable configured tracking after visitor consent</label>
+      <div class="marketing-grid">${[['ga4_id','GA4 measurement ID','G-XXXXXXXXXX'],['google_ads_id','Google Ads tag ID','AW-123456789'],['google_ads_label','Google Ads conversion label','For a future verified conversion integration'],['meta_pixel_id','Meta Pixel ID','123456789012345'],['tiktok_pixel_id','TikTok Pixel ID','Public pixel ID'],['gtm_id','Google Tag Manager container','GTM-XXXXXXX']].map(([key,label,placeholder])=>`<label>${label}<input data-marketing-id="${key}" value="${esc(a[key]||'')}" placeholder="${placeholder}" autocomplete="off" spellcheck="false" maxlength="100"></label>`).join('')}</div>
+      <p class="subline">Use either GTM or the direct integrations. GTM requires both consent categories; manage tag consent inside the container too. Disable automatic form, search, history and user-data collection in your provider settings. Purchase conversions are not fired by clicks, uploads or redirects.</p>
+      <div id="marketingError" class="err" role="alert"></div><div class="toolbar"><button type="submit" id="marketingSave">Save marketing settings</button><button type="button" class="sec" id="marketingReload">Reload saved values</button><span id="marketingSaved" class="muted" role="status"></span></div></form>`;
+    marketingSEOFields();
+    $('#marketingLocale').addEventListener('change',e=>{marketingCapture();marketingLocale=e.target.value;marketingSEOFields();});
+    $('#marketingPage').addEventListener('change',e=>{marketingCapture();marketingPage=e.target.value;marketingSEOFields();});
+    ['marketingTitle','marketingDescription','marketingKeywords'].forEach(id=>$('#'+id).addEventListener('input',marketingPreview));
+    $('#marketingReload').addEventListener('click',loadMarketing);
+    $('#marketingExport').addEventListener('click',()=>{marketingCapture();const rows=[['language','page','title','description','keyword_themes','landing_path']];for(const [locale]of marketingLocales)for(const [page]of marketingPages){const x=marketingDraft.seo?.[locale]?.[page]||{},d=marketingDefaults[locale]||{};rows.push([locale,page,x.title||d['seo.'+page+'.title']||'',x.description||d['seo.'+page+'.description']||'',x.keywords||d['seo.'+page+'.keywords']||'','/portal/'+locale+'/'+(page==='home'?'':page)]);}const csv='\ufeff'+rows.map(row=>row.map(value=>'"'+String(value).replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='portal-keywords.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+    $('#marketingForm').addEventListener('submit',async event=>{event.preventDefault();marketingCapture();const form=event.currentTarget,save=$('#marketingSave');marketingDraft.enabled=$('#marketingEnabled').checked;marketingDraft.analytics=Object.fromEntries([...form.querySelectorAll('[data-marketing-id]')].map(input=>[input.dataset.marketingId,input.value.trim()]));const epoch=routeEpoch;save.disabled=true;$('#marketingError').textContent='';$('#marketingSaved').textContent='Saving…';try{const saved=await api('/api/marketing',{method:'PUT',body:JSON.stringify(marketingDraft)});if(epoch!==routeEpoch||!form.isConnected)return;marketingDraft=JSON.parse(JSON.stringify(saved));$('#marketingSaved').textContent='Saved · new tracking configuration requires fresh visitor consent.';$('#marketingState').textContent=saved.enabled?'Tracking enabled after consent':'Tracking disabled';$('#marketingState').className='pill '+(saved.enabled?'ok':'');showToast('Marketing settings saved');}catch(error){if(form.isConnected){$('#marketingError').textContent=error.message;$('#marketingSaved').textContent='Changes have not been saved.';}}finally{if(form.isConnected)save.disabled=false;}});
+  }catch(error){if(epoch===routeEpoch&&$('#marketingWorkspace')){$('#marketingWorkspace').innerHTML=empty('Marketing settings unavailable',error.message)+'<button type="button" class="sec" id="marketingRetry">Retry</button>';$('#marketingRetry').addEventListener('click',loadMarketing);}}
+  finally{if(marketingLoading===epoch)marketingLoading=false;}
+}
 function viewSettings(){
   const gostui = $('#gostuiLink').href, flash = $('#flashLink').href;
   const otaUrl = localStorage.getItem('ota_url') || (flash.replace(/\/$/,'')+'/firmware/esp32_nat_router.bin');
   $('#view').innerHTML = `<div class="head"><h2>Settings</h2></div>
-    <div class="card" style="max-width:560px">
+    <div class="settings-layout"><section class="card console-settings"><h3>Console</h3>
       <div class="field"><label for="setFlash">Flash firmware page URL</label><input id="setFlash" value="${esc(flash)}" /></div>
       <div class="field"><label for="setGost">GOST config UI URL</label><input id="setGost" value="${esc(gostui)}" /></div>
       <div class="field"><label for="setOta">Custom OTA firmware URL (pre-filled for "Custom URL…" in Update FW)</label><input id="setOta" value="${esc(otaUrl)}" /></div>
@@ -1213,8 +1270,9 @@ function viewSettings(){
       Legacy pool port: <span class="mono">3128</span> (shared pool across devices).<br>
       Flash new devices at the Flash page — each self-provisions (TLS, token baked in) and appears under <b>Devices</b> by MAC.<br>
       <b>OTA:</b> on the Devices tab, "Update FW" lists every firmware release kept on the Flash page (<span class="mono">/firmware/releases.json</span>), older ones included, so a board can be moved back to an earlier version. A new image that cannot reach the broker rolls itself back.</p>
-    </div>`;
+    </section><section class="card marketing-settings" aria-labelledby="marketingHeading"><h3 id="marketingHeading">Portal marketing</h3><p class="intro">Languages, search previews and visitor measurement.</p><div id="marketingWorkspace"></div></section></div>`;
   $('#saveSettingsBtn').addEventListener('click',saveSettings);$('#settingsLogout').addEventListener('click',logout);
+  loadMarketing();
 }
 function saveSettings(){
   localStorage.setItem('gostui',$('#setGost').value.trim()); $('#gostuiLink').href=$('#setGost').value.trim();

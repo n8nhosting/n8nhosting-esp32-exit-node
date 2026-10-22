@@ -1,5 +1,13 @@
 # ESP32 Exit-Node Proxy Platform
 
+Customer portal: Thai, English, Simplified Chinese, Japanese, Russian and
+Vietnamese at `/portal/<locale>/`. Admin **Settings → Portal marketing** manages
+localized SEO and optional consent-gated analytics IDs. See the
+[language/SEO/SEM activation guide](docs/dashboard-review/07-portal-language-seo-sem-analytics.md)
+and [commerce/provider handoff](docs/dashboard-review/06-platform-commerce-acceptance.md).
+Public canonical metadata requires the explicitly configured HTTPS
+`PORTAL_BASE_URL`; provider activation and campaign spending are separate steps.
+
 Rent out a home/office internet connection as a proxy with a **Thai exit IP**,
 using an **ESP32-S3 N16R8** or an **ESP32-C3 Super Mini** at home as the exit
 node and a **VPS** (GOST) as the customer-facing proxy. The ESP32 sits behind

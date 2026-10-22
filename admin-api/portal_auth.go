@@ -86,7 +86,8 @@ func stripeLiveMode() bool {
 
 // Called by main; no provider request or mail send occurs during registration.
 func registerPortalRoutes(mux *http.ServeMux, s *server) {
-	registerPortalStatic(mux)
+	registerPortalStatic(mux, s)
+	registerMarketingRoutes(mux, s)
 	mux.HandleFunc("GET /portal/api/config", s.handlePortalConfig)
 	mux.HandleFunc("POST /portal/api/auth/request", s.handlePortalRequest)
 	mux.HandleFunc("POST /portal/api/auth/verify", s.handlePortalVerify)

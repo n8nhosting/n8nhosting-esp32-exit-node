@@ -35,7 +35,10 @@ sender/domain verification are deployment configuration, never invented content.
 
 The operator selected the supplied dark dashboard references and asked the
 flasher and new screens to match the established admin mood and tone.
-Admin labels are English; customer-facing flows are Thai-first.
+Admin labels are English; customer-facing flows are Thai-first with selectable
+English, Simplified Chinese, Japanese, Russian and Vietnamese. Language-specific
+public pages support search and sharing. Private account/payment documents never
+load optional analytics SDKs; public measurement requires visitor consent.
 
 ## Evidence on Hand
 

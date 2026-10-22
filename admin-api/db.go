@@ -94,6 +94,9 @@ var migrations = []string{
  CREATE TABLE ops_email_cursor (id INTEGER PRIMARY KEY CHECK(id=1),last_event_id INTEGER NOT NULL DEFAULT -1);
  INSERT INTO ops_email_cursor(id,last_event_id) VALUES(1,-1);
  CREATE TABLE email_outbox (id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,kind TEXT NOT NULL,to_email TEXT NOT NULL,subject TEXT NOT NULL,body_enc TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_at TEXT NOT NULL,claim_token TEXT NOT NULL DEFAULT '',claimed_until TEXT NOT NULL DEFAULT '',provider_id TEXT NOT NULL DEFAULT '',last_error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,first_attempt_at TEXT NOT NULL DEFAULT '',sent_at TEXT NOT NULL DEFAULT '');`,
+	// v8: operator-controlled public metadata and typed tracking IDs, disabled by default.
+	`CREATE TABLE marketing_settings (id INTEGER PRIMARY KEY CHECK(id=1),config TEXT NOT NULL,updated_at TEXT NOT NULL);
+	 INSERT INTO marketing_settings(id,config,updated_at) VALUES(1,'{"enabled":false,"analytics":{},"seo":{}}','');`,
 }
 
 // openDB opens (creating if needed) the database at path and migrates it to

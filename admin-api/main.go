@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -153,6 +154,9 @@ func main() {
 
 func logReq(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/portal/api/") || strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
