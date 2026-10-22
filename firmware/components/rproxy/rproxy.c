@@ -20,7 +20,9 @@
  */
 #include "rproxy.h"
 #include "ota_transfer.h"
+#include "link_guard.h"
 #include "sdkconfig.h"
+#include <limits.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -112,22 +114,32 @@ static int link_read(link_t *l, void *buf, size_t len)
     return recv(l->fd, buf, len, 0);
 }
 
+/* A link send buffer that has not drained for this long belongs to a dead
+ * peer or path. Retrying forever kept the mux task inside one write, so the
+ * "broker silent" check never ran and the board stayed stuck. */
+#define LINK_STALL_US (30 * 1000000LL)
+#define LINK_RETRY    INT_MIN
+
+static int link_write_some(void *ctx, const void *p, int len)
+{
+    link_t *l = ctx;
+    if (l->tls) {
+        int w = esp_tls_conn_write(l->t, p, len);
+        return (w == ESP_TLS_ERR_SSL_WANT_READ || w == ESP_TLS_ERR_SSL_WANT_WRITE) ? LINK_RETRY : w;
+    }
+    int w = send(l->fd, p, len, 0);
+    return (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) ? LINK_RETRY : w;
+}
+static int64_t link_now_us(void *ctx) { (void)ctx; return esp_timer_get_time(); }
+static void link_wait(void *ctx) { (void)ctx; vTaskDelay(1); }
+
 static bool link_write_all(link_t *l, const void *data, int len)
 {
-    int off = 0;
-    const char *p = data;
-    while (off < len) {
-        int w;
-        if (l->tls) {
-            w = esp_tls_conn_write(l->t, p + off, len - off);
-            if (w == ESP_TLS_ERR_SSL_WANT_READ || w == ESP_TLS_ERR_SSL_WANT_WRITE) { vTaskDelay(1); continue; }
-        } else {
-            w = send(l->fd, p + off, len - off, 0);
-        }
-        if (w <= 0) return false;
-        off += w;
-    }
-    return true;
+    const rproxy_write_ops_t ops = { .ctx = l, .write = link_write_some, .now_us = link_now_us,
+                                     .yield = link_wait, .retry = LINK_RETRY };
+    if (rproxy_write_all(&ops, data, len, LINK_STALL_US)) return true;
+    ESP_LOGW(TAG, "link write failed or stalled; dropping the link");
+    return false;
 }
 
 static bool link_has_buffered(link_t *l)
@@ -742,6 +754,25 @@ static bool health_send(link_t *l)
     return frame_send(l, F_STATS, 0, line, (uint16_t)n);
 }
 
+/* ---- relay watchdog ------------------------------------------------------
+ * The mux task beats on every pass. Its longest legitimate pass is a 10 s
+ * blocking link read, a 30 s write stall and a 1 s select, so two minutes
+ * without a beat means it is stuck. Nothing else would reboot the board: the
+ * task watchdog only warns, and a starved board kept reporting "online". */
+#define RELAY_STUCK_US (120 * 1000000LL)
+static volatile int64_t s_relay_beat;     /* time of the mux task's latest pass; 0 before the first */
+
+static void relay_beat(void) { s_relay_beat = esp_timer_get_time(); }
+
+static void relay_watchdog(void *arg)
+{
+    (void)arg;
+    if (!rproxy_relay_stuck(esp_timer_get_time(), s_relay_beat, RELAY_STUCK_US, !s_run || s_ota_busy || s_ota_wanted))
+        return;
+    ESP_LOGE(TAG, "relay loop made no pass for %llds; restarting", (long long)(RELAY_STUCK_US / 1000000LL));
+    esp_restart();
+}
+
 /* Serve one established link until it fails or rproxy is disabled. */
 static void mux_serve(link_t *l, uint8_t *rx)
 {
@@ -750,8 +781,18 @@ static void mux_serve(link_t *l, uint8_t *rx)
     int64_t last_stats = last_rx, last_stats_tx = last_rx;
     int lfd = link_fd(l);
     if (lfd < 0) return;
+#if CONFIG_RPROXY_TEST_HANG
+    const int64_t hang_at = last_rx + 60 * 1000000LL;
+#endif
 
     while (s_run) {
+        relay_beat();
+#if CONFIG_RPROXY_TEST_HANG
+        if (esp_timer_get_time() > hang_at) {
+            ESP_LOGW(TAG, "test build: relay loop hangs now");
+            for (;;) vTaskDelay(portMAX_DELAY);
+        }
+#endif
         if (s_ota_wanted) {
             ESP_LOGW(TAG, "OTA: draining %d stream(s) and closing the link", s_active);
             return;                                /* mux_task frees everything, then start_ota() */
@@ -868,6 +909,7 @@ static void mux_task(void *arg)
 
     health_init();
     while (s_run) {
+        relay_beat();
         if (!sta_has_ip()) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
 
         xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -1152,6 +1194,13 @@ static void start_pool(void)
      * ms, C3 -> router 3–9 ms) and the link's in-flight window per RTT capped
      * every board at ~1.5 Mbps. */
     esp_wifi_set_ps(WIFI_PS_NONE);
+    relay_beat();                              /* a restart must not inherit a stale beat */
+    static esp_timer_handle_t watchdog;
+    if (!watchdog) {
+        const esp_timer_create_args_t args = { .callback = relay_watchdog, .name = "relay_wdt" };
+        if (esp_timer_create(&args, &watchdog) != ESP_OK || esp_timer_start_periodic(watchdog, 10 * 1000000LL) != ESP_OK)
+            ESP_LOGE(TAG, "relay watchdog unavailable");
+    }
     if (!s_mux_task)
         xTaskCreate(mux_task, "rproxy_mux", 8192, NULL, tskIDLE_PRIORITY + 3, &s_mux_task);
     ESP_LOGI(TAG, "mux link started -> %s:%u (tls=%d)", s_cfg.host, s_cfg.port, s_cfg.use_tls);

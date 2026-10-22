@@ -105,4 +105,6 @@ Local recorder tests use a simulated short duration and fake responses:
 node --test tools/test_hardware_soak.cjs
 gcc -std=c11 -Wall -Wextra -Werror tools/test_firmware_ota.c -o output/test_firmware_ota.exe
 ./output/test_firmware_ota.exe
+gcc -std=c11 -Wall -Wextra -Werror tools/test_firmware_link.c -o output/test_firmware_link.exe
+./output/test_firmware_link.exe
 ```

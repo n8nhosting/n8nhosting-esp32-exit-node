@@ -89,6 +89,13 @@ config RPROXY_OTA_DEADLINE_SEC
         partial image and reconnects without rebooting. A blocking IDF call
         that exceeds this deadline plus 10 seconds triggers a safe restart.
 
+config RPROXY_TEST_HANG
+    bool "Test builds only: hang the relay loop 60 s after the link comes up"
+    default n
+    help
+        Proves on a board that the relay watchdog restarts it when the mux
+        loop stops making passes. Never enable in a release image.
+
 config RPROXY_MINIMAL_UI
     bool "Minimal exit-node web UI (hide Firewall/VPN/PCAP)"
     default n
