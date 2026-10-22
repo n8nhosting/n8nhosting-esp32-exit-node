@@ -1,5 +1,9 @@
 # ESP32 Exit-Node Proxy Platform
 
+Latest continuation: [work summary](docs/dashboard-review/08-work-summary-and-next-steps.md)
+and [Claude handoff](docs/superpowers/plans/2026-10-22-claude-continuation-handoff.md).
+These distinguish deployed behavior, remaining activation and hardware evidence.
+
 Customer portal: Thai, English, Simplified Chinese, Japanese, Russian and
 Vietnamese at `/portal/<locale>/`. Admin **Settings → Portal marketing** manages
 localized SEO and optional consent-gated analytics IDs. See the

@@ -1,5 +1,10 @@
 # Dashboard redesign — สรุปจาก mockup 3 ภาพ (2026-10-21)
 
+> สรุปงานและจุดเริ่มต่อสำหรับ Claude ล่าสุด (22 ต.ค. 2026):
+> [สรุปสิ่งที่ทำแล้วและงานค้าง](08-work-summary-and-next-steps.md) และ
+> [Claude continuation handoff](../superpowers/plans/2026-10-22-claude-continuation-handoff.md)
+> อ่านสถานะ runtime/activation ล่าสุดก่อนนำ backlog ด้านล่างไปทำซ้ำ
+
 > งานต่อเนื่องระบบขาย/Portal/RSSI/OTA วันที่ 22 ต.ค. 2026:
 > [รายงานตรวจรับ Platform](06-platform-commerce-acceptance.md) และ
 > [การศึกษาราคาในไทย](05-thai-pricing-research.html)

@@ -1,5 +1,11 @@
 # Dashboard phase 2 — implementation plan
 
+> Latest continuation handoff (2026-10-22):
+> [Claude handoff](2026-10-22-claude-continuation-handoff.md) and
+> [work summary](../../dashboard-review/08-work-summary-and-next-steps.md).
+> Implementation is delivered; use those files for current activation and
+> hardware acceptance work rather than restarting this historical plan.
+
 > Approved platform follow-up (2026-10-22): commerce, Stripe + manual slips,
 > customer portal, email outbox, RSSI and bounded firmware OTA are tracked in
 > [the platform acceptance report](../../dashboard-review/06-platform-commerce-acceptance.md).
