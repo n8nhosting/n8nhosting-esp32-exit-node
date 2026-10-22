@@ -67,6 +67,8 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		`kpi-users`,
 		`kpi-traffic`,
 		`Table view`,                     // the chart has a non-visual data equivalent
+		`with data`,                      // the table says how many samples were observed
+		`No data · `,                     // consecutive unobserved samples collapse into one row
 		`row.dataset.key=key`,            // background updates retain row identity
 		`document.hidden`,                // stop polling a hidden browser tab
 		`body.lat=null;body.lon=null`,    // explicit paired coordinate deletion
