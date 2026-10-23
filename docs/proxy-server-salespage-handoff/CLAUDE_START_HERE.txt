@@ -1,0 +1,7 @@
+# Start Claude Code — Sales Page Redesign
+
+Attach/extract this ZIP in the repo root or provide its files to Claude, then paste:
+
+"Read `AGENTS.md`, `CLAUDE.md`, `DESIGN.md`, `PRODUCT.md` and the latest continuation handoff, then read `DESIGN_HANDOFF.md` and inspect `references/`. Verify current branch/HEAD and local changes. Deliver P1–P4 landing-page improvements as described, keeping SSR, six locales, real active plans/empty state, readiness, SEO/privacy constraints and existing payment flows. First inspect status and make a task list, then implement, test and capture actual screenshots. Do not commit/push/deploy without my explicit approval. Respond in Thai with changed files/tests/screenshots."
+
+Reminder: AI concept images are design direction only; current screenshots are user-supplied. Source and operational rules take precedence over mockup visuals.
