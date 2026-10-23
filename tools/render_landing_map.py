@@ -1,9 +1,15 @@
-"""Render the sales-page hero art: Thailand as a dot matrix with exit nodes.
+"""Render Thailand as a dot matrix, twice.
 
-Writes admin-api/portal/landing-map.svg, which the portal inlines into the
-home page. The outline is a coarse hand-traced border (lon, lat), so the
-dots read as Thailand without claiming survey accuracy. Styling comes from
+admin-api/portal/landing-map.svg is the sales-page hero art: the dots plus
+sample exit nodes and arcs, inlined into the home page and styled by
 portal.css classes (the portal CSP forbids inline styles).
+
+admin-api/dashboard/thailand-map.svg is the dashboard Overview's fleet map:
+the dots alone, with the projection in data- attributes so the dashboard
+places each real board at its own position.
+
+The outline is a coarse hand-traced border (lon, lat), so the dots read as
+Thailand without claiming survey accuracy.
 
     python tools/render_landing_map.py
 """
@@ -84,9 +90,18 @@ def main():
            f'<stop offset="1" stop-color="#455ddc" stop-opacity="0"/></radialGradient></defs>'
            f'<circle cx="{hx:g}" cy="{hy:g}" r="{width * 0.42:.0f}" fill="url(#mapHalo)"/>'
            f'<path class="map-dots" d="{path}"/>{"".join(arcs)}{"".join(nodes)}</svg>\n')
-    out = pathlib.Path(__file__).resolve().parent.parent / "admin-api" / "portal" / "landing-map.svg"
+    root = pathlib.Path(__file__).resolve().parent.parent / "admin-api"
+    out = root / "portal" / "landing-map.svg"
     out.write_text(svg, encoding="utf-8", newline="\n")
     print(f"{out}: {len(dots)} dots, {len(svg)} bytes, viewBox {width}x{height}")
+
+    fleet_width = round((LON1 - LON0) * SCALE)
+    fleet = (f'<svg class="fleet-map" viewBox="0 0 {fleet_width} {height}" xmlns="http://www.w3.org/2000/svg" '
+             f'data-lon0="{LON0:g}" data-lat1="{LAT1:g}" data-scale="{SCALE}" focusable="false" aria-hidden="true">'
+             f'<path class="fleet-map-dots" fill="none" stroke="#5b6cf0" stroke-width="4.2" stroke-linecap="round" d="{path}"/></svg>\n')
+    out = root / "dashboard" / "thailand-map.svg"
+    out.write_text(fleet, encoding="utf-8", newline="\n")
+    print(f"{out}: {len(fleet)} bytes, viewBox {fleet_width}x{height}")
 
 
 if __name__ == "__main__":

@@ -74,15 +74,26 @@ async function noPageOverflow(page) {
   await page.locator('#tok').fill(meta.token);
   await page.locator('#loginBtn').click();
   await page.locator('#ov[data-loaded="true"]').waitFor();
-  assert.equal(await page.locator('.stat').count(), 4);
+  assert.equal(await page.locator('#ov .ov-group').nth(0).locator('.stat').count(), 4);
+  assert.equal(await page.locator('#ov .ov-group').nth(1).locator('.stat').count(), 4);
   await page.locator('#trafficChart .chart').waitFor();
   await page.locator('#trafficChart .chart').focus();
   await page.keyboard.press('ArrowRight');
   assert.match(await page.locator('.chart-readout').first().innerText(), /Downloaded/);
+  // every board is on the map or counted as unplaced, and has a tile linking to its drawer
+  assert.equal(await page.locator('#fleetTiles .tile').count(), 8);
+  const placed = await page.locator('.fleet-marker').evaluateAll(list => list.reduce((sum, a) => sum + a.getAttribute('aria-label').split('; ').length, 0));
+  assert.equal(placed, 8);
+  assert.equal(await page.locator('#salesPipeline li').count(), 4);
+  await page.locator('#ovRange [data-range="7d"]').click();
+  await page.waitForFunction(() => document.querySelector('#ov .panel-head span')?.textContent.startsWith('Last 7 days') && !document.querySelector('#ov').classList.contains('is-updating'));
+  assert.equal(await page.locator('#ovRange [data-range="7d"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('#ovRange [data-range="24h"]').click();
+  await page.waitForFunction(() => document.querySelector('#ov .panel-head span')?.textContent.startsWith('Last 24 hours'));
   await page.locator('.head h2').click();
   await page.screenshot({path: path.join(out, 'overview-desktop.png'), fullPage: true});
   await noPageOverflow(page);
-  ok('Overview four KPIs, nonzero chart, keyboard chart inspection');
+  ok('Overview business + network KPIs, nonzero chart, keyboard chart inspection, fleet map/tiles, range switch');
   const chartCases=await page.evaluate(()=>{
     const host=document.createElement('div');document.body.appendChild(host);
     const series=(down,up)=>({from:1700000000,step_sec:300,n:down.length,series:{bytes_down:down,bytes_up:up}});

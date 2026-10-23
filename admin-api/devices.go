@@ -640,11 +640,16 @@ func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	views := s.buildDeviceViewsWithHealth(nodes, false)
 	available := availableSeats(views)
+	// a failed sales query leaves the network overview usable; the dashboard shows the gap
+	sales, err := s.overviewSales(r.Context(), now)
+	if err != nil {
+		log.Printf("overview sales: %v", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"users":    map[string]any{"total": len(users), "active": active, "over_quota": over, "expired": expired, "status_counts": statusCounts, "connected_now": s.connectedNow(now), "expiring_7d": expiring},
 		"seats":    map[string]int{"occupied": occupied, "available": available},
 		"alerts":   map[string]any{"counts": s.overviewAlertCounts()},
-		"month_gb": float64(monthBytes) / (1024 * 1024 * 1024), "broker": broker,
+		"month_gb": float64(monthBytes) / (1024 * 1024 * 1024), "broker": broker, "sales": sales,
 		"as_of": asOf.UTC().Format(time.RFC3339), "stale": asOf.IsZero() || now.Sub(asOf) > 120*time.Second,
 	})
 }

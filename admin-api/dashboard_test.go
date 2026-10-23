@@ -99,3 +99,65 @@ func TestDashboardServesDeviceEditor(t *testing.T) {
 		}
 	}
 }
+
+// The Overview's fleet map is the sales page's Thailand dot matrix without the
+// art (arcs, sample cities); it carries its projection so the dashboard can
+// place each board at its saved or geo-IP position.
+func TestDashboardServesThailandMap(t *testing.T) {
+	srv := httptest.NewServer(dashboardHandler())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/thailand-map.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	body := string(b)
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(body, "<svg") {
+		t.Fatalf("status %d, body %.80q", resp.StatusCode, body)
+	}
+	for _, want := range []string{`data-lon0="97"`, `data-lat1="20.8"`, `data-scale="30"`, `class="fleet-map-dots"`, `aria-hidden="true"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("fleet map lacks %s", want)
+		}
+	}
+	for _, bad := range []string{"map-arc", "map-node", "map-peer"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("fleet map carries sales-page art %s", bad)
+		}
+	}
+}
+
+// The Overview reads as business + network: money and orders from the sales
+// summary, the existing network KPIs, one range control for the history below
+// it, the real fleet on the Thailand map, board tiles, the order pipeline and
+// the heaviest users. Series colours are validated categorical steps, never a
+// status colour (warning orange used to draw "Uploaded").
+func TestDashboardOverviewMarkers(t *testing.T) {
+	srv := httptest.NewServer(dashboardHandler())
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	body := string(b)
+	for _, want := range []string{
+		`kpi-revenue`, `kpi-orders`, `kpi-subs`, `kpi-review`, // business row
+		`o.sales`,                            // ... from /api/overview's sales summary
+		`id="ovRange"`, `data-range="24h"`, `data-range="7d"`, `data-range="30d"`,
+		`/api/metrics?entity=fleet&range=`,   // the traffic chart follows the range
+		`/api/metrics?entity=users&range=`,   // and so do the top users
+		`/thailand-map.svg`, `id="fleetMap"`, `fleet-marker`, // real boards on the map
+		`id="fleetTiles"`, `id="salesPipeline"`, `id="topUsers"`,
+		`--series-1:#7184E2`, `--series-2:#B88A34`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("overview missing %q", want)
+		}
+	}
+	if strings.Contains(body, `colors=['#8595E8','#FF862E']`) {
+		t.Error("traffic chart still draws a series in the warning colour")
+	}
+}

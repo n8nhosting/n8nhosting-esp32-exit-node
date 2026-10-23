@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex,nofollow" />
 <title>Proxy Server Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236d7cff'/%3E%3Cstop offset='1' stop-color='%232b3aa0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M22 46V18h12a9 9 0 0 1 0 18H22' fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 <style>
   :root{
     color-scheme:dark;
@@ -150,7 +151,7 @@
   .empty{padding:26px 12px;color:var(--muted);font-size:13px;line-height:1.7}.empty strong{color:var(--fg);display:block;font-weight:500}.err:empty{display:none}.skeleton{height:180px;background:var(--panel);border-radius:14px;opacity:.65}
   .legend{display:flex;gap:18px;color:var(--muted);font-size:12px;margin:0 0 16px}.legend .legend-unit{margin-left:auto}.chart .cap-line{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:6 4}.chart .cap-label{fill:var(--warn)}
   .user-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}.summary-chip{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:13px;font-weight:500}.summary-chip:hover{background:#272d3a}.summary-chip[aria-pressed="true"]{border-color:var(--accent);background:#2b3350}.summary-count{font-weight:700;font-variant-numeric:tabular-nums}.summary-chip.ok .summary-count{color:var(--ok)}.summary-chip.warn .summary-count{color:var(--warn)}.summary-chip.bad .summary-count{color:var(--bad)}.summary-chip.off .summary-count{color:var(--muted)}.summary-live{margin-left:auto;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
-  .live-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--ok);vertical-align:middle;box-shadow:0 0 0 3px rgba(67,209,167,.18)}.live-dot.idle{background:var(--muted);box-shadow:none;opacity:.6}.legend i{display:inline-block;height:3px;width:16px;margin-right:6px;vertical-align:middle;background:#8595E8}.legend .second{background:#FF862E}
+  .live-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--ok);vertical-align:middle;box-shadow:0 0 0 3px rgba(67,209,167,.18)}.live-dot.idle{background:var(--muted);box-shadow:none;opacity:.6}.legend i{display:inline-block;height:3px;width:16px;margin-right:6px;vertical-align:middle;background:var(--series-1)}.legend .second{background:var(--series-2)}
   .chart{width:100%;display:block;max-height:240px}.chart .grid{stroke:#3b4252;stroke-width:1}.chart text{fill:var(--muted);font:var(--chart-label-size,12px) 'Segoe UI',sans-serif}.chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px}.chart-readout{font-size:12px;min-height:24px;color:var(--muted)}.chart-table{font-size:12px;color:var(--muted);margin-top:12px}.chart-table summary{cursor:pointer;padding:6px 0}.chart-table .table-summary{margin:2px 0 10px;color:var(--fg)}.chart-table .table-wrap{width:fit-content;max-width:100%;max-height:320px;border:1px solid var(--line);border-radius:10px}.chart-table table{width:auto;min-width:min(100%,440px);border-spacing:0;font-variant-numeric:tabular-nums}.chart-table th,.chart-table td{padding:6px 14px;border-radius:0;white-space:nowrap;background:transparent}.chart-table thead th{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--line)}.chart-table td{color:var(--fg)}.chart-table .num{text-align:right}.chart-table tr.day th{padding-top:12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left}.chart-table tr.gap td{color:var(--muted);font-style:italic}.chart-table tbody tr[data-i]:hover td{background:#272d3a}.chart-table tbody tr.gap:hover td,.chart-table tbody tr.day:hover th{background:transparent}.spark{display:block;width:100%;height:28px;margin-top:12px}.delta{font-size:12px;color:var(--muted)}
   .modal-bg{z-index:50;padding:16px}.modal{max-height:90dvh;overflow:auto;max-width:100%;box-shadow:0 24px 48px -12px rgba(0,0,0,.7)}.modal .right{display:flex;gap:8px;justify-content:flex-end}.modal .right button{margin:0}
   #rowmenu{z-index:80;max-height:calc(100dvh - 16px);overflow:auto}#toast{z-index:100;border-left:1px solid var(--ok)}#toast.err{border-left-color:var(--bad)}
@@ -209,14 +210,77 @@
   .settings-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}.settings-layout h3{margin-top:0}.marketing-settings h3:not(:first-child){margin-top:32px;margin-bottom:8px}.marketing-settings label{display:block;margin:16px 0 8px}.marketing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.marketing-grid label{min-width:0}.marketing-settings input,.marketing-settings textarea,.marketing-settings select{width:100%;margin-top:8px}.marketing-settings textarea{resize:vertical;min-height:76px}.marketing-settings .sales-check{margin:20px 0}.marketing-settings .sales-check input{width:18px;margin:0}.marketing-status{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:24px}.marketing-search-preview{margin:20px 0;padding:20px;background:var(--bg);border-radius:9px;overflow-wrap:anywhere}.marketing-search-preview strong{color:var(--accent);font-size:18px}.marketing-search-preview p{margin:8px 0;max-width:70ch}.marketing-settings .toolbar{flex-wrap:wrap}.console-settings p{line-height:1.7}.marketing-settings button{min-height:44px}.marketing-settings .subline{white-space:normal;line-height:1.6}
   @media(max-width:1100px){.settings-layout{grid-template-columns:minmax(0,1fr)}.console-settings{max-width:none}}
   @media(max-width:720px){.marketing-grid{grid-template-columns:minmax(0,1fr);gap:0}.settings-layout{gap:16px}.marketing-settings .toolbar>*{width:100%}.marketing-settings .toolbar .muted{width:auto}.marketing-status{align-items:flex-start}.marketing-search-preview{padding:16px}}
+  /* 2026-10-23 · one visual family with the sales page: its wash, brand mark and fine edges.
+     Operator surfaces stay tonal (no glow); indigo marks actions and selection, status colours mean
+     state, gold marks the dedicated tier. --series-* are the validated chart steps (see SERIES). */
+  :root{--edge:rgba(255,255,255,.075);--side:#131722;--series-1:#7184E2;--series-2:#B88A34;--gold:#F3C77A}
+  body{background:radial-gradient(1100px 560px at 8% -14%,rgba(29,42,107,.32),transparent 62%),radial-gradient(760px 420px at 100% -8%,rgba(90,61,26,.14),transparent 60%),var(--bg);background-attachment:fixed}
+  #app{background:linear-gradient(90deg,var(--side) 215px,var(--edge) 215px 216px,transparent 216px)}
+  .ov-stack{display:grid;gap:20px;min-width:0}.tile-sub{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:4px}
+  aside{background:var(--side);border-right:1px solid var(--edge)}
+  .brand-mark{background:linear-gradient(135deg,#6d7cff,#455ddc 55%,#2b3aa0);box-shadow:0 6px 16px -6px rgba(0,0,0,.6)}
+  nav a.active{background:rgba(69,93,220,.18);color:#c9d1ff} nav a:not(.active):hover{background:rgba(255,255,255,.04)} nav a:hover{text-decoration:none}
+  .stat,.panel,.modal,.drawer-section,.card{border:1px solid var(--edge);box-shadow:none}
+  .stat .v{font-variant-numeric:normal}.stat.warn .v{color:var(--warn)}.stat .detail a{font-weight:600}
+  .head h2{font-size:26px;font-weight:650}
+  .banner{background:rgba(69,93,220,.10);border-color:rgba(133,149,232,.28)}
+  #login{position:relative;overflow:hidden}
+  #login::before{content:"";position:absolute;inset:0;background:url(thailand-map.svg) no-repeat 84% 55%/auto 86vh;opacity:.14;pointer-events:none}
+  #login .card{position:relative;width:min(380px,calc(100% - 32px));padding:28px}
+  .login-brand{display:flex;gap:12px;align-items:center;margin-bottom:22px}.login-brand h1,.login-brand .sub{margin:0}
+  /* Overview */
+  .ov-range{display:inline-flex;gap:2px;padding:3px;border-radius:11px;background:var(--panel);border:1px solid var(--edge)}
+  .ov-range button{background:transparent;color:var(--muted);min-height:34px;padding:6px 12px;border-radius:8px;font-weight:500;font-size:13px}
+  .ov-range button:hover{background:rgba(255,255,255,.05);color:var(--fg)}
+  .ov-range button[aria-pressed="true"]{background:#2b3455;color:#dfe3ff}
+  #ov.is-updating{opacity:.6;transition:opacity .15s}
+  .ov-group-title{display:flex;gap:10px;align-items:baseline;font-size:14px;font-weight:600;margin:0 0 12px}
+  .ov-group-title span{font-size:12px;font-weight:400;color:var(--muted)}
+  .ov-group+.ov-group{margin-top:8px}
+  .ov-grid{display:grid;gap:20px;align-items:start}.ov-main{grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr)}.ov-split{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fleet-map-wrap{display:grid;place-items:center;padding:4px 0 8px;background:radial-gradient(240px 220px at 55% 45%,rgba(43,58,154,.22),transparent 70%)}
+  .fleet-map{display:block;width:100%;max-width:290px;height:auto;max-height:420px;overflow:visible}
+  .fleet-map .fleet-map-dots{stroke:#36428a;opacity:.9}
+  .fleet-marker .hit{fill:transparent}.fleet-marker .ring{fill:none;stroke-width:1.5;opacity:.45}.fleet-marker .dot{stroke:var(--panel);stroke-width:2}
+  .fleet-marker.ok .dot{fill:var(--ok)}.fleet-marker.ok .ring{stroke:var(--ok)}.fleet-marker.warn .dot{fill:var(--warn)}.fleet-marker.warn .ring{stroke:var(--warn)}
+  .fleet-marker.bad .dot{fill:var(--bad)}.fleet-marker.bad .ring{stroke:var(--bad)}.fleet-marker.off .dot{fill:var(--panel);stroke:var(--muted)}.fleet-marker.off .ring{stroke:var(--muted);opacity:.25}
+  .fleet-marker.approx .ring{stroke-dasharray:3 3;opacity:.85}
+  .fleet-marker text{font:700 11px 'Segoe UI',sans-serif;fill:#0b0f1c;pointer-events:none}.fleet-marker.off text{fill:var(--fg)}
+  .fleet-marker:hover .ring{opacity:.9}.fleet-marker:focus-visible{outline:none}.fleet-marker:focus-visible .ring{stroke:var(--fg);stroke-width:2.5;opacity:1}
+  .fleet-legend{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--muted)}
+  .fleet-legend strong{color:var(--fg);font-weight:600;margin-left:2px}
+  .fleet-legend .key{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  .key.ok{background:var(--ok)}.key.warn{background:var(--warn)}.key.bad{background:var(--bad)}.key.off{background:transparent;box-shadow:inset 0 0 0 2px var(--muted)}.key.approx{background:transparent;border:1.5px dashed var(--ok)}
+  .fleet-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .tile{display:grid;gap:10px;align-content:start;min-width:0;padding:14px;border-radius:12px;border:1px solid var(--edge);background:rgba(255,255,255,.02)}
+  .tile.warn{border-color:rgba(255,134,46,.35)}.tile.bad{border-color:rgba(249,101,137,.4)}.tile.off{opacity:.8}
+  .tile-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start}
+  .tile-id{display:grid;min-width:0}.tile-id a{color:var(--fg);font-weight:600;overflow-wrap:anywhere}.tile-id .subline{margin:0}
+  .tile-meters{display:grid;gap:2px}.tile-meters .meter{grid-template-columns:30px minmax(40px,1fr) auto;margin:0}
+  .tile-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .tile-foot strong{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}.tile-foot .warn strong{color:var(--warn)}.tile-foot .micro{font-size:12px}
+  .pipeline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .pipeline li a{position:relative;display:grid;gap:4px;height:100%;padding:14px;border-radius:12px;border:1px solid var(--edge);background:rgba(255,255,255,.02);color:var(--fg)}
+  .pipeline li a:hover{background:rgba(255,255,255,.045);text-decoration:none}
+  .pipeline li+li a::before{content:"";position:absolute;left:-9px;top:26px;width:6px;height:6px;border-top:1.5px solid var(--muted);border-right:1.5px solid var(--muted);transform:rotate(45deg)}
+  .stage-count{font-size:26px;font-weight:650;line-height:1.2}.stage-title{font-size:13px;font-weight:600}.stage-detail{font-size:12px;line-height:1.45;color:var(--muted)}
+  .pipeline li.warn a{border-color:rgba(255,134,46,.4)}.pipeline li.warn .stage-count{color:var(--warn)}.pipeline li.done .stage-count{color:var(--ok)}
+  .top-users{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+  .top-users li{display:grid;grid-template-columns:minmax(90px,.9fr) minmax(0,1.6fr) auto;gap:12px;align-items:center;font-size:13px}
+  .top-users a{overflow-wrap:anywhere}.top-bar{height:8px;border-radius:4px;background:var(--panel2);overflow:hidden}.top-bar i{display:block;height:100%;border-radius:4px;background:var(--series-1)}
+  .top-v{min-width:72px;text-align:right;font-variant-numeric:tabular-nums}
+  @media(max-width:1300px){.pipeline{grid-template-columns:repeat(2,minmax(0,1fr))}.pipeline li:nth-child(3) a::before{display:none}}
+  @media(max-width:1100px){#app{background:linear-gradient(90deg,var(--side) 183px,var(--edge) 183px 184px,transparent 184px)}.ov-main,.ov-split{grid-template-columns:minmax(0,1fr)}}
+  @media(max-width:720px){#app{background:none}.ov-range{width:100%}.ov-range button{flex:1;min-height:44px}.pipeline{grid-template-columns:minmax(0,1fr)}.pipeline li+li a::before{display:none}.top-users li{grid-template-columns:minmax(0,1fr) auto}.top-bar{grid-column:1/-1;grid-row:2}.fleet-tiles{grid-template-columns:minmax(0,1fr)}}
+  @media(pointer:coarse){.ov-range button{min-height:44px}}
+  @media(forced-colors:active){.fleet-marker .dot,.top-bar i{fill:CanvasText;background:CanvasText}}
 </style>
 </head>
 <body>
 <!-- LOGIN -->
 <div id="login">
   <div class="card">
-    <h1>Proxy Server</h1>
-    <div class="sub">Admin dashboard</div>
+    <div class="login-brand"><span class="brand-mark" aria-hidden="true">P</span><div><h1>Proxy Server</h1><div class="sub">Admin dashboard</div></div></div>
     <label>Admin token
       <input id="tok" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" />
     </label>
@@ -474,7 +538,10 @@ function chartTable(rows,keys,names,n){
   const totals=names.map((name,k)=>esc(name)+' '+esc(fmtBytes(observed.reduce((s,r)=>s+(Number.isFinite(r.v[k])?r.v[k]:0),0)))).join(' · ');
   return `<details class="chart-table"><summary>Table view · ${n} samples · ${observed.length} with data</summary><p class="table-summary">Total ${totals}${peak?` · Peak ${esc(fmtBytes(total(peak)))} at ${esc(hm(peak.t))}`:''}</p><div class="table-wrap"><table><thead><tr><th scope="col">Time</th>${names.map(name=>`<th scope="col" class="num">${esc(name)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></details>`;
 }
-/* Charts keep null observations as gaps. No chart library or build step. */
+/* Charts keep null observations as gaps. No chart library or build step.
+   Series hues are categorical steps validated against the panel surface (#222631, dark band
+   L 0.48–0.67, CVD ΔE 26); status colours stay reserved for state. Mirrors --series-1/2. */
+const SERIES=['#7184E2','#B88A34'];
 /* Axis tops round up to 1, 2 or 5 x 10^k so a scale reads as a scale. */
 function niceCeil(v){const e=10**Math.floor(Math.log10(v)),f=v/e;return (f<=1?1:f<=2?2:f<=5?5:10)*e;}
 function fmtMbps(m){return (m>0&&m<1?m.toFixed(2):Number.isInteger(m)?String(m):m<10?m.toFixed(1):String(Math.round(m)))+' Mbps';}
@@ -487,7 +554,9 @@ function renderChart(host,data,label='Traffic history',opts={}){
   const from=+data.from||0,step=+data.step_sec||3600,rows=Array.from({length:n},(_,i)=>({t:from+i*step,v:keys.map(k=>data.series[k][i]??null)}));
   if(!rows.some(r=>r.v.some(v=>v!==null&&Number.isFinite(v)))){host.innerHTML=empty('No history yet','Recording starts with this version of the admin API.');return;}
   const asRate=step<=3600,plot=v=>asRate?v*8/step/1e6:v,fmtAxis=asRate?fmtMbps:fmtBytes,cap=asRate&&opts.capMbps>0?+opts.capMbps:0,vals=rows.flatMap(r=>r.v.filter(v=>v!==null&&Number.isFinite(v)).map(plot));
-  const W=680,H=220,P={l:host.clientWidth<480?94:54,r:16,t:12,b:28},pw=W-P.l-P.r,ph=H-P.t-P.b,max=asRate?niceCeil(Math.max(1,cap,...vals)):Math.max(1,...vals),x=i=>P.l+i*pw/Math.max(1,n-1),y=p=>P.t+ph-Math.min(p,max)/max*ph,colors=['#8595E8','#FF862E'];
+  // labels are drawn at 12px on screen, so in viewBox units they grow as the chart narrows;
+  // the left margin fits the widest axis label at that size
+  const W=680,H=220,max=asRate?niceCeil(Math.max(1,cap,...vals)):Math.max(1,...vals),fs=12*W/Math.min(host.clientWidth||W,W),P={l:Math.ceil(Math.max(...[0,.5,1].map(f=>fmtAxis(max*f).length))*fs*.58)+12,r:16,t:12,b:28},pw=W-P.l-P.r,ph=H-P.t-P.b,x=i=>P.l+i*pw/Math.max(1,n-1),y=p=>P.t+ph-Math.min(p,max)/max*ph,colors=SERIES;
   const grid=[0,.5,1].map(f=>`<line class="grid" x1="${P.l}" x2="${W-P.r}" y1="${y(max*f)}" y2="${y(max*f)}"/><text x="${P.l-8}" y="${y(max*f)+4}" text-anchor="end">${esc(fmtAxis(max*f))}</text>`).join('')+(cap?`<line class="cap-line" x1="${P.l}" x2="${W-P.r}" y1="${y(cap)}" y2="${y(cap)}"/><text class="cap-label" x="${P.l+6}" y="${y(cap)-5}" text-anchor="start">cap ${esc(fmtMbps(cap))}</text>`:'');
   const paths=keys.map((k,ki)=>{let runs=[],run=[];rows.forEach((r,i)=>{const v=r.v[ki];if(v===null||!Number.isFinite(v)){if(run.length)runs.push(run);run=[];}else run.push({x:x(i),y:y(plot(v))});});if(run.length)runs.push(run);return runs.map(points=>{const pts=points.map(p=>p.x.toFixed(2)+','+p.y.toFixed(2)).join(' '),area=points.length>1?`<polygon points="${points[0].x},${P.t+ph} ${pts} ${points.at(-1).x},${P.t+ph}" fill="${colors[ki]}" opacity=".09"/>`:'';return area+`<polyline class="series-${ki?'up':'down'}" points="${pts}" fill="none" stroke="${colors[ki]}" stroke-width="2" stroke-linejoin="round"/>`+(points.length===1?`<circle cx="${points[0].x}" cy="${points[0].y}" r="4" fill="${colors[ki]}"/>`:'');}).join('');}).join('');
   const formatTick=unix=>{const date=new Date(unix*1000);return n*step<=172800?date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):date.toLocaleDateString(undefined,{month:'short',day:'numeric'});};
@@ -497,21 +566,93 @@ function renderChart(host,data,label='Traffic history',opts={}){
   svg.addEventListener('pointermove',e=>{const rect=svg.getBoundingClientRect();inspect(Math.round(((e.clientX-rect.left)*W/rect.width-P.l)/pw*Math.max(1,n-1)));});svg.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();inspect(index+(e.key==='ArrowRight'?1:-1));}});
   host.querySelector('.chart-table tbody')?.addEventListener('mouseover',e=>{const row=e.target.closest('tr[data-i]');if(row)inspect(+row.dataset.i);});
 }
-/* ---- Overview: inventory first, live operations second ---- */
+/* ---- Overview: business first, then the network, then what needs a hand ----
+   One range control in the header scopes every history below it (traffic, sparklines, top users);
+   month figures say "this month" and ignore it. Months and days are UTC, like usage months. */
+const OV_RANGES={'24h':['Last 24 hours',''],'7d':['Last 7 days','&step=1h'],'30d':['Last 30 days','&step=1d']};
+const OV_RANGE_HTML='<div class="ov-range" id="ovRange" role="group" aria-label="History range"><button type="button" data-range="24h">24 h</button><button type="button" data-range="7d">7 days</button><button type="button" data-range="30d">30 days</button></div>';
+let ovRange='24h',ovGeneration=0,fleetMapSVG=null;
+try{const saved=localStorage.getItem('ov_range');if(OV_RANGES[saved])ovRange=saved;}catch(_){}
+function syncRangeButtons(){document.querySelectorAll('#ovRange [data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===ovRange)));}
+document.addEventListener('click',e=>{const b=e.target.closest('#ovRange [data-range]');if(!b||b.dataset.range===ovRange)return;ovRange=b.dataset.range;try{localStorage.setItem('ov_range',ovRange);}catch(_){}syncRangeButtons();$('#ov')?.classList.add('is-updating');viewOverview();});
+async function loadFleetMap(){if(fleetMapSVG!==null)return fleetMapSVG;try{const r=await fetch('/thailand-map.svg');fleetMapSVG=r.ok?await r.text():'';}catch(_){fleetMapSVG='';}return fleetMapSVG;}
+/* A board's map state: blocked or a failed update is serious, offline is grey, a low health score needs a look. */
+const FLEET_RANK={bad:3,warn:2,off:1,ok:0},FLEET_LABEL={ok:'Online',warn:'Needs attention',off:'Offline',bad:'Blocked or update failed'};
+function fleetState(n){if(n.blocked||['ota_failed','rolled_back'].includes(n.status))return 'bad';if(!n.online)return 'off';return n.health&&Number.isFinite(n.health.score)&&n.health.score<80?'warn':'ok';}
+// the operator's saved pin is exact; a geo-IP position is approximate and drawn as a ring
+function fleetPoint(n){const exact=typeof n.lat==='number'&&typeof n.lon==='number',g=n.geo||{},lat=exact?n.lat:g.lat,lon=exact?n.lon:g.lon;return typeof lat==='number'&&typeof lon==='number'&&(lat||lon)?{lat,lon,exact}:null;}
+function fleetMapHTML(nodes,svg){
+  if(!svg)return empty('Map unavailable','The board tiles below still list every board.');
+  const num=k=>+((new RegExp('data-'+k+'="([^"]+)"').exec(svg)||[])[1]),lon0=num('lon0'),lat1=num('lat1'),scale=num('scale'),box=/viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg)||[0,0,0],W=+box[1],H=+box[2];
+  const placed=[],missing=[],outside=[];
+  for(const n of nodes){const p=fleetPoint(n);if(!p){missing.push(n);continue;}const x=(p.lon-lon0)*scale,y=(lat1-p.lat)*scale;if(!(x>=0&&y>=0&&x<=W&&y<=H)){outside.push(n);continue;}placed.push({n,x,y,exact:p.exact});}
+  // boards in one town share a marker that takes the worst state and shows how many it holds
+  // (markers closer than a marker's diameter would overlap; the group sits at its members' centre)
+  const groups=[];for(const p of placed){const g=groups.find(g=>Math.hypot(g.x-p.x,g.y-p.y)<32);if(g){g.items.push(p);g.x+=(p.x-g.x)/g.items.length;g.y+=(p.y-g.y)/g.items.length;}else groups.push({x:p.x,y:p.y,items:[p]});}
+  const markers=groups.map(g=>{const state=g.items.map(p=>fleetState(p.n)).sort((a,b)=>FLEET_RANK[b]-FLEET_RANK[a])[0],approx=g.items.every(p=>!p.exact),many=g.items.length>1,cx=g.x.toFixed(1),cy=g.y.toFixed(1);
+    const label=g.items.map(p=>boardName(p.n)+': '+FLEET_LABEL[fleetState(p.n)]).join('; ')+(approx?' (approximate position)':''),href=many?'#/devices':'#/devices/'+encodeURIComponent(g.items[0].n.mac);
+    return `<a class="fleet-marker ${state}${approx?' approx':''}" href="${esc(href)}" aria-label="${esc(label)}"><title>${esc(label)}</title><circle class="hit" cx="${cx}" cy="${cy}" r="18"/><circle class="ring" cx="${cx}" cy="${cy}" r="${many?15:12}"/><circle class="dot" cx="${cx}" cy="${cy}" r="${many?10:6.5}"/>${many?`<text x="${cx}" y="${cy}" dy=".35em" text-anchor="middle">${g.items.length}</text>`:''}</a>`;}).join('');
+  const counts=Object.keys(FLEET_LABEL).map(k=>[k,nodes.filter(n=>fleetState(n)===k).length]).filter(([,c])=>c);
+  const map=svg.trim().replace('aria-hidden="true"','role="group" aria-label="'+esc(`Board positions: ${placed.length} of ${nodes.length} boards placed`)+'"').replace(/<\/svg>$/,markers+'</svg>');
+  const notes=[missing.length?`${missing.length} without a position · set one in the device editor (Location)`:'',outside.length?`${outside.length} outside Thailand`:''].filter(Boolean);
+  return `<div class="fleet-map-wrap">${map}</div><ul class="fleet-legend">${counts.map(([k,c])=>`<li><i class="key ${k}" aria-hidden="true"></i>${esc(FLEET_LABEL[k])} <strong>${c}</strong></li>`).join('')}<li><i class="key ok approx" aria-hidden="true"></i>Approximate (geo-IP)</li></ul>${notes.map(t=>`<p class="subline">${esc(t)}</p>`).join('')}`;
+}
+function fleetTile(n){
+  const s=n.stats,tot=+s?.heap_total||0,free=+s?.heap_free||0;
+  const cpu=s&&s.cpu_pct>=0?meter(T('cpu'),s.cpu_pct,s.cpu_pct+'%',s.cpu_pct>=85,(s.cpu_pct>=85?T('cpuHigh')+' — ':'')+T('cpuHint')):'';
+  const ram=tot?meter(T('ram'),100-free*100/tot,fmtKB(free)+' '+T('free'),free<24*1024||free<tot*0.15,`${T('ram')}: ${fmtKB(free)} ${T('freeOf')} ${fmtKB(tot)}`):'';
+  const body=cpu||ram?`<div class="tile-meters">${cpu}${ram}</div>`:`<p class="subline">${n.online?'Waiting for a health report':esc(T('offline'))+(fmtAgo(n.last_seen)?' · '+esc(T('lastSeen'))+' '+esc(fmtAgo(n.last_seen)):'')}</p>`;
+  const full=n.max_users>0&&(n.active_users+(n.reserved_seats||0))>=n.max_users;
+  return `<article class="tile ${fleetState(n)}"><div class="tile-head"><span class="slot-tag" title="Proxy slot">${n.slot>0?esc(String(n.slot).padStart(2,'0')):'—'}</span><div class="tile-id"><a href="#/devices/${encodeURIComponent(n.mac)}">${esc(boardName(n))}</a><span class="tile-sub">${statusPill(n.status||(n.blocked?'blocked':n.online?'online':'offline'))}<span class="subline">${esc(n.kind||'shared')} · ${esc(n.chip||'esp32s3')}</span></span></div></div>${body}<div class="tile-foot"><span class="${full?'warn':''}"><strong>${esc(n.active_users??0)} / ${esc(n.max_users??0)}</strong> seats</span>${s?envLine(s):''}</div></article>`;
+}
+function fleetTilesHTML(nodes){
+  if(!nodes.length)return empty('No boards yet','Flash a board and connect it to WiFi; it appears here by MAC.');
+  const order=[...nodes].sort((a,b)=>(a.slot>0?a.slot:999)-(b.slot>0?b.slot:999)||boardName(a).localeCompare(boardName(b)));
+  return `<div id="fleetTiles" class="fleet-tiles">${order.map(fleetTile).join('')}</div>`;
+}
+function pipelineHTML(sales){
+  if(!sales)return empty('Sales summary unavailable','Use Refresh to try again.');
+  const stages=[['awaiting_payment','Holding a seat','Order created, seat reserved for payment','#/sales/orders'],['awaiting_review','Slip review','Transfer slips waiting for a decision','#/sales/approvals'],['waiting_capacity','Waiting for a board','Paid; allocation follows measured capacity','#/sales/orders'],['paid_orders','Paid this month',money(sales.revenue_satang)+' received','#/sales/orders']];
+  return `<ol id="salesPipeline" class="pipeline">${stages.map(([k,title,detail,href])=>`<li class="${k==='awaiting_review'&&sales[k]>0?'warn':k==='paid_orders'?'done':''}"><a href="${href}"><span class="stage-count">${esc(sales[k]??0)}</span><span class="stage-title">${esc(title)}</span><span class="stage-detail">${esc(detail)}</span></a></li>`).join('')}</ol>`;
+}
+function topUsersHTML(data){
+  const rows=Object.entries(data?.totals||{}).filter(([u])=>!u.startsWith('_')).map(([u,v])=>[u,+v.bytes||0]).filter(([,b])=>b>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if(!rows.length)return empty('No customer traffic in this range','Users appear here once they send traffic.');
+  const max=rows[0][1];
+  return `<ol id="topUsers" class="top-users">${rows.map(([u,b])=>`<li><a class="mono" href="#/users/${encodeURIComponent(u)}">${esc(u)}</a><span class="top-bar" aria-hidden="true"><i style="width:${Math.max(2,b/max*100).toFixed(1)}%"></i></span><span class="top-v">${esc(fmtBytes(b))}</span></li>`).join('')}</ol>`;
+}
 async function viewOverview(){
-  if(activeView!=='overview')return;const epoch=routeEpoch;
+  if(activeView!=='overview')return;const epoch=routeEpoch,generation=++ovGeneration;
   if($('#ov')?.contains(document.activeElement))return;
-  if(!$('#ov'))$('#view').innerHTML=viewHeader('Overview','Your exit network, at a glance.')+`<div id="ov"><div class="skeleton" aria-label="Loading overview"></div></div>`;
+  if(!$('#ov')){$('#view').innerHTML=viewHeader('Overview','Business and network, at a glance.',OV_RANGE_HTML)+`<div id="ov"><div class="skeleton" aria-label="Loading overview"></div></div>`;}
+  syncRangeButtons();
+  const range=ovRange,[rangeLabel,step]=OV_RANGES[range];
   try{
-    const results=await Promise.allSettled([api('/api/overview'),api('/api/metrics?entity=fleet&range=30d&step=1d&fields=bytes_down,bytes_up,nodes_online,users_seated'),api('/api/alerts'),api('/api/events?limit=6')]);
-    if(epoch!==routeEpoch||!TOKEN)return;if(results[0].status==='rejected')throw results[0].reason;
-    const o=results[0].value,b=o.broker||{},u=o.users||{},seats=o.seats||{},m=results[1].status==='fulfilled'?results[1].value:null,al=results[2].status==='fulfilled'?results[2].value:null,events=results[3].status==='fulfilled'?results[3].value:null,counts=al?.counts||o.alerts?.counts||{},need=(counts.critical||0)+(counts.warn||0);
+    const results=await Promise.allSettled([api('/api/overview'),api('/api/metrics?entity=fleet&range='+range+step+'&fields=bytes_down,bytes_up,nodes_online,users_seated'),api('/api/alerts'),api('/api/events?limit=6'),api('/api/devices'),api('/api/metrics?entity=users&range='+range+'&fields=bytes'),loadFleetMap()]);
+    if(epoch!==routeEpoch||generation!==ovGeneration||!TOKEN)return;if(results[0].status==='rejected')throw results[0].reason;
+    const ok=i=>results[i].status==='fulfilled'?results[i].value:null;
+    const o=ok(0),b=o.broker||{},u=o.users||{},seats=o.seats||{},m=ok(1),al=ok(2),events=ok(3),nodes=ok(4),userTotals=ok(5),svg=ok(6),sales=o.sales||null,counts=al?.counts||o.alerts?.counts||{},need=(counts.critical||0)+(counts.warn||0);
     const rate=b.throughput_bps||{},fmtRate=v=>v===null||v===undefined?'—':(v*8/1e6).toFixed(2)+' Mbps';
-    const card=(id,label,value,detail,series,summary)=>`<div class="stat" id="${id}"><div class="kpi-title"><span class="k">${label}</span></div><div class="v">${value}</div><div class="detail">${detail}</div>${spark(series)}${deltaPill(summary)}</div>`;
-    $('#ov').innerHTML=`<div class="cards">${card('kpi-online','Exit devices online',`${b.nodes_online??0} <small>/ ${b.nodes_total??0}</small>`,need?need+' need attention':'Network availability',m?.series?.nodes_online,m?.summary?.nodes_online)}${card('kpi-seats','Seats occupied',`${seats.occupied??0} <small>used</small>`,`${seats.available??0} available online · per board`)}${card('kpi-users','Users ready',`${u.status_counts?.active??u.active??0} <small>/ ${u.total??0}</small>`,`${u.expiring_7d??0} expiring within 7 days`,m?.series?.users_seated,m?.summary?.users_seated)}${card('kpi-traffic','Traffic this month',`${(o.month_gb||0).toFixed(2)} <small>GB</small>`,'Customer usage · current billing month')}</div><div class="opbar"><span>Connected now <strong>${u.connected_now??0}</strong></span><span>Download <strong>${fmtRate(rate.down)}</strong></span><span>Upload <strong>${fmtRate(rate.up)}</strong></span><span>Broker <strong>${b.tls?'TLS':'plain'} · ${fmtUptime(b.uptime_sec)}</strong></span></div><div class="dashboard-grid"><div><section class="panel"><div class="panel-head"><h3>Network traffic</h3><span>Last 30 days · UTC buckets</span></div><div id="trafficChart"></div></section><section class="panel section-space"><div class="panel-head"><h3>Recent activity</h3><a href="#/devices">View devices ↗</a></div>${events?feedHTML(events.events):empty('Activity unavailable','Use Refresh to try again.')}</section></div><div><section class="panel"><div class="panel-head"><h3>Needs attention</h3><span>${need} to review</span></div>${al?attentionHTML(al):empty('Alerts unavailable','Use Refresh to try again.')}</section><section class="panel section-space"><div class="panel-head"><h3>Capacity per board</h3></div><p class="muted" style="font-size:13px;margin:0">Each board has its own seats, even behind the same public IP. Shared capacity follows that board's measured speed; dedicated boards take one customer.</p><div class="fleet-strip"><span><i></i>${b.nodes_online??0} online</span><span>${Math.max(0,(b.nodes_total||0)-(b.nodes_online||0))} offline</span></div></section></div></div>`;
-    if(m)renderChart($('#trafficChart'),m,'Network traffic over the last 30 days');else $('#trafficChart').innerHTML=results[1].status==='rejected'&&results[1].reason.status!==404?empty('History unavailable','Use Refresh to try again.'):empty('No history yet','Recording starts with this version of the admin API.');
-    $('#ov').dataset.loaded='true';stamp(o.stale?'Broker telemetry is stale':'');
-  }catch(e){if(epoch===routeEpoch){stamp(e.message);if(!$('#ov').dataset.loaded)$('#ov').innerHTML=empty('Could not load overview',e.message+' · Use Refresh to try again.');}}
+    const card=(id,label,value,detail,series,summary,tone='')=>`<div class="stat${tone?' '+tone:''}" id="${id}"><div class="kpi-title"><span class="k">${label}</span></div><div class="v">${value}</div><div class="detail">${detail}</div>${spark(series)}${deltaPill(summary)}</div>`;
+    const sv=k=>sales?esc(sales[k]??0):'—',none='Sales summary unavailable';
+    const business=card('kpi-revenue','Revenue this month',sales?esc(money(sales.revenue_satang)):'—',sales?`Last month ${esc(money(sales.prev_revenue_satang))} · payments received`:none,sales?.daily_revenue_satang)
+      +card('kpi-orders','Paid orders this month',sv('paid_orders'),sales?`${sv('awaiting_payment')} holding a seat · ${sv('waiting_capacity')} waiting for a board`:none)
+      +card('kpi-subs','Active subscriptions',sv('active_subscriptions'),sales?'Paid periods running now':none)
+      +card('kpi-review','Slips to review',sv('awaiting_review'),sales?(sales.awaiting_review?'<a href="#/sales/approvals">Review in Sales →</a>':'Nothing waiting'):none,null,null,sales?.awaiting_review?'warn':'');
+    const network=card('kpi-online','Exit devices online',`${b.nodes_online??0} <small>/ ${b.nodes_total??0}</small>`,need?need+' need attention':'Network availability',m?.series?.nodes_online,m?.summary?.nodes_online)
+      +card('kpi-seats','Seats occupied',`${seats.occupied??0} <small>used</small>`,`${seats.available??0} available online · per board`)
+      +card('kpi-users','Users ready',`${u.status_counts?.active??u.active??0} <small>/ ${u.total??0}</small>`,`${u.expiring_7d??0} expiring within 7 days`,m?.series?.users_seated,m?.summary?.users_seated)
+      +card('kpi-traffic','Traffic this month',`${(o.month_gb||0).toFixed(2)} <small>GB</small>`,'Customer usage · current billing month');
+    const list=nodes||[],online=list.filter(n=>n.online).length;
+    $('#ov').innerHTML=`<section class="ov-group" aria-labelledby="ovBusiness"><h3 class="ov-group-title" id="ovBusiness">Business <span>this month · UTC</span></h3><div class="cards">${business}</div></section>`
+      +`<section class="ov-group" aria-labelledby="ovNetwork"><h3 class="ov-group-title" id="ovNetwork">Network <span>live · history ${esc(rangeLabel.toLowerCase())}</span></h3><div class="cards">${network}</div><div class="opbar"><span>Connected now <strong>${u.connected_now??0}</strong></span><span>Download <strong>${fmtRate(rate.down)}</strong></span><span>Upload <strong>${fmtRate(rate.up)}</strong></span><span>Broker <strong>${b.tls?'TLS':'plain'} · ${fmtUptime(b.uptime_sec)}</strong></span></div></section>`
+      +`<div class="ov-grid ov-main"><div class="ov-stack"><section class="panel"><div class="panel-head"><h3>Network traffic</h3><span>${esc(rangeLabel)} · UTC buckets</span></div><div id="trafficChart"></div></section><section class="panel"><div class="panel-head"><h3>Top users by traffic</h3><span>${esc(rangeLabel)}</span></div>${userTotals?topUsersHTML(userTotals):empty('Usage history unavailable','Use Refresh to try again.')}</section></div><section class="panel fleet-panel"><div class="panel-head"><h3>Fleet map</h3><a href="#/devices">All devices ↗</a></div><div id="fleetMap">${nodes?fleetMapHTML(list,svg):empty('Devices unavailable','Use Refresh to try again.')}</div></section></div>`
+      +`<section class="panel section-space"><div class="panel-head"><h3>Boards</h3><span>${online} online of ${list.length} · seats count per board, even behind one public IP</span></div>${nodes?fleetTilesHTML(list):empty('Devices unavailable','Use Refresh to try again.')}</section>`
+      +`<section class="panel section-space"><div class="panel-head"><h3>Order pipeline</h3><a href="#/sales/orders">Orders ↗</a></div>${pipelineHTML(sales)}</section>`
+      +`<div class="ov-grid ov-split section-space"><section class="panel"><div class="panel-head"><h3>Needs attention</h3><span>${need} to review</span></div>${al?attentionHTML(al):empty('Alerts unavailable','Use Refresh to try again.')}</section><section class="panel"><div class="panel-head"><h3>Recent activity</h3><a href="#/devices">View devices ↗</a></div>${events?feedHTML(events.events):empty('Activity unavailable','Use Refresh to try again.')}</section></div>`;
+    if(m)renderChart($('#trafficChart'),m,'Network traffic, '+rangeLabel.toLowerCase());else $('#trafficChart').innerHTML=results[1].status==='rejected'&&results[1].reason.status!==404?empty('History unavailable','Use Refresh to try again.'):empty('No history yet','Recording starts with this version of the admin API.');
+    $('#ov').classList.remove('is-updating');$('#ov').dataset.loaded='true';stamp(o.stale?'Broker telemetry is stale':'');
+  }catch(e){if(epoch===routeEpoch&&generation===ovGeneration){$('#ov').classList.remove('is-updating');stamp(e.message);if(!$('#ov').dataset.loaded)$('#ov').innerHTML=empty('Could not load overview',e.message+' · Use Refresh to try again.');}}
 }
 /* ---- Keyed updates preserve row identity, open menus and focused controls ---- */
 let usersByName=new Map();

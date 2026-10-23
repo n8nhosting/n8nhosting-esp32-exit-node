@@ -292,6 +292,7 @@ func registerPortalStatic(mux *http.ServeMux, s *server) {
 		doc = htmlTitleRE.ReplaceAllStringFunc(doc, func(string) string { return "<title>" + html.EscapeString(seo.Title) + "</title>" })
 		doc = htmlLangRE.ReplaceAllString(doc, `<html lang="`+locale+`"`)
 		doc = strings.Replace(doc, "</head>", portalSEOHead(locale, page, seo, indexable)+"</head>", 1)
+		doc = strings.Replace(doc, `<div id="readiness" role="status"></div>`, `<div id="readiness" role="status">`+portalReadinessBanner(dict)+`</div>`, 1)
 		content := `<section id="publicContent" class="public-content" hidden></section>`
 		if public {
 			var plans []Plan

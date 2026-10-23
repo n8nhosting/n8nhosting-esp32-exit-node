@@ -40,12 +40,15 @@ async function api(path,options={}){
 }
 function updateAccount(){const signed=!!state.customer;$('#accountEmail').textContent=state.customer?.email||'';$('#loginButton').hidden=signed;$('#logoutButton').hidden=!signed;}
 function samePortalOrigin(){try{return !!state.config?.portal_url&&new URL(state.config.portal_url).origin===location.origin;}catch{return false;}}
+// The server renders the same banner for its own readiness state (portalReadinessBanner);
+// an identical result is left in place so the page neither shifts nor re-announces it.
 function showReadiness(){
-  const c=state.config,box=$('#readiness');if(!c){box.innerHTML='<div class="banner">'+t("ui.service.status.is.unavailable")+' <button class="secondary" type="button" data-action="reload">'+t("ui.try.again")+'</button></div>';return;}
-  if(c.portal_url&&!samePortalOrigin()){box.innerHTML='<div class="banner">'+t("ui.sign.in.at.the.configured.customer.portal")+' <a href="'+esc(c.portal_url)+'">'+t("ui.open.customer.portal")+'</a></div>';return;}
-  if(!c.login_ready){box.innerHTML='<div class="banner"><strong>'+t("ui.orders.are.not.open.yet")+'</strong><br>'+t("ui.the.provider.is.setting.up.email.verification.and.sign.in.you.can")+'</div>';return;}
-  if(!c.stripe_ready&&!c.manual_ready){box.innerHTML='<div class="banner">'+t("ui.payment.is.not.available.yet.no.payment.will.be.collected.meanwhi")+'</div>';return;}
-  box.innerHTML=c.stripe_mode==='test'?'<div class="banner"><strong>'+t("ui.payment.test.mode")+'</strong> '+t("ui.real.payments.are.not.enabled")+'</div>':'';
+  const c=state.config,box=$('#readiness'),show=html=>{const next=document.createElement('template');next.innerHTML=html;if(box.innerHTML!==next.innerHTML)box.innerHTML=html;};
+  if(!c){show('<div class="banner">'+t("ui.service.status.is.unavailable")+' <button class="secondary" type="button" data-action="reload">'+t("ui.try.again")+'</button></div>');return;}
+  if(c.portal_url&&!samePortalOrigin()){show('<div class="banner">'+t("ui.sign.in.at.the.configured.customer.portal")+' <a href="'+esc(c.portal_url)+'">'+t("ui.open.customer.portal")+'</a></div>');return;}
+  if(!c.login_ready){show('<div class="banner"><strong>'+esc(t("ui.orders.are.not.open.yet"))+'</strong><br>'+esc(t("ui.readiness.closed.body"))+'</div>');return;}
+  if(!c.stripe_ready&&!c.manual_ready){show('<div class="banner">'+esc(t("ui.payment.is.not.available.yet.no.payment.will.be.collected.meanwhi"))+'</div>');return;}
+  show(c.stripe_mode==='test'?'<div class="banner"><strong>'+esc(t("ui.payment.test.mode"))+'</strong> '+esc(t("ui.real.payments.are.not.enabled"))+'</div>':'');
 }
 function publishContext(page){dispatchEvent(new CustomEvent('portal:context',{detail:{locale:I18n.locale,page,authenticated:!!state.customer||!state.authKnown||privacyBlocked,auth_known:state.authKnown&&!privacyBlocked}}));}
 function go(page){

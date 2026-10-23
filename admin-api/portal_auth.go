@@ -99,7 +99,6 @@ func registerPortalRoutes(mux *http.ServeMux, s *server) {
 
 func (s *server) handlePortalConfig(w http.ResponseWriter, r *http.Request) {
 	base, baseOK := portalBase()
-	ready := baseOK && emailConfigured()
 	reasons := []string{}
 	if !baseOK {
 		reasons = append(reasons, "portal_url_not_configured")
@@ -127,7 +126,7 @@ func (s *server) handlePortalConfig(w http.ResponseWriter, r *http.Request) {
 			mode = "live"
 		}
 	}
-	out := map[string]any{"signup_ready": ready && turnstileConfigured(), "login_ready": ready && turnstileConfigured(), "stripe_ready": baseOK && stripeConfigured(), "stripe_mode": mode, "manual_ready": manualConfigured(), "turnstile_site_key": os.Getenv("TURNSTILE_SITE_KEY"), "aup_version": portalAUPVersion, "portal_url": publicURL, "reasons": reasons}
+	out := map[string]any{"signup_ready": portalLoginReady(), "login_ready": portalLoginReady(), "stripe_ready": baseOK && stripeConfigured(), "stripe_mode": mode, "manual_ready": manualConfigured(), "turnstile_site_key": os.Getenv("TURNSTILE_SITE_KEY"), "aup_version": portalAUPVersion, "portal_url": publicURL, "reasons": reasons}
 	if manualConfigured() {
 		out["bank"] = map[string]string{"name": os.Getenv("PAYMENT_BANK_NAME"), "account_number": os.Getenv("PAYMENT_ACCOUNT_NUMBER"), "account_name": os.Getenv("PAYMENT_ACCOUNT_NAME")}
 	}
